@@ -1,22 +1,22 @@
 {
-  "name": "soa-graduation-project",
-  "version": "2.0.0",
-  "description": "Hệ thống quản lý đồ án tốt nghiệp theo kiến trúc hướng dịch vụ (SOA)",
+  "name": "htqlns-main",
+  "version": "1.0.0",
+  "description": "Hệ thống Quản lý Chấm công - Tính lương & Nhân sự (HTQLNS) – Kiến trúc Hướng Dịch Vụ (SOA) với Express.js",
   "main": "scripts/run-all.js",
   "scripts": {
     "start": "node scripts/run-all.js",
-    "start:demo": "node scripts/run-all.js --no-restart",
     "test": "node --test tests/infra.test.js",
+    "start:gateway": "node gateway/server.js",
     "start:registry": "node registry/server.js",
     "start:event-bus": "node event-bus/server.js",
-    "start:gateway": "node gateway/server.js",
     "start:auth": "node services/auth-service/index.js",
-    "start:student": "node services/student-service/index.js",
-    "start:topic": "node services/topic-service/index.js",
-    "start:registration": "node services/registration-service/index.js",
+    "start:organization": "node services/organization-service/index.js",
+    "start:attendance": "node services/attendance-service/index.js",
+    "start:leave": "node services/leave-service/index.js",
+    "start:shift": "node services/shift-service/index.js",
+    "start:payroll": "node services/payroll-service/index.js",
     "start:notification": "node services/notification-service/index.js",
-    "test:e2e": "node --test tests/e2e.test.js",
-    "seed": "node scripts/clean-seed-data.js"
+    "start:analytics": "node services/analytics-service/index.js"
   },
   "engines": {
     "node": ">=18"
