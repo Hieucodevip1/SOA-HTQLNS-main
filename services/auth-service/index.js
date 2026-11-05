@@ -1,0 +1,223 @@
+// AUTH SERVICE – tài khoản, đăng nhập, cấp JWT, vai trò: admin, giangvien, sinhvien (database riêng: soa_auth)
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('../../shared/jwt');
+const { jwtSecret } = require('../../shared/env');
+const { createService, HttpError, requireRole } = require('../../shared/service-base');
+
+const VALID_ROLES = ['admin', 'giangvien', 'sinhvien'];
+
+createService({
+    name: 'auth-service',
+    port: 3001,
+    db: {
+        name: process.env.DB_NAME_AUTH || 'soa_auth',
+        schema: [
+            `CREATE TABLE IF NOT EXISTS TAIKHOAN (
+                MaTK INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                TenDangNhap VARCHAR(50) NOT NULL UNIQUE,
+                MatKhau VARCHAR(255) NOT NULL,
+                HoTen VARCHAR(100) NOT NULL,
+                Email VARCHAR(100) NULL,
+                VaiTro VARCHAR(20) NOT NULL DEFAULT 'sinhvien',
+                MaSV VARCHAR(20) NULL,
+                Lop VARCHAR(50) NULL,
+                Nganh VARCHAR(100) NULL DEFAULT 'Công nghệ phần mềm',
+                NgayTao TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+        ]
+    },
+    // Đăng ký nhận sự kiện từ Event Bus: tự động cấp tài khoản khi Admin thêm sinh viên
+    events: {
+        'student.created': async ({ MaSV, HoTen, Email, Lop, Nganh }, ev, { pool, log }) => {
+            if (!MaSV) return;
+            const studentCode = String(MaSV).trim().toUpperCase();
+            const [exist] = await pool.query('SELECT MaTK FROM TAIKHOAN WHERE TenDangNhap = ? OR MaSV = ?', [studentCode, studentCode]);
+            if (!exist[0]) {
+                const defaultHash = await bcrypt.hash('123456', 10);
+                await pool.query(
+                    'INSERT INTO TAIKHOAN (TenDangNhap, MatKhau, HoTen, Email, VaiTro, MaSV, Lop, Nganh) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    [studentCode, defaultHash, HoTen || 'Sinh viên', Email || null, 'sinhvien', studentCode, Lop || null, Nganh || 'Công nghệ phần mềm']
+                );
+                log(`[student.created] Tự động cấp tài khoản đăng nhập cho sinh viên: ${studentCode} (mật khẩu mặc định: 123456)`);
+            }
+        },
+        'student.deleted': async ({ MaSV }, ev, { pool, log }) => {
+            if (!MaSV) return;
+            const studentCode = String(MaSV).trim().toUpperCase();
+            const [r] = await pool.query('DELETE FROM TAIKHOAN WHERE (TenDangNhap = ? OR MaSV = ?) AND VaiTro = ?', [studentCode, studentCode, 'sinhvien']);
+            log(`[student.deleted] Đã xóa tài khoản đăng nhập của sinh viên ${studentCode} (${r.affectedRows} bản ghi)`);
+        }
+    },
+    openapi: {
+        description: 'Dịch vụ xác thực & phân quyền: admin, giangvien, sinhvien.',
+        routes: [
+            { method: 'POST', path: '/api/auth/register', summary: 'Đăng ký tài khoản người dùng', body: ['TenDangNhap', 'MatKhau', 'HoTen', 'Email', 'VaiTro', 'MaSV', 'Lop', 'Nganh'], required: ['TenDangNhap', 'MatKhau', 'HoTen'] },
+            { method: 'POST', path: '/api/auth/login', summary: 'Đăng nhập, nhận JWT', auth: false, body: ['TenDangNhap', 'MatKhau'], required: ['TenDangNhap', 'MatKhau'] },
+            { method: 'GET', path: '/api/auth/me', summary: 'Thông tin người dùng hiện tại' },
+            { method: 'POST', path: '/api/auth/verify', summary: 'Kiểm tra token (dịch vụ khác có thể tái sử dụng)', body: ['token'], required: ['token'] },
+            { method: 'GET', path: '/api/auth/users', summary: 'Danh sách tài khoản (admin/giangvien)', roles: ['admin', 'giangvien'] },
+            { method: 'PUT', path: '/api/auth/users/:id/role', summary: 'Cập nhật vai trò tài khoản', roles: ['admin'] },
+            { method: 'DELETE', path: '/api/auth/users/:id', summary: 'Xóa tài khoản', roles: ['admin'] }
+        ]
+    },
+    async init(app, { pool, log, publish }) {
+        const router = express.Router();
+
+        // Migrate từng cột riêng để tương thích MySQL và không bỏ qua cột thiếu.
+        for (const [column, definition] of [
+            ['MaSV', 'VARCHAR(20) NULL'],
+            ['Lop', 'VARCHAR(50) NULL'],
+            ['Nganh', "VARCHAR(100) NULL DEFAULT 'Công nghệ phần mềm'"]
+        ]) {
+            const [[{ columnCount }]] = await pool.query(
+                'SELECT COUNT(*) AS columnCount FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                ['TAIKHOAN', column]
+            );
+            if (columnCount === 0) {
+                try {
+                    await pool.query(`ALTER TABLE TAIKHOAN ADD COLUMN \`${column}\` ${definition}`);
+                } catch (e) {
+                    if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+                }
+            }
+        }
+
+
+
+        router.post('/register', async (req, res) => {
+            const { TenDangNhap, MatKhau, HoTen, Email, VaiTro, MaSV, Lop, Nganh } = req.body || {};
+            const rawUser = (TenDangNhap || MaSV || '').trim();
+            if (!rawUser || !MatKhau || !HoTen) throw new HttpError(400, 'Tên đăng nhập / Mã sinh viên, mật khẩu và họ tên là bắt buộc');
+            if (String(MatKhau).length < 6) throw new HttpError(400, 'Mật khẩu phải có ít nhất 6 ký tự');
+
+            // Quyền phân vai trò: nếu có người dùng đăng nhập là admin thì được cấp quyền bất kỳ,
+            // còn lại mặc định là 'sinhvien'
+            let assignedRole = 'sinhvien';
+            if (req.user && req.user.VaiTro === 'admin' && VaiTro && VALID_ROLES.includes(VaiTro)) {
+                assignedRole = VaiTro;
+            }
+
+            const studentCode = (assignedRole === 'sinhvien') ? (MaSV ? String(MaSV).trim().toUpperCase() : rawUser) : null;
+            const finalUsername = rawUser;
+            const hash = await bcrypt.hash(String(MatKhau), 10);
+
+            // Kiểm tra xem tài khoản đã tồn tại hay chưa
+            const [exist] = await pool.query(
+                'SELECT MaTK, VaiTro FROM TAIKHOAN WHERE TenDangNhap = ? OR (MaSV IS NOT NULL AND MaSV = ?)',
+                [finalUsername, studentCode]
+            );
+
+            if (exist[0]) {
+                if (exist[0].VaiTro !== 'sinhvien' && (!req.user || req.user.VaiTro !== 'admin')) {
+                    throw new HttpError(403, 'Không thể đăng ký lại tài khoản quản trị hoặc giảng viên');
+                }
+                // Nếu tài khoản đã tồn tại (ví dụ do admin thêm trước với pass mặc định 123456), cập nhật mật khẩu mới của sinh viên
+                await pool.query(
+                    'UPDATE TAIKHOAN SET MatKhau = ?, HoTen = ?, Email = ?, Lop = ?, Nganh = ? WHERE MaTK = ?',
+                    [hash, HoTen, Email || null, Lop || null, Nganh || 'Công nghệ phần mềm', exist[0].MaTK]
+                );
+            } else {
+                await pool.query(
+                    'INSERT INTO TAIKHOAN (TenDangNhap, MatKhau, HoTen, Email, VaiTro, MaSV, Lop, Nganh) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    [finalUsername, hash, HoTen, Email || null, assignedRole, studentCode, Lop || null, Nganh || 'Công nghệ phần mềm']
+                );
+            }
+
+            publish('user.registered', {
+                TenDangNhap: finalUsername,
+                HoTen,
+                Email: Email || null,
+                VaiTro: assignedRole,
+                MaSV: studentCode,
+                Lop: Lop || null,
+                Nganh: Nganh || 'Công nghệ phần mềm'
+            });
+
+            res.status(201).json({ success: true, message: 'Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.' });
+        });
+
+        router.post('/login', async (req, res) => {
+            const { TenDangNhap, MatKhau } = req.body || {};
+            if (!TenDangNhap || !MatKhau) throw new HttpError(400, 'Tên đăng nhập và mật khẩu là bắt buộc');
+            const [rows] = await pool.query('SELECT * FROM TAIKHOAN WHERE TenDangNhap = ?', [TenDangNhap]);
+            const user = rows[0];
+            if (!user || !(await bcrypt.compare(String(MatKhau), user.MatKhau))) {
+                throw new HttpError(401, 'Tên đăng nhập hoặc mật khẩu không đúng');
+            }
+            const token = jwt.sign({
+                MaTK: user.MaTK,
+                TenDangNhap: user.TenDangNhap,
+                HoTen: user.HoTen,
+                VaiTro: user.VaiTro,
+                MaSV: user.MaSV || (user.VaiTro === 'sinhvien' ? user.TenDangNhap : null),
+                Nganh: user.Nganh || 'Công nghệ phần mềm'
+            }, jwtSecret(), 7200);
+
+            res.json({
+                success: true,
+                message: 'Đăng nhập thành công',
+                token,
+                user: {
+                    MaTK: user.MaTK,
+                    TenDangNhap: user.TenDangNhap,
+                    HoTen: user.HoTen,
+                    Email: user.Email,
+                    VaiTro: user.VaiTro,
+                    MaSV: user.MaSV || (user.VaiTro === 'sinhvien' ? user.TenDangNhap : null),
+                    Nganh: user.Nganh || 'Công nghệ phần mềm'
+                }
+            });
+        });
+
+        router.get('/me', async (req, res) => {
+            if (!req.user) throw new HttpError(401, 'Chưa đăng nhập');
+            const [rows] = await pool.query('SELECT MaTK, TenDangNhap, HoTen, Email, VaiTro, MaSV, Nganh, NgayTao FROM TAIKHOAN WHERE TenDangNhap = ?', [req.user.TenDangNhap]);
+            if (!rows[0]) throw new HttpError(404, 'Không tìm thấy thông tin tài khoản');
+            res.json({ success: true, data: rows[0] });
+        });
+
+        router.post('/verify', (req, res) => {
+            try {
+                const p = jwt.verify((req.body || {}).token, jwtSecret());
+                res.json({
+                    success: true,
+                    valid: true,
+                    user: {
+                        MaTK: p.MaTK,
+                        TenDangNhap: p.TenDangNhap,
+                        VaiTro: p.VaiTro,
+                        MaSV: p.MaSV,
+                        Nganh: p.Nganh
+                    }
+                });
+            } catch {
+                res.json({ success: true, valid: false });
+            }
+        });
+
+        router.get('/users', async (req, res) => {
+            requireRole(req, 'admin', 'giangvien');
+            const [rows] = await pool.query('SELECT MaTK, TenDangNhap, HoTen, Email, VaiTro, MaSV, Nganh, NgayTao FROM TAIKHOAN ORDER BY MaTK');
+            res.json({ success: true, data: rows });
+        });
+
+        router.put('/users/:id/role', async (req, res) => {
+            requireRole(req, 'admin');
+            const { VaiTro } = req.body || {};
+            if (!VALID_ROLES.includes(VaiTro)) throw new HttpError(400, `Vai trò không hợp lệ. Phải là một trong: ${VALID_ROLES.join(', ')}`);
+            const [r] = await pool.query('UPDATE TAIKHOAN SET VaiTro = ? WHERE MaTK = ?', [VaiTro, req.params.id]);
+            if (r.affectedRows === 0) throw new HttpError(404, 'Không tìm thấy tài khoản');
+            res.json({ success: true, message: 'Cập nhật vai trò thành công' });
+        });
+
+        router.delete('/users/:id', async (req, res) => {
+            requireRole(req, 'admin');
+            const [r] = await pool.query('DELETE FROM TAIKHOAN WHERE MaTK = ?', [req.params.id]);
+            if (r.affectedRows === 0) throw new HttpError(404, 'Không tìm thấy tài khoản');
+            res.json({ success: true, message: 'Xóa tài khoản thành công' });
+        });
+
+        app.use('/api/auth', router);
+    }
+});
