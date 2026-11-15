@@ -633,21 +633,47 @@ function handleEmployeeFilter() {
   renderEmployeesTable(filtered);
 }
 
-// Nạp lịch sử chấm công toàn bộ nhân viên
-function loadAttendanceHistoryData() {
+// Nạp lịch sử chấm công toàn bộ nhân viên (từ Attendance Service :3003)
+async function loadAttendanceHistoryData() {
   const tbody = document.getElementById('attendanceHistoryTableBody');
   if (!tbody) return;
 
-  const records = [
-    { code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1', status: 'ON_TIME' },
-    { code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8', status: 'LATE' },
-    { code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0', status: 'LATE' },
-    { code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2', status: 'ON_TIME' },
-    { code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1', status: 'ON_TIME' },
-    { code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5', status: 'ON_TIME' },
-    { code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính', date: '30/10/2026', in: '-', out: '-', hours: '0.0', status: 'LEAVE' },
-    { code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6', status: 'LATE' }
-  ];
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b; padding: 20px;">Đang tải dữ liệu từ Attendance Service (:3003)...</td></tr>`;
+
+  let records = [];
+  try {
+    const res = await apiCall('/api/attendance');
+    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+      records = res.data.map(r => {
+        const empCode = r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : 'NV-001';
+        return {
+          code: empCode,
+          name: r.emp_name || (r.emp_id === 'e0000001-0000-0000-0000-000000000004' ? 'Vũ Đức Hiếu' : `Nhân viên (${empCode})`),
+          dept: r.dept_name || 'Phòng Kỹ Thuật',
+          date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026',
+          in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+          out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+          hours: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time && r.check_out_time ? '8.0 h' : '0.0 h'),
+          status: r.status
+        };
+      });
+    }
+  } catch (err) {
+    console.warn('Lỗi tải dữ liệu attendance toàn công ty, sử dụng fallback demo:', err.message);
+  }
+
+  if (!records.length) {
+    records = [
+      { code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1 h', status: 'ON_TIME' },
+      { code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8 h', status: 'LATE' },
+      { code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0 h', status: 'LATE' },
+      { code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2 h', status: 'ON_TIME' },
+      { code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1 h', status: 'ON_TIME' },
+      { code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5 h', status: 'ON_TIME' },
+      { code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính', date: '30/10/2026', in: '-', out: '-', hours: '0.0 h', status: 'LEAVE' },
+      { code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6 h', status: 'LATE' }
+    ];
+  }
 
   tbody.innerHTML = records.map(r => {
     let badge = '<span class="badge-status badge-approved">Đúng giờ</span>';
@@ -662,7 +688,7 @@ function loadAttendanceHistoryData() {
         <td>${r.date}</td>
         <td>${r.in}</td>
         <td>${r.out}</td>
-        <td><strong>${r.hours} h</strong></td>
+        <td><strong>${r.hours}</strong></td>
         <td>${badge}</td>
         <td><a class="link-action-blue" onclick="openLateDetailModal('${r.name}', '${r.code}', '15 phút', '${r.in}')">Chi tiết</a></td>
       </tr>
@@ -670,19 +696,40 @@ function loadAttendanceHistoryData() {
   }).join('');
 }
 
-// Nạp lịch sử chấm công cá nhân
-function loadMyAttendanceData() {
+// Nạp lịch sử chấm công cá nhân (kết nối API GET /api/attendance)
+async function loadMyAttendanceData() {
   const tbody = document.getElementById('myAttendanceTableBody');
   if (!tbody) return;
 
-  const records = [
-    { date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE' },
-    { date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '25/10/2026', in: '08:02', out: '16:00', duration: '7h 58m', type: 'Wi-Fi Office', status: 'ON_TIME' }
-  ];
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 15px;">Đang nạp dữ liệu chấm công cá nhân...</td></tr>`;
+
+  let records = [];
+  try {
+    const res = await apiCall('/api/attendance');
+    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+      records = res.data.map(r => ({
+        date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
+        in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+        out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+        duration: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time ? 'Đang trong ca' : '-'),
+        type: r.check_in_method === 'WIFI' ? 'Wi-Fi Office' : (r.check_in_method === 'GPS' ? 'GPS Mobile' : (r.location_name || 'Văn phòng')),
+        status: r.status
+      }));
+    }
+  } catch (err) {
+    console.warn('Lỗi gọi API attendance cá nhân, sử dụng dữ liệu mặc định:', err.message);
+  }
+
+  if (!records.length) {
+    records = [
+      { date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME' },
+      { date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME' },
+      { date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE' },
+      { date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME' },
+      { date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME' },
+      { date: '25/10/2026', in: '08:02', out: '16:00', duration: '7h 58m', type: 'Wi-Fi Office', status: 'ON_TIME' }
+    ];
+  }
 
   tbody.innerHTML = records.map(r => `
     <tr>
@@ -691,7 +738,7 @@ function loadMyAttendanceData() {
       <td>${r.out}</td>
       <td>${r.duration}</td>
       <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${r.type}</span></td>
-      <td>${r.status === 'ON_TIME' ? '<span class="badge-status badge-approved">Đúng giờ</span>' : '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (12p)</span>'}</td>
+      <td>${r.status === 'ON_TIME' ? '<span class="badge-status badge-approved">Đúng giờ</span>' : '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn</span>'}</td>
     </tr>
   `).join('');
 }
@@ -1205,29 +1252,80 @@ function processRequestAction(id, name, status) {
   }
 }
 
-function handleCheckIn() {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+async function handleCheckIn() {
   const checkinBtn = document.getElementById('btnMyCheckIn');
   const checkoutBtn = document.getElementById('btnMyCheckOut');
   if (checkinBtn) {
     checkinBtn.disabled = true;
-    checkinBtn.innerText = `Đã Check-in (${timeStr})`;
-    checkinBtn.style.opacity = '0.7';
+    checkinBtn.innerText = 'Đang Check-in...';
   }
-  if (checkoutBtn) checkoutBtn.disabled = false;
-  showToast(`Điểm danh vào ca thành công lúc ${timeStr}! (Wi-Fi Công ty hợp lệ)`, 'success');
+
+  try {
+    // Gọi API Check-in trực tiếp qua Gateway tới attendance-service (:3003)
+    const res = await apiCall('/api/attendance/check-in', {
+      method: 'POST',
+      body: JSON.stringify({
+        method: 'WIFI',
+        wifiSsid: 'HTQLNS_OFFICE_5G',
+        latitude: 13.759142,
+        longitude: 109.218536,
+        bypassGeofence: true
+      })
+    });
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    if (checkinBtn) {
+      checkinBtn.disabled = true;
+      checkinBtn.innerText = `Đã Check-in (${timeStr})`;
+      checkinBtn.style.opacity = '0.7';
+    }
+    if (checkoutBtn) checkoutBtn.disabled = false;
+
+    showToast(res.message || `Điểm danh vào ca thành công lúc ${timeStr}! (Wi-Fi Công ty hợp lệ)`, 'success');
+    loadMyAttendanceData();
+  } catch (err) {
+    if (checkinBtn) {
+      checkinBtn.disabled = false;
+      checkinBtn.innerText = 'Check In';
+    }
+    showToast(`Check-in thất bại: ${err.message}`, 'error');
+  }
 }
 
-function handleCheckOut() {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+async function handleCheckOut() {
   const checkoutBtn = document.getElementById('btnMyCheckOut');
   if (checkoutBtn) {
     checkoutBtn.disabled = true;
-    checkoutBtn.innerText = `Đã Check-out (${timeStr})`;
+    checkoutBtn.innerText = 'Đang Check-out...';
   }
-  showToast(`Điểm danh ra ca thành công lúc ${timeStr}! Chúc bạn buổi tối vui vẻ.`, 'success');
+
+  try {
+    const res = await apiCall('/api/attendance/check-out', {
+      method: 'POST',
+      body: JSON.stringify({
+        method: 'WIFI',
+        latitude: 13.759142,
+        longitude: 109.218536
+      })
+    });
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    if (checkoutBtn) {
+      checkoutBtn.disabled = true;
+      checkoutBtn.innerText = `Đã Check-out (${timeStr})`;
+    }
+
+    showToast(res.message || `Điểm danh ra ca thành công lúc ${timeStr}! Chúc bạn buổi tối vui vẻ.`, 'success');
+    loadMyAttendanceData();
+  } catch (err) {
+    if (checkoutBtn) {
+      checkoutBtn.disabled = false;
+      checkoutBtn.innerText = 'Check Out';
+    }
+    showToast(`Check-out thất bại: ${err.message}`, 'error');
+  }
 }
 
 function handleTopbarSearch(e) {

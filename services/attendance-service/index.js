@@ -43,6 +43,11 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
+function getEmpIdFromUser(user) {
+  if (!user) return null;
+  return user.empId || user.emp_id || user.userId || user.id || user.sub || user.username || null;
+}
+
 async function fetchEmployeeShift(empId, workDate) {
   try {
     const url = `${SHIFT_SERVICE_URL}/internal/shifts/schedule?empId=${encodeURIComponent(empId)}&date=${encodeURIComponent(workDate)}`;
@@ -118,7 +123,7 @@ app.post(['/api/v1/work-locations', '/api/work-locations', '/api/attendance/work
 
 app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAuth(), async (req, res, next) => {
   try {
-    const empId = req.user.empId;
+    const empId = getEmpIdFromUser(req.user);
     if (!empId) {
       return res.status(400).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự (empId)' });
     }
@@ -230,7 +235,7 @@ app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAu
 
 app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], requireAuth(), async (req, res, next) => {
   try {
-    const empId = req.user.empId;
+    const empId = getEmpIdFromUser(req.user);
     const { latitude, longitude, method = 'GPS' } = req.body;
     const now = new Date();
     const workDate = now.toISOString().slice(0, 10);
@@ -287,7 +292,7 @@ app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], require
 app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, res, next) => {
   try {
     const { empId, fromDate, toDate, status } = req.query;
-    const targetEmpId = req.user.role === 'EMPLOYEE' ? req.user.empId : empId;
+    const targetEmpId = req.user.role === 'EMPLOYEE' ? getEmpIdFromUser(req.user) : (empId || null);
 
     const conditions = [];
     const params = [];
@@ -328,7 +333,7 @@ app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, r
 // Gửi đơn giải trình công (SCR_ATT_03)
 app.post(['/api/v1/attendance-adjustments', '/api/attendance/explanations', '/api/attendance/adjustments'], requireAuth(), async (req, res, next) => {
   try {
-    const empId = req.user.empId;
+    const empId = getEmpIdFromUser(req.user);
     const { workDate, adjustmentType = 'FORGOT_CHECK_IN', requestedCheckIn, requestedCheckOut, reason, evidenceUrl = null } = req.body;
 
     if (!empId || !workDate || !reason) {
@@ -370,7 +375,7 @@ app.patch('/api/v1/attendance-adjustments/:id/decision', requireAuth(['ADMIN', '
       return res.status(400).json({ success: false, error: 'Đơn giải trình đã được xử lý' });
     }
 
-    const approverId = req.user.empId || req.user.userId;
+    const approverId = getEmpIdFromUser(req.user);
     await pool.query(
       `UPDATE attendance_adjustments
        SET status = ?, approver_id = ?, approved_at = NOW(), reject_reason = ?
