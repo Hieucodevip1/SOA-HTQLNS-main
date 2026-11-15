@@ -171,14 +171,15 @@ const app = createServiceApp('auth-service', {
   }
 });
 
-// Middleware giải mã thông tin x-user do Gateway forward tới (nếu có)
+// Never trust a client-supplied x-user header. Authorize using a signed JWT.
 app.use((req, res, next) => {
-  const forwardedUser = req.headers['x-user'];
-  if (forwardedUser && !req.user) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
     try {
-      req.user = JSON.parse(Buffer.from(forwardedUser, 'base64').toString('utf8'));
+      req.user = jwt.verifyToken(authHeader.slice(7).trim());
     } catch {
-      // Bỏ qua nếu lỗi parse
+      // Public endpoints remain public; protected handlers reject missing req.user.
+      req.user = null;
     }
   }
   next();
@@ -203,13 +204,15 @@ app.post('/api/auth/register', async (req, res) => {
       return badRequest(res, 'Mật khẩu phải có độ dài tối thiểu 6 ký tự');
     }
 
-    // Bảo mật: Đăng ký công khai không thể tự cấp quyền ADMIN
-    let assignedRole = 'EMPLOYEE';
-    if (req.user && ['ADMIN', 'HR'].includes(req.user.role)) {
-      assignedRole = role || 'EMPLOYEE';
-    } else if (role && role !== 'ADMIN') {
-      assignedRole = role;
+    // Public registration must never grant privileged roles.
+    const allowedRoles = ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'];
+    if (role && !allowedRoles.includes(role)) {
+      return badRequest(res, 'Vai trò không hợp lệ');
     }
+    if (role && role !== 'EMPLOYEE' && req.user?.role !== 'ADMIN') {
+      return forbidden(res, 'Chỉ ADMIN được cấp vai trò đặc quyền khi đăng ký');
+    }
+    const assignedRole = req.user?.role === 'ADMIN' ? (role || 'EMPLOYEE') : 'EMPLOYEE';
 
     const existingUser = await findUserByLogin(username);
     if (existingUser) {
@@ -308,8 +311,10 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password, biometric } = req.body;
 
-    if (!username || (!password && !biometric)) {
-      return badRequest(res, 'Vui lòng cung cấp thông tin đăng nhập');
+    // A client boolean is not biometric proof: a password is mandatory until
+    // a server-verified WebAuthn assertion flow is implemented.
+    if (!username || !password) {
+      return badRequest(res, 'Vui lòng cung cấp tên đăng nhập và mật khẩu');
     }
 
     const user = await findUserByLogin(username);
@@ -321,16 +326,10 @@ app.post('/api/auth/login', async (req, res) => {
       return forbidden(res, `Tài khoản của bạn đang ở trạng thái: ${user.status}`);
     }
 
-    // Kiểm tra mật khẩu (nếu không phải đăng nhập sinh trắc học đã xác thực)
-    if (!biometric) {
-      const match = await bcrypt.compare(password, user.password_hash);
-      if (!match) {
-        return unauthorized(res, 'Tên đăng nhập hoặc mật khẩu không chính xác');
-      }
-    } else {
-      if (!user.biometric_enabled) {
-        return forbidden(res, 'Tài khoản chưa kích hoạt xác thực sinh trắc học');
-      }
+    // Do not allow biometric=true to skip credential verification.
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return unauthorized(res, 'Tên đăng nhập hoặc mật khẩu không chính xác');
     }
 
     // Ký JWT Token
