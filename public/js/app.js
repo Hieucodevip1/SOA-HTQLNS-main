@@ -1,20 +1,22 @@
 /**
  * public/js/app.js
- * Frontend JavaScript tương tác với API Gateway trong kiến trúc SOA HTQLNS
+ * Frontend JavaScript điều khiển giao diện chuẩn Figma (Images 1 - 5)
+ * Tương tác với API Gateway trong kiến trúc Microservices HTQLNS
  */
 
-const API_BASE = ''; // Gọi tương đối qua API Gateway trên cùng Host/Port
+const API_BASE = ''; // Gọi qua API Gateway cùng Host/Port
 
 let state = {
   token: localStorage.getItem('htqlns_token') || null,
   user: JSON.parse(localStorage.getItem('htqlns_user') || 'null'),
   departments: [],
   positions: [],
-  employees: []
+  employees: [],
+  currentView: 'dashboard'
 };
 
 // ==============================================================================
-// 1. QUẢN LÝ THÔNG BÁO (TOAST NOTIFICATIONS)
+// 1. TOAST NOTIFICATION
 // ==============================================================================
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastBox');
@@ -34,7 +36,7 @@ function showToast(message, type = 'success') {
 }
 
 // ==============================================================================
-// 2. FETCH WRAPPER CÓ GẮN TOKEN & HEADER BẢO MẬT
+// 2. WRAPPER GỌI API QUA GATEWAY
 // ==============================================================================
 async function apiCall(path, options = {}) {
   const headers = {
@@ -56,7 +58,7 @@ async function apiCall(path, options = {}) {
 
     if (!res.ok) {
       if (res.status === 401 && path !== '/api/auth/login') {
-        handleLogout();
+        handleLogoutClick();
         showToast('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại', 'warning');
       }
       throw new Error(data?.error || data?.message || `Lỗi HTTP ${res.status}`);
@@ -69,29 +71,34 @@ async function apiCall(path, options = {}) {
 }
 
 // ==============================================================================
-// 3. XÁC THỰC (AUTHENTICATION & QUICK LOGIN)
+// 3. XÁC THỰC AUTH (LOGIN & REGISTER THEO FIGMA IMAGE 5)
 // ==============================================================================
-function switchAuthTab(tab) {
-  const isLogin = tab === 'login';
-  document.getElementById('tabLogin').classList.toggle('active', isLogin);
-  document.getElementById('tabRegister').classList.toggle('active', !isLogin);
-  document.getElementById('formLoginContainer').style.display = isLogin ? 'block' : 'none';
-  document.getElementById('formRegisterContainer').style.display = isLogin ? 'none' : 'block';
+function toggleAuthMode(mode) {
+  const isLogin = mode === 'login';
+  document.getElementById('authLoginFormContainer').style.display = isLogin ? 'block' : 'none';
+  document.getElementById('authRegisterFormContainer').style.display = isLogin ? 'none' : 'block';
 }
 
-function quickLogin(username) {
-  document.getElementById('loginUsername').value = username;
+function togglePasswordVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  if (input) {
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+}
+
+function quickFillAuth(role) {
+  document.getElementById('loginUsername').value = role;
   document.getElementById('loginPassword').value = '123456';
-  handleLogin(new Event('submit'));
+  handleLoginSubmit(new Event('submit'));
 }
 
-async function handleLogin(e) {
+async function handleLoginSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
   const biometric = document.getElementById('loginBiometric')?.checked;
-  const btn = document.getElementById('btnLoginSubmit');
+  const btn = document.getElementById('btnLoginAction');
 
   if (!username || !password) {
     return showToast('Vui lòng nhập tên đăng nhập và mật khẩu', 'warning');
@@ -113,46 +120,59 @@ async function handleLogin(e) {
     localStorage.setItem('htqlns_user', JSON.stringify(state.user));
 
     showToast(`Xin chào ${state.user.username}! Đăng nhập thành công.`, 'success');
-    initPortal();
+    initPortalDashboard();
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerText = 'Đăng nhập hệ thống';
+    btn.innerText = 'Login';
   }
 }
 
-async function handleRegister(e) {
+async function handleRegisterSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
-  const username = document.getElementById('regUsername').value.trim();
+  const firstName = document.getElementById('regFirstName').value.trim();
+  const lastName = document.getElementById('regLastName').value.trim();
   const email = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPassword').value;
-  const role = document.getElementById('regRole').value;
-  const btn = document.getElementById('btnRegisterSubmit');
+  const confirmPassword = document.getElementById('regConfirmPassword').value;
+  const btn = document.getElementById('btnRegisterAction');
 
+  if (password !== confirmPassword) {
+    return showToast('Xác nhận mật khẩu không khớp', 'warning');
+  }
+
+  const username = email.split('@')[0] || `user_${Date.now()}`;
   btn.disabled = true;
-  btn.innerText = 'Đang tạo tài khoản...';
+  btn.innerText = 'Đang đăng ký...';
 
   try {
     await apiCall('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, email, password, role })
+      body: JSON.stringify({
+        username,
+        email,
+        password,
+        role: 'EMPLOYEE'
+      })
     });
 
     showToast('Tạo tài khoản thành công! Bạn có thể đăng nhập ngay.', 'success');
-    switchAuthTab('login');
+    toggleAuthMode('login');
     document.getElementById('loginUsername').value = username;
     document.getElementById('loginPassword').value = password;
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerText = 'Tạo tài khoản mới';
+    btn.innerText = 'Register';
   }
 }
 
-function handleLogout() {
+function handleLogoutClick() {
+  if (!confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) return;
+
   state.token = null;
   state.user = null;
   localStorage.removeItem('htqlns_token');
@@ -160,118 +180,99 @@ function handleLogout() {
 
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
-  showToast('Đã đăng xuất khỏi hệ thống', 'success');
+  showToast('Đã đăng xuất thành công', 'success');
 }
 
-async function handleForgotPassword() {
-  const email = prompt('Nhập địa chỉ email tài khoản của bạn để nhận mã OTP:');
+function handleForgotPasswordClick() {
+  const email = prompt('Nhập địa chỉ email tài khoản để nhận mã OTP khôi phục:');
   if (!email) return;
 
-  try {
-    await apiCall('/api/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-    showToast(`Mã xác thực OTP đã được gửi tới ${email}. Vui lòng kiểm tra email.`, 'success');
-  } catch (err) {
-    showToast(err.message, 'error');
-  }
+  apiCall('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  })
+    .then(() => {
+      showToast(`Mã xác thực OTP đã được gửi đến ${email}.`, 'success');
+    })
+    .catch((err) => showToast(err.message, 'error'));
 }
 
 // ==============================================================================
-// 4. ĐIỀU HƯỚNG GIAO DIỆN (VIEW NAVIGATION)
+// 4. ĐIỀU HƯỚNG VIEW (BREADCRUMB & SIDEBAR THEO FIGMA)
 // ==============================================================================
-const VIEW_TITLES = {
-  dashboard: 'Tổng quan hệ thống',
-  departments: 'Quản lý Cơ cấu Phòng ban (SCR_ADM_05)',
-  positions: 'Quản lý Chức danh Công việc',
-  employees: 'Quản trị Hồ sơ Nhân sự (SCR_ADM_06)',
-  attendance: 'Chấm công GPS/WiFi (SCR_ATT_01)',
-  leaves: 'Quản lý Nghỉ phép (SCR_LEAVE_01)',
-  shifts: 'Phân ca làm việc & Tăng ca (SCR_SHIFT_01)',
-  payroll: 'Bảng lương & Phiếu lương (SCR_PAY_01)',
-  'soa-monitor': 'Giám sát Cụm Dịch Vụ SOA (Service Registry & Event Bus)'
-};
+function navigateToView(viewName) {
+  state.currentView = viewName;
 
-function switchView(viewName) {
   // Cập nhật tab active trên Sidebar
-  document.querySelectorAll('.sidebar-menu .nav-link').forEach((link) => {
-    link.classList.remove('active');
+  document.querySelectorAll('.figma-nav-item').forEach((item) => {
+    item.classList.remove('active');
   });
 
-  const activeLink = Array.from(document.querySelectorAll('.sidebar-menu .nav-link')).find((link) => {
-    return link.getAttribute('onclick')?.includes(viewName);
-  });
-  if (activeLink) activeLink.classList.add('active');
+  const targetNavItem = document.getElementById(`nav-${viewName}`);
+  if (targetNavItem) targetNavItem.classList.add('active');
 
-  // Chuyển view nội dung
-  document.querySelectorAll('.portal-view').forEach((view) => {
-    view.classList.remove('active');
+  // Ẩn tất cả view section
+  document.querySelectorAll('.figma-view-section').forEach((sec) => {
+    sec.style.display = 'none';
   });
 
-  const targetView = document.getElementById(`view-${viewName}`);
-  if (targetView) targetView.classList.add('active');
+  // Hiển thị view tương ứng
+  let targetSection = document.getElementById(`view-${viewName}`);
+  if (!targetSection) {
+    if (viewName === 'requests') {
+      targetSection = document.getElementById('view-request-detail');
+    } else {
+      targetSection = document.getElementById('view-dashboard');
+    }
+  }
 
-  // Cập nhật tiêu đề trang
-  document.getElementById('pageTitle').innerText = VIEW_TITLES[viewName] || 'HTQLNS';
+  if (targetSection) targetSection.style.display = 'block';
 
   // Nạp dữ liệu tương ứng
-  if (viewName === 'departments') loadDepartments();
-  if (viewName === 'positions') loadPositions();
-  if (viewName === 'employees') loadEmployees();
-  if (viewName === 'soa-monitor') loadSoaMonitor();
-  if (viewName === 'dashboard') loadDashboard();
+  if (viewName === 'dashboard') loadDashboardData();
+  if (viewName === 'employees') loadEmployeesData();
+  if (viewName === 'departments') loadDepartmentsData();
+  if (viewName === 'soa-monitor') loadSoaServicesStatus();
+}
+
+function openRequestDetail(requestId) {
+  document.querySelectorAll('.figma-view-section').forEach((sec) => {
+    sec.style.display = 'none';
+  });
+
+  const detailSec = document.getElementById('view-request-detail');
+  if (detailSec) detailSec.style.display = 'block';
+
+  document.querySelectorAll('.figma-nav-item').forEach((item) => {
+    item.classList.remove('active');
+  });
+  const navReq = document.getElementById('nav-requests');
+  if (navReq) navReq.classList.add('active');
 }
 
 // ==============================================================================
 // 5. NẠP DỮ LIỆU TỪ CÁC MICROSERVICES
 // ==============================================================================
-
-// Nạp Tổng quan
-async function loadDashboard() {
-  await Promise.all([loadDepartments(), loadPositions(), loadEmployees()]);
-
-  document.getElementById('statEmpCount').innerText = state.employees.length;
-  document.getElementById('statDeptCount').innerText = state.departments.length;
-  document.getElementById('statPosCount').innerText = state.positions.length;
-
-  const tbody = document.getElementById('dashEmployeesTableBody');
-  if (!tbody) return;
-
-  const recent = state.employees.slice(0, 5);
-  tbody.innerHTML = recent
-    .map(
-      (e) => `
-    <tr>
-      <td><strong>${e.code}</strong></td>
-      <td>${e.full_name}</td>
-      <td>${e.email}</td>
-      <td>${e.department_name || '-'}</td>
-      <td>${e.position_title || '-'}</td>
-      <td><span class="badge badge-active">${e.status}</span></td>
-    </tr>
-  `
-    )
-    .join('');
+async function loadDashboardData() {
+  await Promise.all([loadDepartmentsData(), loadEmployeesData()]);
 }
 
-// Nạp danh sách Phòng ban
-async function loadDepartments() {
+async function loadDepartmentsData() {
   try {
     const res = await apiCall('/api/organization/departments');
     state.departments = res.data || [];
     renderDepartmentsTable(state.departments);
   } catch (err) {
-    showToast('Lỗi nạp phòng ban: ' + err.message, 'error');
+    console.warn('Lỗi tải danh sách phòng ban:', err.message);
   }
 }
 
 function renderDepartmentsTable(list) {
-  const tbody = document.getElementById('departmentsTableBody');
+  const tbody = document.getElementById('departmentsTableFullBody');
   if (!tbody) return;
 
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chưa có phòng ban nào</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu phòng ban</td></tr>`;
     return;
   }
 
@@ -280,88 +281,41 @@ function renderDepartmentsTable(list) {
       (d) => `
     <tr>
       <td><strong>${d.code}</strong></td>
-      <td><strong style="color: var(--primary);">${d.name}</strong></td>
+      <td><strong style="color: #0f172a;">${d.name}</strong></td>
       <td>${d.manager_name || '<span style="color:#94a3b8">Chưa bổ nhiệm</span>'}</td>
-      <td><span class="badge" style="background:#eff6ff; color:#1e40af;">👥 ${d.employee_count || 0} người</span></td>
+      <td><span class="badge-status" style="background:#eff6ff; color:#1d4ed8;">${d.employee_count || 0} nhân sự</span></td>
       <td>${d.description || '-'}</td>
-      <td><span class="badge ${d.status === 'ACTIVE' ? 'badge-active' : 'badge-inactive'}">${d.status}</span></td>
+      <td><span class="badge-status badge-approved">${d.status}</span></td>
     </tr>
   `
     )
     .join('');
 }
 
-function filterDepartments() {
-  const keyword = document.getElementById('deptSearchInput')?.value.toLowerCase() || '';
+function handleDepartmentFilter() {
+  const kw = document.getElementById('departmentSearchInput')?.value.toLowerCase() || '';
   const filtered = state.departments.filter(
-    (d) => d.name.toLowerCase().includes(keyword) || d.code.toLowerCase().includes(keyword)
+    (d) => d.name.toLowerCase().includes(kw) || d.code.toLowerCase().includes(kw)
   );
   renderDepartmentsTable(filtered);
 }
 
-// Nạp danh sách Vị trí chức danh
-async function loadPositions() {
-  try {
-    const res = await apiCall('/api/organization/positions');
-    state.positions = res.data || [];
-    renderPositionsTable(state.positions);
-  } catch (err) {
-    showToast('Lỗi nạp chức danh: ' + err.message, 'error');
-  }
-}
-
-function renderPositionsTable(list) {
-  const tbody = document.getElementById('positionsTableBody');
-  if (!tbody) return;
-
-  if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chưa có chức danh nào</td></tr>`;
-    return;
-  }
-
-  const formatVnd = (num) => Number(num || 0).toLocaleString('vi-VN') + ' đ';
-
-  tbody.innerHTML = list
-    .map(
-      (p) => `
-    <tr>
-      <td><strong>${p.code}</strong></td>
-      <td><strong style="color: var(--text-main);">${p.title}</strong></td>
-      <td>${p.department_name || '-'}</td>
-      <td>${formatVnd(p.base_salary_min)}</td>
-      <td>${formatVnd(p.base_salary_max)}</td>
-      <td><span class="badge badge-active">${p.status}</span></td>
-    </tr>
-  `
-    )
-    .join('');
-}
-
-function filterPositions() {
-  const keyword = document.getElementById('posSearchInput')?.value.toLowerCase() || '';
-  const filtered = state.positions.filter(
-    (p) => p.title.toLowerCase().includes(keyword) || p.code.toLowerCase().includes(keyword)
-  );
-  renderPositionsTable(filtered);
-}
-
-// Nạp danh sách Nhân sự
-async function loadEmployees() {
+async function loadEmployeesData() {
   try {
     const res = await apiCall('/api/organization/employees');
     state.employees = res.data || [];
     renderEmployeesTable(state.employees);
   } catch (err) {
-    showToast('Lỗi nạp danh sách nhân sự: ' + err.message, 'error');
+    console.warn('Lỗi tải danh sách nhân sự:', err.message);
   }
 }
 
 function renderEmployeesTable(list) {
-  const tbody = document.getElementById('employeesTableBody');
+  const tbody = document.getElementById('employeesTableFullBody');
   if (!tbody) return;
 
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Chưa có hồ sơ nhân sự nào</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu nhân sự</td></tr>`;
     return;
   }
 
@@ -375,64 +329,65 @@ function renderEmployeesTable(list) {
       <td>${e.phone || '-'}</td>
       <td>${e.department_name || '-'}</td>
       <td>${e.position_title || '-'}</td>
-      <td><span class="badge" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
-      <td><span class="badge ${e.status === 'ACTIVE' ? 'badge-active' : 'badge-resigned'}">${e.status}</span></td>
+      <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
+      <td><span class="badge-status ${e.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${e.status}</span></td>
     </tr>
   `
     )
     .join('');
 }
 
-function filterEmployees() {
-  const keyword = document.getElementById('empSearchInput')?.value.toLowerCase() || '';
+function handleEmployeeFilter() {
+  const kw = document.getElementById('employeeSearchInput')?.value.toLowerCase() || '';
   const filtered = state.employees.filter(
     (e) =>
-      e.full_name.toLowerCase().includes(keyword) ||
-      e.code.toLowerCase().includes(keyword) ||
-      e.email.toLowerCase().includes(keyword)
+      e.full_name.toLowerCase().includes(kw) ||
+      e.code.toLowerCase().includes(kw) ||
+      e.email.toLowerCase().includes(kw)
   );
   renderEmployeesTable(filtered);
 }
 
-// Nạp thông tin Giám sát Hạ tầng SOA
-async function loadSoaMonitor() {
-  const tbody = document.getElementById('soaServicesTableBody');
+// Giám sát trạng thái cụm SOA Registry
+async function loadSoaServicesStatus() {
+  const tbody = document.getElementById('soaMonitorTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Đang kết nối Service Registry...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Đang kết nối Service Registry (:3500)...</td></tr>`;
 
   try {
     const res = await apiCall('/api/system/services').catch(() => null);
     const services = res?.data?.services || {};
 
-    const knownServices = [
-      { name: 'api-gateway', port: 3000, db: 'N/A (Proxy / Gateway)' },
-      { name: 'service-registry', port: 3500, db: 'In-Memory (Dò tìm động)' },
-      { name: 'event-bus', port: 3600, db: 'Durable Queue (event-bus.json)' },
-      { name: 'auth-service', port: 3001, db: 'htqlns_auth' },
-      { name: 'organization-service', port: 3002, db: 'htqlns_organization' },
-      { name: 'attendance-service', port: 3003, db: 'htqlns_attendance' },
-      { name: 'leave-service', port: 3004, db: 'htqlns_leave' },
-      { name: 'shift-service', port: 3005, db: 'htqlns_shift' },
-      { name: 'payroll-service', port: 3006, db: 'htqlns_payroll' },
-      { name: 'notification-service', port: 3007, db: 'htqlns_notification' },
-      { name: 'analytics-service', port: 3008, db: 'htqlns_analytics' }
+    const serviceList = [
+      { name: 'api-gateway', port: 3000, db: 'N/A (Cổng Gateway & Proxy)', defaultUp: true },
+      { name: 'service-registry', port: 3500, db: 'In-Memory (Service Discovery)', defaultUp: true },
+      { name: 'event-bus', port: 3600, db: 'Durable Queue (event-bus.json)', defaultUp: true },
+      { name: 'auth-service', port: 3001, db: 'htqlns_auth (Cơ sở dữ liệu xác thực)', defaultUp: true },
+      { name: 'organization-service', port: 3002, db: 'htqlns_organization (Phòng ban & Nhân sự)', defaultUp: true },
+      { name: 'attendance-service', port: 3003, db: 'htqlns_attendance (GPS/WiFi)', defaultUp: false },
+      { name: 'leave-service', port: 3004, db: 'htqlns_leave (Quỹ phép & Đơn)', defaultUp: false },
+      { name: 'shift-service', port: 3005, db: 'htqlns_shift (Lịch ca & OT)', defaultUp: false },
+      { name: 'payroll-service', port: 3006, db: 'htqlns_payroll (Động cơ tính lương)', defaultUp: false },
+      { name: 'notification-service', port: 3007, db: 'htqlns_notification (Cảnh báo)', defaultUp: false },
+      { name: 'analytics-service', port: 3008, db: 'htqlns_analytics (Báo cáo)', defaultUp: false }
     ];
 
-    tbody.innerHTML = knownServices
+    tbody.innerHTML = serviceList
       .map((item) => {
         const instances = services[item.name] || [];
         const isUp = instances.length > 0 && instances.some((i) => i.status === 'UP');
-        // Các hạ tầng cơ sở registry, event-bus, gateway có thể tự kiểm tra
-        const isInfrastructure = ['api-gateway', 'service-registry', 'event-bus', 'auth-service', 'organization-service'].includes(item.name);
-        const statusBadge = isUp || isInfrastructure ? '<span class="badge badge-up">🟢 ONLINE (UP)</span>' : '<span class="badge badge-down">⚪ CHƯA BẬT (OFF)</span>';
+        const isOnline = isUp || item.defaultUp;
+        const statusBadge = isOnline
+          ? '<span class="badge-status badge-approved">🟢 ONLINE (UP)</span>'
+          : '<span class="badge-status" style="background:#f1f5f9; color:#94a3b8;">⚪ CHƯA BẬT (OFF)</span>';
 
         return `
         <tr>
           <td><strong>${item.name}</strong></td>
           <td><code>:${item.port}</code></td>
           <td>http://localhost:${item.port}</td>
-          <td><a href="http://localhost:${item.port}/health" target="_blank" style="color: var(--primary); text-decoration: underline;">/health ↗</a></td>
+          <td><a href="http://localhost:${item.port}/health" target="_blank" class="link-action-blue">/health ↗</a></td>
           <td>${statusBadge}</td>
           <td><code>${item.db}</code></td>
         </tr>
@@ -440,57 +395,64 @@ async function loadSoaMonitor() {
       })
       .join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color: var(--danger); text-align: center;">Lỗi tải dữ liệu Registry: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color: #dc2626; text-align: center;">Lỗi tải dữ liệu Registry: ${err.message}</td></tr>`;
   }
 }
 
+// Bật tắt thiết lập phương thức chấm công (Figma Image 4)
+function handleSettingToggle(type) {
+  const isWifi = document.getElementById('toggleWifi')?.checked;
+  const isGps = document.getElementById('toggleGps')?.checked;
+  showToast(`Cập nhật phương thức: Wi-Fi: ${isWifi ? 'BẬT' : 'TẮT'} | GPS: ${isGps ? 'BẬT' : 'TẮT'}`, 'success');
+}
+
 // ==============================================================================
-// 6. THAO TÁC MODAL (THÊM PHÒNG BAN, NHÂN SỰ)
+// 6. POPUP MODAL (THÊM PHÒNG BAN, NHÂN VIÊN)
 // ==============================================================================
-function openModal(title, bodyHtml, onConfirm) {
+function openModal(title, contentHtml, onConfirm) {
   const box = document.getElementById('modalBox');
   box.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal-content" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <div class="modal-title">${title}</div>
-          <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div class="modal-overlay" onclick="closeModal(event)" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100;">
+      <div class="modal-content" onclick="event.stopPropagation()" style="background: #ffffff; width: 100%; max-width: 480px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+          <h3 style="font-size: 17px; font-weight: 700; color: #0f172a;">${title}</h3>
+          <span style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="closeModal()">&times;</span>
         </div>
-        <div class="modal-body">${bodyHtml}</div>
-        <div class="modal-footer">
-          <button class="btn-logout" onclick="closeModal()">Hủy</button>
-          <button class="btn-primary" id="btnModalConfirm">Lưu thông tin</button>
+        <div>${contentHtml}</div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 14px;">
+          <button class="btn-secondary-outline" onclick="closeModal()">Hủy</button>
+          <button class="btn-primary-blue" id="btnModalConfirmAction">Lưu thông tin</button>
         </div>
       </div>
     </div>
   `;
   box.style.display = 'block';
 
-  document.getElementById('btnModalConfirm').onclick = onConfirm;
+  document.getElementById('btnModalConfirmAction').onclick = onConfirm;
 }
 
 function closeModal(e) {
-  if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close') && !e.target.classList.contains('btn-logout')) return;
+  if (e && e.target !== e.currentTarget) return;
   const box = document.getElementById('modalBox');
   box.style.display = 'none';
   box.innerHTML = '';
 }
 
-function openAddDeptModal() {
+function openAddDepartmentModal() {
   openModal(
     'Thêm Phòng Ban Mới',
     `
-    <div class="form-group">
-      <label class="form-label">Mã phòng ban *</label>
-      <input type="text" id="mDeptCode" class="form-control" placeholder="Ví dụ: PB-MKT" required>
+    <div style="margin-bottom: 12px;">
+      <label class="info-label">Mã phòng ban *</label>
+      <input type="text" id="mDeptCode" class="figma-pill-input" placeholder="Ví dụ: PB-MKT" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Tên phòng ban *</label>
-      <input type="text" id="mDeptName" class="form-control" placeholder="Ví dụ: Phòng Marketing & Truyền Thông" required>
+    <div style="margin-bottom: 12px;">
+      <label class="info-label">Tên phòng ban *</label>
+      <input type="text" id="mDeptName" class="figma-pill-input" placeholder="Ví dụ: Phòng Marketing & Thương hiệu" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Mô tả chức năng</label>
-      <textarea id="mDeptDesc" class="form-control" rows="3" placeholder="Mô tả phạm vi hoạt động của phòng..."></textarea>
+    <div style="margin-bottom: 12px;">
+      <label class="info-label">Mô tả chức năng</label>
+      <textarea id="mDeptDesc" class="figma-pill-input" rows="3" placeholder="Mô tả phạm vi hoạt động..." style="border-radius: 8px;"></textarea>
     </div>
   `,
     async () => {
@@ -498,7 +460,7 @@ function openAddDeptModal() {
       const name = document.getElementById('mDeptName').value.trim();
       const description = document.getElementById('mDeptDesc').value.trim();
 
-      if (!code || !name) return showToast('Vui lòng nhập đầy đủ mã và tên phòng ban', 'warning');
+      if (!code || !name) return showToast('Vui lòng nhập mã và tên phòng ban', 'warning');
 
       try {
         await apiCall('/api/organization/departments', {
@@ -507,51 +469,7 @@ function openAddDeptModal() {
         });
         showToast('Tạo phòng ban mới thành công!', 'success');
         closeModal();
-        loadDepartments();
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-  );
-}
-
-function openAddPositionModal() {
-  openModal(
-    'Thêm Chức Danh Công Việc',
-    `
-    <div class="form-group">
-      <label class="form-label">Mã chức danh *</label>
-      <input type="text" id="mPosCode" class="form-control" placeholder="Ví dụ: POS-QA" required>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Tên vị trí công việc *</label>
-      <input type="text" id="mPosTitle" class="form-control" placeholder="Ví dụ: Kỹ Sư Đảm Bảo Chất Lượng QA" required>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Mức lương tối thiểu (VND)</label>
-      <input type="number" id="mPosSalaryMin" class="form-control" value="10000000">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Mức lương tối đa (VND)</label>
-      <input type="number" id="mPosSalaryMax" class="form-control" value="20000000">
-    </div>
-  `,
-    async () => {
-      const code = document.getElementById('mPosCode').value.trim();
-      const title = document.getElementById('mPosTitle').value.trim();
-      const base_salary_min = Number(document.getElementById('mPosSalaryMin').value);
-      const base_salary_max = Number(document.getElementById('mPosSalaryMax').value);
-
-      if (!code || !title) return showToast('Vui lòng nhập đầy đủ mã và tên chức danh', 'warning');
-
-      try {
-        await apiCall('/api/organization/positions', {
-          method: 'POST',
-          body: JSON.stringify({ code, title, base_salary_min, base_salary_max })
-        });
-        showToast('Tạo chức danh mới thành công!', 'success');
-        closeModal();
-        loadPositions();
+        loadDepartmentsData();
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -560,35 +478,30 @@ function openAddPositionModal() {
 }
 
 function openAddEmployeeModal() {
-  const deptOptions = state.departments.map((d) => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
-  const posOptions = state.positions.map((p) => `<option value="${p.id}">${p.title}</option>`).join('');
+  const deptOpts = state.departments.map((d) => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
 
   openModal(
-    'Thêm Hồ Sơ Nhân Sự Mới',
+    'Thêm Nhân Viên Mới (SCR_ADM_06)',
     `
-    <div class="form-group">
-      <label class="form-label">Mã số nhân viên *</label>
-      <input type="text" id="mEmpCode" class="form-control" placeholder="Ví dụ: EMP005" required>
+    <div style="margin-bottom: 10px;">
+      <label class="info-label">Mã nhân viên *</label>
+      <input type="text" id="mEmpCode" class="figma-pill-input" placeholder="Ví dụ: EMP005" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Họ và tên *</label>
-      <input type="text" id="mEmpName" class="form-control" placeholder="Ví dụ: Lê Thị Mai" required>
+    <div style="margin-bottom: 10px;">
+      <label class="info-label">Họ và tên *</label>
+      <input type="text" id="mEmpName" class="figma-pill-input" placeholder="Ví dụ: Trần Văn Nam" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Email công ty *</label>
-      <input type="email" id="mEmpEmail" class="form-control" placeholder="mai.le@htqlns.com" required>
+    <div style="margin-bottom: 10px;">
+      <label class="info-label">Email công ty *</label>
+      <input type="email" id="mEmpEmail" class="figma-pill-input" placeholder="nam.tran@htqlns.com" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Số điện thoại</label>
-      <input type="text" id="mEmpPhone" class="form-control" placeholder="0901234567">
+    <div style="margin-bottom: 10px;">
+      <label class="info-label">Số điện thoại</label>
+      <input type="text" id="mEmpPhone" class="figma-pill-input" placeholder="0901234567" style="border-radius: 8px;">
     </div>
-    <div class="form-group">
-      <label class="form-label">Phòng ban</label>
-      <select id="mEmpDept" class="form-control">${deptOptions}</select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Vị trí chức danh</label>
-      <select id="mEmpPos" class="form-control">${posOptions}</select>
+    <div style="margin-bottom: 10px;">
+      <label class="info-label">Phòng ban</label>
+      <select id="mEmpDept" class="figma-pill-input" style="border-radius: 8px;">${deptOpts}</select>
     </div>
   `,
     async () => {
@@ -597,18 +510,17 @@ function openAddEmployeeModal() {
       const email = document.getElementById('mEmpEmail').value.trim();
       const phone = document.getElementById('mEmpPhone').value.trim();
       const department_id = document.getElementById('mEmpDept').value;
-      const position_id = document.getElementById('mEmpPos').value;
 
-      if (!code || !full_name || !email) return showToast('Vui lòng nhập đầy đủ mã, họ tên và email', 'warning');
+      if (!code || !full_name || !email) return showToast('Vui lòng nhập đủ mã, họ tên và email', 'warning');
 
       try {
         await apiCall('/api/organization/employees', {
           method: 'POST',
-          body: JSON.stringify({ code, full_name, email, phone, department_id, position_id })
+          body: JSON.stringify({ code, full_name, email, phone, department_id })
         });
-        showToast('Tạo hồ sơ nhân sự mới thành công!', 'success');
+        showToast('Tạo hồ sơ nhân viên thành công!', 'success');
         closeModal();
-        loadEmployees();
+        loadEmployeesData();
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -616,40 +528,35 @@ function openAddEmployeeModal() {
   );
 }
 
-// Chấm công mô phỏng
-function simulateCheckIn() {
-  showToast('Đang quét toạ độ GPS văn phòng & BSSID WiFi công ty...', 'warning');
-  setTimeout(() => {
-    showToast('✅ Check-in thành công lúc ' + new Date().toLocaleTimeString('vi-VN') + ' (Tọa độ: 10.762622, 106.660172)', 'success');
-  }, 800);
-}
-
-function simulateCheckOut() {
-  showToast('✅ Check-out thành công lúc ' + new Date().toLocaleTimeString('vi-VN') + '. Tổng thời gian làm việc: 8.5 giờ.', 'success');
-}
-
 // ==============================================================================
-// 7. KHỞI CHẠY ỨNG DỤNG (INITIALIZATION)
+// 7. KHỞI TẠO DASHBOARD PORTAL
 // ==============================================================================
-function initPortal() {
+function initPortalDashboard() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').style.display = 'flex';
 
   if (state.user) {
-    document.getElementById('userName').innerText = state.user.username || 'User';
-    document.getElementById('userAvatar').innerText = (state.user.username || 'U')[0].toUpperCase();
-    const roleBadge = document.getElementById('userRoleBadge');
-    roleBadge.innerText = state.user.role || 'EMPLOYEE';
-    roleBadge.className = `role-tag role-${state.user.role || 'EMPLOYEE'}`;
+    const isManager = state.user.role === 'MANAGER' || state.user.role === 'ADMIN' || state.user.username === 'manager';
+    const displayName = isManager ? 'Thầy Lâm' : (state.user.username || 'Nhân viên');
+    const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên' : (state.user.role === 'HR' ? 'Phòng Nhân sự' : 'Quản lý | Nhân sự');
+
+    document.getElementById('topbarUserName').innerText = `Xin chào, ${displayName}`;
+    document.getElementById('topbarUserRole').innerText = displayRole;
+    document.getElementById('topbarAvatarCircle').innerText = displayName.slice(0, 2).toUpperCase();
+
+    const greetSub = document.getElementById('dashGreetingSub');
+    if (greetSub) {
+      greetSub.innerText = `Xin chào ${displayName}, đây là tình hình đội nhóm hôm nay.`;
+    }
   }
 
-  switchView('dashboard');
+  navigateToView('dashboard');
 }
 
-// Tự động kiểm tra token khi mở trang
+// Kiểm tra phiên đăng nhập sẵn có
 window.addEventListener('DOMContentLoaded', () => {
   if (state.token && state.user) {
-    initPortal();
+    initPortalDashboard();
   } else {
     document.getElementById('loginScreen').style.display = 'flex';
   }
