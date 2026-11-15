@@ -363,13 +363,37 @@ app.post(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, nex
       ? req.body.empId
       : currentEmpId;
 
-    const { workDate, startTime, endTime, totalHours, otType = 'WEEKDAY', reason } = req.body;
+    const { workDate, startTime, endTime, otType = 'WEEKDAY', reason } = req.body;
 
-    if (!empId || !workDate || !startTime || !endTime || !totalHours || !reason) {
+    if (!empId || !workDate || !startTime || !endTime || !reason) {
       return res.status(400).json({
         success: false,
-        error: 'Thiếu thông tin bắt buộc: workDate, startTime, endTime, totalHours, reason'
+        error: 'Thiếu thông tin bắt buộc: workDate, startTime, endTime, reason'
       });
+    }
+
+    // Calculate overtime duration on the server; never trust submitted totalHours.
+    const parseTime = (value) => {
+      const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(value));
+      if (!match) return null;
+      const h = Number(match[1]), m = Number(match[2]), s = Number(match[3] || 0);
+      return h < 24 && m < 60 && s < 60 ? h * 3600 + m * 60 + s : null;
+    };
+    const startSeconds = parseTime(startTime);
+    const endSeconds = parseTime(endTime);
+    const dateIsValid = /^\d{4}-\d{2}-\d{2}$/.test(String(workDate)) &&
+      !Number.isNaN(Date.parse(`${workDate}T00:00:00Z`));
+    const allowedTypes = ['WEEKDAY', 'WEEKEND', 'HOLIDAY'];
+    if (!dateIsValid || startSeconds === null || endSeconds === null || !allowedTypes.includes(otType)) {
+      return res.status(400).json({ success: false, error: 'Ngày, giờ hoặc loại tăng ca không hợp lệ' });
+    }
+    const durationSeconds = (endSeconds - startSeconds + 86400) % 86400;
+    const totalHours = Math.round(durationSeconds / 36) / 100;
+    if (durationSeconds < 900 || durationSeconds > 12 * 3600) {
+      return res.status(400).json({ success: false, error: 'Thời gian tăng ca phải từ 15 phút đến 12 giờ' });
+    }
+    if (req.body.totalHours != null && Math.abs(Number(req.body.totalHours) - totalHours) > 0.02) {
+      return res.status(400).json({ success: false, error: 'Số giờ tăng ca không khớp với giờ bắt đầu và kết thúc' });
     }
 
     const id = crypto.randomUUID();
