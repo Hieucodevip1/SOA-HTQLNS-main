@@ -28,14 +28,17 @@ const app = createServiceApp(SERVICE_NAME, {
   }
 });
 
-async function fetchInternal(url, fallback) {
-  try {
-    const res = await fetch(url, { headers: { 'x-internal-key': env.INTERNAL_API_KEY } });
-    const json = await res.json();
-    return json.success ? json.data : fallback;
-  } catch {
-    return fallback;
+async function fetchInternal(url) {
+  const res = await fetch(url, {
+    headers: { 'x-internal-key': env.INTERNAL_API_KEY },
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!res.ok) throw new Error(`Upstream request failed (${res.status}): ${url}`);
+  const json = await res.json();
+  if (!json.success || json.data == null) {
+    throw new Error(`Invalid upstream response: ${url}`);
   }
+  return json.data;
 }
 
 // 1. Dashboard tổng hợp chỉ số chuyên cần, OT, nghỉ phép và quỹ lương (SCR_DASH_01)
@@ -44,10 +47,15 @@ app.get(['/api/v1/analytics/dashboard', '/api/analytics/dashboard', '/api/analyt
     const month = Number(req.query.month || new Date().getMonth() + 1);
     const year = Number(req.query.year || new Date().getFullYear());
 
-    const attList = await fetchInternal(`${ATTENDANCE_URL}/internal/attendances/monthly-summary?month=${month}&year=${year}`, []);
-    const leaveList = await fetchInternal(`${LEAVE_URL}/internal/leaves/monthly-summary?month=${month}&year=${year}`, []);
-    const otList = await fetchInternal(`${SHIFT_URL}/internal/ot/summary?month=${month}&year=${year}`, []);
-    const payrollSum = await fetchInternal(`${PAYROLL_URL}/internal/payrolls/summary?month=${month}&year=${year}`, { employee_count: 0, total_net_salary: 0 });
+    const attList = await fetchInternal(`${ATTENDANCE_URL}/internal/attendances/monthly-summary?month=${month}&year=${year}`);
+    const leaveList = await fetchInternal(`${LEAVE_URL}/internal/leaves/monthly-summary?month=${month}&year=${year}`);
+    const otList = await fetchInternal(`${SHIFT_URL}/internal/ot/summary?month=${month}&year=${year}`);
+    const payrollSum = await fetchInternal(`${PAYROLL_URL}/internal/payrolls/summary?month=${month}&year=${year}`);
+
+    if (!Array.isArray(attList) || !Array.isArray(leaveList) || !Array.isArray(otList) ||
+        !payrollSum || typeof payrollSum !== 'object' || Array.isArray(payrollSum)) {
+      throw new Error('Dữ liệu tổng hợp từ dịch vụ phụ thuộc không hợp lệ');
+    }
 
     const totalWorkDays = attList.reduce((acc, r) => acc + Number(r.actual_work_days || 0), 0);
     const totalLateMinutes = attList.reduce((acc, r) => acc + Number(r.total_late_minutes || 0), 0);
@@ -83,7 +91,8 @@ app.get(['/api/v1/analytics/dashboard', '/api/analytics/dashboard', '/api/analyt
       }
     });
   } catch (err) {
-    next(err);
+    console.error('[ANALYTICS] Upstream unavailable:', err.message);
+    res.status(503).json({ success: false, code: 'UPSTREAM_UNAVAILABLE', error: 'Chưa thể tổng hợp Dashboard vì một hoặc nhiều dịch vụ phụ thuộc không khả dụng' });
   }
 });
 
