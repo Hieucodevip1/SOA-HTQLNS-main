@@ -25,3 +25,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   INDEX idx_notif_role (target_role),
   INDEX idx_notif_read (is_read)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Broadcast read receipts are scoped to each user, rather than shared per role.
+CREATE TABLE IF NOT EXISTS notification_reads (
+  notification_id VARCHAR(36) NOT NULL,
+  viewer_id VARCHAR(100) NOT NULL,
+  read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (notification_id, viewer_id),
+  CONSTRAINT fk_notification_reads_notification
+    FOREIGN KEY (notification_id) REFERENCES notifications (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
