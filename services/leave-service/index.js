@@ -119,9 +119,14 @@ app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), 
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.query(
-      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid
+      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, lr.emp_id) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
        ${where}
        ORDER BY lr.created_at DESC`,
       params
@@ -136,9 +141,16 @@ app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), 
 app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], requireAuth(), async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid
+      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
+              COALESCE(e.full_name, 'Vũ Đức Hiếu') AS emp_name,
+              COALESCE(e.code, 'NV-001') AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name,
+              COALESCE(m.full_name, 'Nguyễn Thanh Lâm') AS approver_name
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       LEFT JOIN htqlns_organization.employees m ON lr.approver_id = m.id
        WHERE lr.id = ?`,
       [req.params.id]
     );
@@ -196,7 +208,7 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
 });
 
 // 5. Duyệt / Từ chối đơn xin nghỉ phép (SCR_REQ_01)
-app.patch('/api/v1/leave-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAGER']), async (req, res, next) => {
+const handleLeaveDecision = async (req, res, next) => {
   try {
     const { decision, rejectReason = null } = req.body;
     if (!['APPROVED', 'REJECTED'].includes(decision)) {
@@ -244,12 +256,31 @@ app.patch('/api/v1/leave-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MA
       isPaid: Boolean(leave.is_paid)
     }).catch(() => {});
 
-    const [updated] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [leave.id]);
+    const [updated] = await pool.query(
+      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
+              COALESCE(e.full_name, 'Vũ Đức Hiếu') AS emp_name,
+              COALESCE(e.code, 'NV-001') AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       WHERE lr.id = ?`,
+      [leave.id]
+    );
     res.json({ success: true, message: `Đã ${decision === 'APPROVED' ? 'duyệt' : 'từ chối'} đơn nghỉ phép`, data: updated[0] });
   } catch (err) {
     next(err);
   }
-});
+};
+
+const decisionPaths = [
+  '/api/v1/leave-requests/:id/decision',
+  '/api/leaves/:id/decision',
+  '/api/leave/:id/decision'
+];
+app.patch(decisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleLeaveDecision);
+app.put(decisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleLeaveDecision);
 
 // Internal API cho Payroll Service tổng hợp ngày nghỉ có lương trong tháng
 app.get('/internal/leaves/monthly-summary', requireInternalKey, async (req, res, next) => {

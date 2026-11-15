@@ -291,7 +291,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["PUT", "DELETE"],
+          "methods": ["PUT", "PATCH", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR", "MANAGER"]
         }
@@ -307,7 +307,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["PUT", "DELETE"],
+          "methods": ["PUT", "PATCH", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR", "MANAGER"]
         }
@@ -479,7 +479,7 @@
       "service": "leave-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
     {

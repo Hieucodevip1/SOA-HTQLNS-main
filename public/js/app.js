@@ -500,7 +500,7 @@ function navigateToView(viewName) {
   let targetSection = document.getElementById(`view-${viewName}`);
   if (!targetSection) {
     if (viewName === 'requests') {
-      targetSection = document.getElementById('view-request-detail');
+      targetSection = document.getElementById('view-requests') || document.getElementById('view-request-detail');
     } else {
       targetSection = document.getElementById('view-dashboard');
     }
@@ -510,6 +510,7 @@ function navigateToView(viewName) {
 
   // Nạp dữ liệu tương ứng
   if (viewName === 'dashboard') loadDashboardData();
+  if (viewName === 'requests') loadRequestsData();
   if (viewName === 'employees') loadEmployeesData();
   if (viewName === 'departments') loadDepartmentsData();
   if (viewName === 'attendance-history') loadAttendanceHistoryData();
@@ -525,7 +526,324 @@ function navigateToView(viewName) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function openRequestDetail(requestId) {
+function formatLeaveDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatLeaveDateTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} • ${hours}:${minutes}`;
+}
+
+function scrollToCreateForm() {
+  const formCard = document.getElementById('cardCreateLeaveForm');
+  if (formCard) {
+    formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const reasonInput = document.getElementById('leaveFormReason');
+    if (reasonInput) reasonInput.focus();
+  }
+}
+
+function calculateLeaveDays() {
+  const startVal = document.getElementById('leaveFormStartDate')?.value;
+  const endVal = document.getElementById('leaveFormEndDate')?.value;
+  const session = document.getElementById('leaveFormSession')?.value || 'FULL_DAY';
+  const totalInput = document.getElementById('leaveFormTotalDays');
+  if (!totalInput) return;
+
+  if (!startVal || !endVal) {
+    totalInput.value = (session === 'FULL_DAY' ? 1.0 : 0.5).toFixed(1);
+    return;
+  }
+
+  const d1 = new Date(startVal);
+  const d2 = new Date(endVal);
+  if (d2 < d1) {
+    totalInput.value = '1.0';
+    return;
+  }
+
+  const diffTime = Math.abs(d2 - d1);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  if (diffDays === 1 && (session === 'MORNING' || session === 'AFTERNOON')) {
+    totalInput.value = '0.5';
+  } else {
+    totalInput.value = diffDays.toFixed(1);
+  }
+}
+
+async function loadRequestsData() {
+  const role = state.user?.role || 'EMPLOYEE';
+  const tbody = document.getElementById('requestsTableFullBody');
+  const typeSelect = document.getElementById('leaveFormType');
+
+  // Khởi tạo ngày mặc định nếu chưa có
+  const startInput = document.getElementById('leaveFormStartDate');
+  const endInput = document.getElementById('leaveFormEndDate');
+  if (startInput && !startInput.value) {
+    const today = new Date();
+    today.setDate(today.getDate() + 1);
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    startInput.value = `${yyyy}-${mm}-${dd}`;
+    if (endInput) endInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // 1. Nạp danh mục loại nghỉ phép từ leave-service
+  try {
+    const typesRes = await apiCall('/api/v1/leave-types').catch(() => null);
+    if (typesRes?.data && typesRes.data.length && typeSelect) {
+      state.leaveTypes = typesRes.data;
+      typeSelect.innerHTML = typesRes.data.map(t => 
+        `<option value="${t.id}">${t.name} (${t.code}${t.is_paid ? ' • Có lương' : ''})</option>`
+      ).join('');
+    } else if (typeSelect && !typeSelect.children.length) {
+      typeSelect.innerHTML = `
+        <option value="lt000001-0000-0000-0000-000000000001">Nghỉ phép năm (AL • Có hưởng lương)</option>
+        <option value="lt000001-0000-0000-0000-000000000002">Nghỉ ốm hưởng BHXH (SL)</option>
+        <option value="lt000001-0000-0000-0000-000000000003">Nghỉ không hưởng lương (UL)</option>
+        <option value="lt000001-0000-0000-0000-000000000004">Nghỉ việc riêng (PL • Hiếu/Hỉ)</option>
+      `;
+    }
+  } catch (err) {
+    console.warn('Lỗi nạp leave types:', err);
+  }
+
+  // 2. Nạp số dư quỹ phép năm 2026
+  try {
+    const balRes = await apiCall('/api/v1/leave-balances').catch(() => null);
+    let total = 12.0;
+    let used = 2.0;
+    let pending = 1.0;
+    if (balRes?.data && balRes.data.length) {
+      const b = balRes.data[0];
+      total = Number(b.total_days || 12);
+      used = Number(b.used_days || 0);
+      pending = Number(b.pending_days || 0);
+    }
+    const remaining = Math.max(0, total - used - pending);
+
+    const elTotal = document.getElementById('statLeaveTotal');
+    const elUsed = document.getElementById('statLeaveUsed');
+    const elPending = document.getElementById('statLeavePending');
+    const elRem = document.getElementById('statLeaveRemaining');
+    if (elTotal) elTotal.innerText = total.toFixed(1);
+    if (elUsed) elUsed.innerText = used.toFixed(1);
+    if (elPending) elPending.innerText = pending.toFixed(1);
+    if (elRem) elRem.innerText = remaining.toFixed(1);
+  } catch (err) {
+    console.warn('Lỗi nạp leave balances:', err);
+  }
+
+  // 3. Nạp danh sách đơn từ
+  try {
+    const res = await apiCall('/api/leave');
+    state.requests = res?.data || [];
+    renderRequestsTable(state.requests);
+  } catch (err) {
+    console.error('Lỗi nạp danh sách đơn từ:', err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu đơn từ: ${err.message}</td></tr>`;
+    }
+  }
+}
+
+function renderRequestsTable(list) {
+  const role = state.user?.role || 'EMPLOYEE';
+  const tbody = document.getElementById('requestsTableFullBody');
+  const filterVal = document.getElementById('requestsFilterStatus')?.value || 'PENDING';
+  const title = document.getElementById('requestsTableTitle');
+  const sub = document.getElementById('requestsTableSubtitle');
+
+  if (role === 'EMPLOYEE') {
+    if (title) title.innerText = 'Lịch sử đơn từ của tôi';
+    if (sub) sub.innerText = 'Theo dõi trạng thái xét duyệt đơn từ và số ngày phép năm của bạn';
+  } else {
+    if (title) title.innerText = 'Danh sách đơn từ & Chờ phê duyệt';
+    if (sub) sub.innerText = 'Quản trị viên có thể trực tiếp Phê duyệt (✓) hoặc Từ chối (✕) đơn xin nghỉ phép của nhân viên';
+  }
+
+  if (!tbody) return;
+
+  let filtered = list || [];
+  if (filterVal !== 'ALL') {
+    filtered = filtered.filter(r => r.status === filterVal);
+  }
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 30px;">Không có đơn từ nào trong mục này.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
+    let badgeHtml = '';
+    if (r.status === 'PENDING') {
+      badgeHtml = `<span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>`;
+    } else if (r.status === 'APPROVED') {
+      badgeHtml = `<span class="badge-status badge-approved">✓ Đã duyệt</span>`;
+    } else {
+      badgeHtml = `<span class="badge-status badge-rejected">✕ Từ chối</span>`;
+    }
+
+    const rangeStr = `${formatLeaveDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? ' → ' + formatLeaveDate(r.end_date) : ''}`;
+    const canApprove = (role === 'ADMIN' || role === 'HR' || role === 'MANAGER') && r.status === 'PENDING';
+
+    const actionHtml = canApprove
+      ? `
+        <button class="btn-approve-sm" onclick="handleDirectApproveLeave('${r.id}')">✓ Duyệt</button>
+        <button class="btn-reject-sm" onclick="handleDirectRejectLeave('${r.id}')">✕ Từ chối</button>
+        <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+      `
+      : `
+        <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+      `;
+
+    return `
+      <tr id="req-row-full-${r.id}">
+        <td>
+          <a class="link-action-blue" style="font-weight: 700; cursor: pointer;" onclick="openRequestDetail('${r.id}')">${r.id}</a>
+        </td>
+        <td>
+          <div style="font-weight: 700; color: #1e293b;">${r.emp_name || 'Nhân viên'}</div>
+          <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''}</div>
+        </td>
+        <td>${r.department_name || 'Phòng Kỹ Thuật'}</td>
+        <td>${r.leave_name || 'Nghỉ phép năm'}</td>
+        <td>${rangeStr}</td>
+        <td style="font-weight: 600;">${r.total_days || 1} ngày</td>
+        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.reason || ''}">
+          ${r.reason || 'Nghỉ giải quyết việc gia đình'}
+        </td>
+        <td style="font-size: 12px; color: #64748b;">${formatLeaveDate(r.created_at)}</td>
+        <td>${badgeHtml}</td>
+        <td style="text-align: center; white-space: nowrap;">
+          ${actionHtml}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterRequestsTable() {
+  renderRequestsTable(state.requests || []);
+}
+
+async function handleCreateLeaveSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  const leaveTypeId = document.getElementById('leaveFormType')?.value;
+  const session = document.getElementById('leaveFormSession')?.value || 'FULL_DAY';
+  const startDate = document.getElementById('leaveFormStartDate')?.value;
+  const endDate = document.getElementById('leaveFormEndDate')?.value;
+  const totalDays = parseFloat(document.getElementById('leaveFormTotalDays')?.value) || 1.0;
+  const reason = document.getElementById('leaveFormReason')?.value.trim();
+  const attachmentUrl = document.getElementById('leaveFormAttachment')?.value.trim() || 'Bien-ban-ban-giao.pdf';
+  const btn = document.getElementById('btnSubmitLeave');
+
+  if (!leaveTypeId || !startDate || !endDate || !reason) {
+    return showToast('Vui lòng nhập đầy đủ thông tin ngày nghỉ và lý do', 'warning');
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Đang gửi đơn...</span>';
+  }
+
+  try {
+    const res = await apiCall('/api/leave', {
+      method: 'POST',
+      body: JSON.stringify({
+        leaveTypeId,
+        session,
+        startDate,
+        endDate,
+        totalDays,
+        reason,
+        attachmentUrl
+      })
+    });
+
+    showToast('Đã gửi đơn xin nghỉ phép thành công! Đơn đã chuyển đến Quản lý / Quản trị viên xét duyệt.', 'success');
+    
+    // Xóa form lý do
+    const reasonInput = document.getElementById('leaveFormReason');
+    if (reasonInput) reasonInput.value = '';
+
+    await loadRequestsData();
+    await loadDashboardPendingRequests();
+
+    if (res?.data?.id) {
+      setTimeout(() => openRequestDetail(res.data.id), 300);
+    }
+  } catch (err) {
+    showToast(`Lỗi gửi đơn: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Gửi đơn duyệt</span> ➔';
+    }
+  }
+}
+
+async function handleDirectApproveLeave(id) {
+  if (!confirm(`Bạn có chắc chắn muốn PHÊ DUYỆT đơn xin nghỉ phép [${id}]?`)) return;
+
+  try {
+    const res = await apiCall(`/api/v1/leave-requests/${id}/decision`, {
+      method: 'PATCH',
+      body: JSON.stringify({ decision: 'APPROVED' })
+    });
+    showToast(`Đã phê duyệt thành công đơn ${id}!`, 'success');
+    await loadRequestsData();
+    await loadDashboardPendingRequests();
+    
+    const detailSec = document.getElementById('view-request-detail');
+    if (detailSec && detailSec.style.display !== 'none') {
+      openRequestDetail(id);
+    }
+  } catch (err) {
+    showToast(`Lỗi phê duyệt đơn: ${err.message}`, 'error');
+  }
+}
+
+async function handleDirectRejectLeave(id) {
+  const reason = prompt('Nhập lý do từ chối đơn này:', 'Kế hoạch công việc cao điểm, vui lòng dời lịch nghỉ phép');
+  if (reason === null) return;
+
+  try {
+    const res = await apiCall(`/api/v1/leave-requests/${id}/decision`, {
+      method: 'PATCH',
+      body: JSON.stringify({ decision: 'REJECTED', rejectReason: reason || 'Không phù hợp kế hoạch công việc' })
+    });
+    showToast(`Đã từ chối đơn ${id}!`, 'warning');
+    await loadRequestsData();
+    await loadDashboardPendingRequests();
+
+    const detailSec = document.getElementById('view-request-detail');
+    if (detailSec && detailSec.style.display !== 'none') {
+      openRequestDetail(id);
+    }
+  } catch (err) {
+    showToast(`Lỗi từ chối đơn: ${err.message}`, 'error');
+  }
+}
+
+async function openRequestDetail(requestId) {
   document.querySelectorAll('.figma-view-section').forEach((sec) => {
     sec.style.display = 'none';
   });
@@ -539,80 +857,289 @@ function openRequestDetail(requestId) {
   const navReq = document.getElementById('nav-requests');
   if (navReq) navReq.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Lấy dữ liệu đơn
+  let req = state.requests?.find(r => r.id === requestId);
+  try {
+    const res = await apiCall(`/api/v1/leave-requests/${requestId}`);
+    if (res?.data) req = res.data;
+  } catch (err) {
+    console.warn('Không thể tải chi tiết từ API, dùng dữ liệu có sẵn:', err);
+  }
+
+  if (!req) {
+    req = {
+      id: requestId || 'NP-2026-024',
+      leave_name: 'Nghỉ phép năm',
+      is_paid: 1,
+      emp_name: 'Vũ Đức Hiếu',
+      emp_code: 'NV-001',
+      department_name: 'Phòng Kỹ Thuật',
+      approver_name: 'Nguyễn Thanh Lâm',
+      start_date: '2026-11-02',
+      end_date: '2026-11-02',
+      total_days: 1.0,
+      reason: 'Tôi xin nghỉ phép để giải quyết công việc gia đình. Các hạng mục đang thực hiện đã được bàn giao cho Huỳnh Gia Kiệt trước ngày nghỉ.',
+      attachment_url: 'Bien-ban-ban-giao.pdf',
+      status: 'PENDING',
+      created_at: '2026-10-30T08:15:00'
+    };
+  }
+
+  // Cập nhật giao diện Figma SCR_REQ_02
+  const headerCode = document.getElementById('reqDetailHeaderCode');
+  const title = document.getElementById('reqDetailLeaveTitle');
+  const meta = document.getElementById('reqDetailMeta');
+  const badge = document.getElementById('reqDetailStatusBadge');
+  const empName = document.getElementById('reqDetailEmpName');
+  const approverName = document.getElementById('reqDetailApproverName');
+  const dept = document.getElementById('reqDetailDept');
+  const leaveType = document.getElementById('reqDetailLeaveType');
+  const startDate = document.getElementById('reqDetailStartDate');
+  const endDate = document.getElementById('reqDetailEndDate');
+  const duration = document.getElementById('reqDetailDuration');
+  const reason = document.getElementById('reqDetailReason');
+  const attach = document.getElementById('reqDetailAttachmentName');
+  const alertBox = document.getElementById('reqDetailApproverBox');
+  const alertIcon = document.getElementById('reqDetailApproverIcon');
+  const alertText = document.getElementById('reqDetailApproverAlert');
+  const alertSub = document.getElementById('reqDetailApproverAlertSub');
+  const adminGroup = document.getElementById('reqDetailAdminDecisionGroup');
+  const step2Icon = document.getElementById('reqDetailStep2Icon');
+  const step2Title = document.getElementById('reqDetailStep2Title');
+  const step2Badge = document.getElementById('reqDetailStep2Badge');
+  const step2Desc = document.getElementById('reqDetailStep2Desc');
+
+  if (headerCode) headerCode.innerText = `Mã đơn: ${req.id}`;
+  if (title) title.innerText = req.leave_name || 'Đơn xin nghỉ phép';
+  if (meta) meta.innerText = `${req.id} • Gửi ngày ${formatLeaveDateTime(req.created_at)}`;
+  if (empName) empName.innerText = `${req.emp_name || 'Vũ Đức Hiếu'} • ${req.emp_code || 'NV-001'}`;
+  if (approverName) approverName.innerText = req.approver_name || 'Nguyễn Thanh Lâm';
+  if (dept) dept.innerText = req.department_name || 'Phòng Kỹ Thuật';
+  if (leaveType) leaveType.innerText = `${req.leave_name || 'Nghỉ phép năm'} • ${req.is_paid ? 'Có hưởng lương' : 'Không hưởng lương'}`;
+  if (startDate) startDate.innerText = `${formatLeaveDate(req.start_date)} • 08:00`;
+  if (endDate) endDate.innerText = `${formatLeaveDate(req.end_date)} • 16:00`;
+  const daysNum = parseFloat(req.total_days || 1);
+  if (duration) duration.innerText = `${daysNum.toFixed(0)} ngày • ${(daysNum * 8).toFixed(0)} giờ`;
+  if (reason) reason.innerText = req.reason || 'Tôi xin nghỉ phép để giải quyết công việc gia đình.';
+  if (attach) attach.innerText = req.attachment_url || 'Bien-ban-ban-giao.pdf';
+
+  const role = state.user?.role || 'EMPLOYEE';
+  const isApprover = (role === 'ADMIN' || role === 'HR' || role === 'MANAGER');
+
+  if (req.status === 'PENDING') {
+    if (badge) {
+      badge.className = 'badge-status';
+      badge.style.background = '#fef3c7';
+      badge.style.color = '#d97706';
+      badge.innerText = '• Đang chờ';
+    }
+    if (alertBox) {
+      alertBox.style.background = '#fefce8';
+      alertBox.style.borderColor = '#fef08a';
+    }
+    if (alertIcon) {
+      alertIcon.style.color = '#ca8a04';
+      alertIcon.innerText = 'ⓘ';
+    }
+    if (alertText) alertText.innerText = `Đang chờ ${req.approver_name || 'Nguyễn Thanh Lâm'} phê duyệt`;
+    if (alertSub) alertSub.innerText = 'Đơn đã được gửi đến quản lý trực tiếp. Bạn sẽ nhận được thông báo khi có kết quả.';
+
+    if (step2Icon) {
+      step2Icon.style.background = '#fef3c7';
+      step2Icon.style.color = '#d97706';
+      step2Icon.innerText = '●';
+    }
+    if (step2Title) {
+      step2Title.style.color = '#d97706';
+      step2Title.innerText = 'Đang chờ phê duyệt';
+    }
+    if (step2Badge) {
+      step2Badge.style.background = '#fef3c7';
+      step2Badge.style.color = '#b45309';
+      step2Badge.innerText = 'Bước hiện tại';
+    }
+    if (step2Desc) {
+      step2Desc.innerText = `${req.approver_name || 'Nguyễn Thanh Lâm'} • Quản lý ${req.department_name || 'Phòng Kỹ Thuật'}. Chưa có phản hồi từ người duyệt.`;
+    }
+
+    if (adminGroup) {
+      if (isApprover) {
+        adminGroup.innerHTML = `
+          <button class="btn-approve-sm" style="padding: 9px 18px; font-size: 13px;" onclick="handleDirectApproveLeave('${req.id}')">✓ Phê duyệt đơn này</button>
+          <button class="btn-reject-sm" style="padding: 9px 18px; font-size: 13px;" onclick="handleDirectRejectLeave('${req.id}')">✕ Từ chối đơn này</button>
+        `;
+      } else {
+        adminGroup.innerHTML = '';
+      }
+    }
+  } else if (req.status === 'APPROVED') {
+    if (badge) {
+      badge.className = 'badge-status badge-approved';
+      badge.style.background = '';
+      badge.style.color = '';
+      badge.innerText = '✓ Đã phê duyệt';
+    }
+    if (alertBox) {
+      alertBox.style.background = '#ecfdf5';
+      alertBox.style.borderColor = '#a7f3d0';
+    }
+    if (alertIcon) {
+      alertIcon.style.color = '#059669';
+      alertIcon.innerText = '✔';
+    }
+    if (alertText) alertText.innerText = `Đã được ${req.approver_name || 'Quản trị viên'} phê duyệt`;
+    if (alertSub) alertSub.innerText = 'Đơn xin nghỉ phép đã được chấp thuận. Ngày nghỉ được ghi nhận chính thức vào hệ thống chấm công.';
+
+    if (step2Icon) {
+      step2Icon.style.background = '#10b981';
+      step2Icon.style.color = '#ffffff';
+      step2Icon.innerText = '✔';
+    }
+    if (step2Title) {
+      step2Title.style.color = '#059669';
+      step2Title.innerText = 'Đã phê duyệt thành công';
+    }
+    if (step2Badge) {
+      step2Badge.style.background = '#dcfce7';
+      step2Badge.style.color = '#15803d';
+      step2Badge.innerText = 'Hoàn tất';
+    }
+    if (step2Desc) {
+      step2Desc.innerText = `Đã được duyệt bởi ${req.approver_name || 'Quản lý'}. Quỹ phép năm đã tự động cập nhật.`;
+    }
+    if (adminGroup) adminGroup.innerHTML = '';
+  } else if (req.status === 'REJECTED') {
+    if (badge) {
+      badge.className = 'badge-status badge-rejected';
+      badge.style.background = '';
+      badge.style.color = '';
+      badge.innerText = '✕ Đã từ chối';
+    }
+    if (alertBox) {
+      alertBox.style.background = '#fef2f2';
+      alertBox.style.borderColor = '#fecaca';
+    }
+    if (alertIcon) {
+      alertIcon.style.color = '#dc2626';
+      alertIcon.innerText = '✕';
+    }
+    if (alertText) alertText.innerText = `Đơn đã bị từ chối`;
+    if (alertSub) alertSub.innerText = `Lý do: ${req.reject_reason || 'Không phù hợp kế hoạch công việc dự án'}`;
+
+    if (step2Icon) {
+      step2Icon.style.background = '#ef4444';
+      step2Icon.style.color = '#ffffff';
+      step2Icon.innerText = '✕';
+    }
+    if (step2Title) {
+      step2Title.style.color = '#dc2626';
+      step2Title.innerText = 'Đã từ chối đơn';
+    }
+    if (step2Badge) {
+      step2Badge.style.background = '#fee2e2';
+      step2Badge.style.color = '#b91c1c';
+      step2Badge.innerText = 'Từ chối';
+    }
+    if (step2Desc) {
+      step2Desc.innerText = `Lý do từ chối: ${req.reject_reason || 'Không phù hợp kế hoạch'}`;
+    }
+    if (adminGroup) adminGroup.innerHTML = '';
+  }
+}
+
+async function loadDashboardPendingRequests() {
+  const role = state.user?.role || 'EMPLOYEE';
+  const pendingTbody = document.getElementById('dashPendingApprovalTableBody');
+  const personalTbody = document.getElementById('dashPersonalRequestsTableBody');
+  const subTitle = document.getElementById('dashPendingApprovalSub');
+
+  try {
+    const res = await apiCall('/api/leave');
+    const list = res?.data || [];
+    state.requests = list;
+
+    // 1. Phía Nhân viên: Hiển thị đơn của chính mình trên Dashboard
+    if (personalTbody) {
+      if (!list.length) {
+        personalTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Bạn chưa gửi đơn xin nghỉ phép nào.</td></tr>`;
+      } else {
+        personalTbody.innerHTML = list.slice(0, 5).map(r => {
+          let badgeHtml = '';
+          if (r.status === 'PENDING') badgeHtml = `<span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>`;
+          else if (r.status === 'APPROVED') badgeHtml = `<span class="badge-status badge-approved">✓ Đã duyệt</span>`;
+          else badgeHtml = `<span class="badge-status badge-rejected">✕ Từ chối</span>`;
+
+          const rangeStr = `${formatLeaveDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? ' → ' + formatLeaveDate(r.end_date) : ''}`;
+          return `
+            <tr>
+              <td><span style="font-weight: 700; color: #1e293b;">${r.id}</span></td>
+              <td>${r.leave_name || 'Nghỉ phép năm'}</td>
+              <td>${rangeStr}</td>
+              <td>${r.total_days || 1} ngày</td>
+              <td>${badgeHtml}</td>
+              <td style="text-align: center;">
+                <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // 2. Phía Quản trị viên / Quản lý: Hiển thị các đơn PENDING cần xét duyệt
+    if (pendingTbody) {
+      const pendingList = list.filter(r => r.status === 'PENDING');
+      if (subTitle) {
+        subTitle.innerText = `${pendingList.length} đơn cần xử lý - Nhấp để duyệt hoặc từ chối trực tiếp`;
+      }
+
+      if (!pendingList.length) {
+        pendingTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #10b981; padding: 24px; font-weight: 600;">🎉 Tuyệt vời! Hiện không có đơn nào đang chờ duyệt.</td></tr>`;
+      } else {
+        pendingTbody.innerHTML = pendingList.map(r => {
+          const rangeStr = `${formatLeaveDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? ' → ' + formatLeaveDate(r.end_date) : ''} • ${r.total_days || 1} ngày`;
+          return `
+            <tr id="req-row-${r.id}">
+              <td>
+                <div style="font-weight: 700; color: #1e293b;">${r.emp_name || 'Nhân viên'}</div>
+                <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''} • Mã: ${r.id}</div>
+              </td>
+              <td>${r.department_name || 'Phòng Kỹ Thuật'}</td>
+              <td>${r.leave_name || 'Nghỉ phép năm'}</td>
+              <td>${rangeStr}</td>
+              <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.reason || ''}">
+                ${r.reason || 'Giải quyết việc riêng'}
+              </td>
+              <td style="text-align: center; white-space: nowrap;">
+                <button class="btn-approve-sm" onclick="handleDirectApproveLeave('${r.id}')">✓ Duyệt</button>
+                <button class="btn-reject-sm" onclick="handleDirectRejectLeave('${r.id}')">✕ Từ chối</button>
+                <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi nạp danh sách đơn chờ duyệt:', err);
+  }
 }
 
 function openCreateLeaveModal() {
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
-      <div>
-        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Loại nghỉ phép:</label>
-        <select id="newLeaveType" class="figma-pill-input" style="width: 100%;">
-          <option value="lt000001-0000-0000-0000-000000000001">Nghỉ phép năm (AL - Có lương)</option>
-          <option value="lt000001-0000-0000-0000-000000000002">Nghỉ ốm hưởng BHXH (SL)</option>
-          <option value="lt000001-0000-0000-0000-000000000003">Nghỉ không hưởng lương (UL)</option>
-          <option value="lt000001-0000-0000-0000-000000000004">Nghỉ việc riêng (PL - Hiếu/Hỉ)</option>
-        </select>
-      </div>
-      <div style="display: flex; gap: 10px;">
-        <div style="flex: 1;">
-          <label style="font-weight: 600; display: block; margin-bottom: 4px;">Từ ngày:</label>
-          <input type="date" id="newLeaveStartDate" class="figma-pill-input" value="2026-11-20" style="width: 100%;">
-        </div>
-        <div style="flex: 1;">
-          <label style="font-weight: 600; display: block; margin-bottom: 4px;">Đến ngày:</label>
-          <input type="date" id="newLeaveEndDate" class="figma-pill-input" value="2026-11-20" style="width: 100%;">
-        </div>
-      </div>
-      <div>
-        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Số ngày xin nghỉ:</label>
-        <input type="number" id="newLeaveDays" class="figma-pill-input" value="1.0" step="0.5" min="0.5" max="30" style="width: 100%;">
-      </div>
-      <div>
-        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Lý do xin nghỉ:</label>
-        <textarea id="newLeaveReason" class="figma-pill-input" style="width: 100%; height: 75px; border-radius: 10px;" placeholder="Ghi rõ lý do và phân công bàn giao công việc..."></textarea>
-      </div>
-      <button class="btn-primary-blue" style="margin-top: 10px;" onclick="submitCreateLeaveRequest()">Gửi đơn xin nghỉ phép</button>
-    </div>
-  `;
-  openModal('Tạo đơn xin nghỉ phép mới (SCR_LEAVE_01)', html);
+  navigateToView('requests');
+  setTimeout(scrollToCreateForm, 200);
 }
 
 async function submitCreateLeaveRequest() {
-  const leaveTypeId = document.getElementById('newLeaveType')?.value;
-  const startDate = document.getElementById('newLeaveStartDate')?.value;
-  const endDate = document.getElementById('newLeaveEndDate')?.value;
-  const totalDays = Number(document.getElementById('newLeaveDays')?.value || 1);
-  const reason = document.getElementById('newLeaveReason')?.value.trim();
-
-  if (!startDate || !endDate || !reason) {
-    return showToast('Vui lòng điền đầy đủ ngày nghỉ và lý do', 'warning');
-  }
-
-  try {
-    const res = await apiCall('/api/leave', {
-      method: 'POST',
-      body: JSON.stringify({
-        leaveTypeId,
-        startDate,
-        endDate,
-        totalDays,
-        session: 'FULL_DAY',
-        reason
-      })
-    });
-    showToast(res.message || 'Đã gửi đơn xin nghỉ phép thành công! Đang chờ Quản lý duyệt.', 'success');
-    closeModal();
-    openRequestDetail('NP-2026-024');
-  } catch (err) {
-    showToast(`Lỗi gửi đơn: ${err.message}`, 'error');
-  }
+  handleCreateLeaveSubmit();
 }
 
 // ==============================================================================
 // 7. NẠP DỮ LIỆU CÁC DỊCH VỤ & GIAO DIỆN
 // ==============================================================================
 async function loadDashboardData() {
-  await Promise.all([loadDepartmentsData(), loadEmployeesData()]);
+  await Promise.all([loadDepartmentsData(), loadEmployeesData(), loadDashboardPendingRequests()]);
 }
 
 async function loadDepartmentsData() {

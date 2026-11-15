@@ -1146,6 +1146,59 @@ input:checked + .slider:before {
 .badge-pending { background: #eff6ff; color: #2563eb; }
 .badge-approved { background: #dcfce7; color: #16a34a; }
 
+.btn-approve-sm {
+  background: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-approve-sm:hover {
+  background: #15803d;
+}
+.btn-reject-sm {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-reject-sm:hover {
+  background: #dc2626;
+}
+.btn-detail-sm {
+  background: #f1f5f9;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 6px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.btn-detail-sm:hover {
+  background: #e2e8f0;
+}
+
 /* Toast */
 #toastBox {
   position: fixed;
@@ -1656,67 +1709,250 @@ input:checked + .slider:before {
             </div>
           </div>
 
-          <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (FIGMA IMAGE 3 BOTTOM - CÓ THỂ DUYỆT / TỪ CHỐI) -->
-          <div class="figma-white-card">
+          <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (CHO QUẢN TRỊ VIÊN / QUẢN LÝ) -->
+          <div id="dashPendingApprovalCard" class="figma-white-card">
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Đơn đang chờ phê duyệt</div>
-                <div style="font-size: 12px; color: #64748b;">7 đơn cần xử lý - Nhấp để duyệt hoặc từ chối trực tiếp</div>
+                <div id="dashPendingApprovalSub" style="font-size: 12px; color: #64748b;">Danh sách đơn từ của nhân viên cần xét duyệt trực tiếp</div>
               </div>
-              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem tất cả 7 đơn →</a>
+              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Quản lý tất cả đơn từ →</a>
             </div>
 
             <table class="figma-table">
               <thead>
                 <tr>
                   <th>Nhân viên / Mã đơn</th>
+                  <th>Phòng ban</th>
                   <th>Loại đơn</th>
                   <th>Thời gian yêu cầu</th>
-                  <th>Ngày gửi</th>
-                  <th>Thao tác</th>
+                  <th>Lý do</th>
+                  <th style="text-align: center;">Thao tác xét duyệt</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="dashPendingApprovalTableBody">
                 <tr id="req-row-NP-2026-024">
                   <td>
                     <div style="font-weight: 700;">Vũ Đức Hiếu</div>
                     <div style="font-size: 11px; color: #94a3b8;">NP-2026-024</div>
                   </td>
+                  <td>Phòng Kỹ Thuật</td>
                   <td>Nghỉ phép năm</td>
                   <td>02/11/2026 • 1 ngày</td>
-                  <td>Hôm nay, 08:15</td>
-                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('NP-2026-024', 'Vũ Đức Hiếu', 'Nghỉ phép năm', '02/11/2026 (1 ngày)')">Xem xét →</a></td>
-                </tr>
-                <tr id="req-row-BS-2026-018">
-                  <td>
-                    <div style="font-weight: 700;">Lê Ngọc Mai</div>
-                    <div style="font-size: 11px; color: #94a3b8;">BS-2026-018</div>
+                  <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Giải quyết việc gia đình</td>
+                  <td style="text-align: center;">
+                    <button class="btn-approve-sm" onclick="handleDirectApproveLeave('NP-2026-024')">✓ Duyệt</button>
+                    <button class="btn-reject-sm" onclick="handleDirectRejectLeave('NP-2026-024')">✕ Từ chối</button>
+                    <button class="btn-detail-sm" onclick="openRequestDetail('NP-2026-024')">Chi tiết ↗</button>
                   </td>
-                  <td>Bổ sung chấm công</td>
-                  <td>29/10/2026 • Giờ ra</td>
-                  <td>Hôm nay, 08:05</td>
-                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('BS-2026-018', 'Lê Ngọc Mai', 'Bổ sung chấm công', '29/10/2026 (Giờ ra)')">Xem xét →</a></td>
                 </tr>
-                <tr id="req-row-NP-2026-023">
-                  <td>
-                    <div style="font-weight: 700;">Phạm Minh Tuấn</div>
-                    <div style="font-size: 11px; color: #94a3b8;">NP-2026-023</div>
-                  </td>
-                  <td>Nghỉ phép năm</td>
-                  <td>03/11/2026 • 1 ngày</td>
-                  <td>29/10, 16:30</td>
-                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('NP-2026-023', 'Phạm Minh Tuấn', 'Nghỉ phép năm', '03/11/2026 (1 ngày)')">Xem xét →</a></td>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- BẢNG ĐƠN TỪ CỦA TÔI (CHO NHÂN VIÊN) -->
+          <div id="dashEmployeePersonalRequestsCard" class="figma-white-card" style="display: none;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Đơn từ gần đây của tôi</div>
+                <div style="font-size: 12px; color: #64748b;">Theo dõi trạng thái xét duyệt đơn xin nghỉ phép của bạn</div>
+              </div>
+              <button class="btn-primary-blue" style="padding: 7px 16px; font-size: 12px;" onclick="navigateToView('requests')">+ Tạo đơn xin nghỉ phép</button>
+            </div>
+
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Loại đơn</th>
+                  <th>Thời gian xin nghỉ</th>
+                  <th>Số ngày</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Chi tiết</th>
                 </tr>
-                <tr id="req-row-GM-2026-009">
-                  <td>
-                    <div style="font-weight: 700;">Đỗ Thu Hà</div>
-                    <div style="font-size: 11px; color: #94a3b8;">GM-2026-009</div>
-                  </td>
-                  <td>Giải trình đi muộn</td>
-                  <td>29/10/2026 • 15 phút</td>
-                  <td>29/10, 15:10</td>
-                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('GM-2026-009', 'Đỗ Thu Hà', 'Giải trình đi muộn', '29/10/2026 (15 phút)')">Xem xét →</a></td>
+              </thead>
+              <tbody id="dashPersonalRequestsTableBody">
+                <!-- Nạp động qua API GET /api/leave -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <!-- ====================================================================
+             VIEW: QUẢN LÝ ĐƠN TỪ & NGHỈ PHÉP (TẠO ĐƠN & PHÊ DUYỆT)
+             ==================================================================== -->
+        <section id="view-requests" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Trang chủ / Đơn từ &amp; Nghỉ phép</div>
+          <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+              <h1 class="page-heading-title">Quản lý Đơn từ &amp; Nghỉ phép</h1>
+              <div class="page-heading-desc">Nhân viên tạo và gửi đơn xin nghỉ phép; Quản trị viên duyệt và quản lý lịch sử đơn từ.</div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn-primary-blue" onclick="scrollToCreateForm()">+ Tạo đơn mới</button>
+              <button class="btn-secondary-outline" onclick="loadRequestsData()">↻ Làm mới</button>
+            </div>
+          </div>
+
+          <!-- PHẦN TRÊN: FORM TẠO ĐƠN & QUỸ PHÉP NĂM 2026 -->
+          <div style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 20px; margin-bottom: 24px;">
+            <!-- FORM TẠO ĐƠN NGHỈ PHÉP (DÀNH CHO NHÂN VIÊN GỬI QUẢN TRỊ) -->
+            <div class="figma-white-card" id="cardCreateLeaveForm">
+              <div class="card-title-flex">
+                <div>
+                  <div class="card-title-text" style="font-size: 16px;">Tạo đơn xin nghỉ phép mới</div>
+                  <div style="font-size: 12px; color: #64748b;">Đơn sẽ được tự động gửi đến Quản lý trực tiếp và Quản trị viên xét duyệt</div>
+                </div>
+                <span class="badge-status badge-pending">Quy trình trực tuyến</span>
+              </div>
+
+              <form id="formCreateLeave" onsubmit="handleCreateLeaveSubmit(event)">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Loại nghỉ phép *</label>
+                    <select id="leaveFormType" class="topbar-search-input" style="padding: 8px 12px;" required>
+                      <!-- Đổ động từ leave_types -->
+                    </select>
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Ca nghỉ / Buổi nghỉ *</label>
+                    <select id="leaveFormSession" class="topbar-search-input" style="padding: 8px 12px;" onchange="calculateLeaveDays()">
+                      <option value="FULL_DAY">Cả ngày (08:00 - 17:30)</option>
+                      <option value="MORNING">Buổi sáng (08:00 - 12:00)</option>
+                      <option value="AFTERNOON">Buổi chiều (13:30 - 17:30)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 0.8fr; gap: 14px; margin-bottom: 14px;">
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Từ ngày *</label>
+                    <input type="date" id="leaveFormStartDate" class="topbar-search-input" style="padding: 8px 12px;" required onchange="calculateLeaveDays()">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Đến ngày *</label>
+                    <input type="date" id="leaveFormEndDate" class="topbar-search-input" style="padding: 8px 12px;" required onchange="calculateLeaveDays()">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Số ngày nghỉ</label>
+                    <input type="number" id="leaveFormTotalDays" class="topbar-search-input" style="padding: 8px 12px; font-weight: 700; background: #f8fafc;" step="0.5" min="0.5" value="1.0" readonly>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                  <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Lý do xin nghỉ phép *</label>
+                  <textarea id="leaveFormReason" class="topbar-search-input" style="height: 68px; padding: 10px 12px; resize: vertical;" placeholder="Nhập lý do chi tiết (ví dụ: Tôi xin nghỉ phép để giải quyết công việc gia đình...)" required></textarea>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 18px;">
+                  <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Tệp đính kèm (Biên bản bàn giao / Giấy tờ)</label>
+                    <input type="text" id="leaveFormAttachment" class="topbar-search-input" style="padding: 8px 12px;" placeholder="Tên tệp (vd: Bien-ban-ban-giao.pdf)" value="Bien-ban-ban-giao.pdf">
+                  </div>
+                  <div style="display: flex; align-items: flex-end;">
+                    <div style="font-size: 11px; color: #64748b; line-height: 1.4; padding-bottom: 8px;">
+                      📎 Đính kèm tệp hỗ trợ người duyệt thẩm định nhanh chóng.
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 14px;">
+                  <div style="font-size: 12px; color: #64748b;">
+                    Người duyệt: <strong id="leaveFormApproverPreview">Nguyễn Thanh Lâm (Quản lý)</strong> &amp; Quản trị viên
+                  </div>
+                  <button type="submit" id="btnSubmitLeave" class="btn-primary-blue" style="padding: 10px 24px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span>Gửi đơn duyệt</span> ➔
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- THẺ QUỸ PHÉP & THỐNG KÊ (FIGMA WIREFRAME) -->
+            <div>
+              <div class="figma-white-card" style="margin-bottom: 18px;">
+                <div class="card-title-flex">
+                  <div>
+                    <div class="card-title-text" style="font-size: 15px;">Quỹ phép năm 2026</div>
+                    <div style="font-size: 12px; color: #64748b;">Theo dõi số dư ngày phép có lương của bạn</div>
+                  </div>
+                  <span class="badge-status badge-approved">Chuẩn Luật LĐ</span>
+                </div>
+
+                <!-- 4 BOX SỐ LIỆU -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600;">Tổng phép năm</div>
+                    <div id="statLeaveTotal" style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 2px;">12.0</div>
+                    <div style="font-size: 10px; color: #94a3b8;">ngày / năm 2026</div>
+                  </div>
+                  <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #065f46; font-weight: 600;">Đã sử dụng</div>
+                    <div id="statLeaveUsed" style="font-size: 22px; font-weight: 800; color: #047857; margin-top: 2px;">2.0</div>
+                    <div style="font-size: 10px; color: #059669;">ngày đã nghỉ</div>
+                  </div>
+                  <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #92400e; font-weight: 600;">Đang chờ duyệt</div>
+                    <div id="statLeavePending" style="font-size: 22px; font-weight: 800; color: #d97706; margin-top: 2px;">1.0</div>
+                    <div style="font-size: 10px; color: #b45309;">ngày đang gửi</div>
+                  </div>
+                  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #1e40af; font-weight: 600;">Còn lại khả dụng</div>
+                    <div id="statLeaveRemaining" style="font-size: 22px; font-weight: 800; color: #2563eb; margin-top: 2px;">9.0</div>
+                    <div style="font-size: 10px; color: #3b82f6;">ngày có thể xin</div>
+                  </div>
+                </div>
+
+                <!-- LƯU Ý / GHI CHÚ QUY ĐỊNH -->
+                <div style="background: #f8fafc; border-radius: 8px; padding: 12px; font-size: 12px; color: #475569; line-height: 1.5;">
+                  <strong>💡 Quy trình xét duyệt đơn từ:</strong>
+                  <ul style="margin: 6px 0 0 16px; padding: 0; font-size: 11.5px; color: #64748b;">
+                    <li>Nhân viên gửi đơn xin nghỉ phép trực tuyến kèm biên bản bàn giao.</li>
+                    <li>Đơn ngay lập tức xuất hiện trong danh sách chờ duyệt của Quản trị viên/Quản lý.</li>
+                    <li>Khi được phê duyệt, hệ thống tự động trừ vào số dư phép năm 2026.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PHẦN DƯỚI: BẢNG DANH SÁCH ĐƠN TỪ & LỊCH SỬ CHỜ DUYỆT -->
+          <div class="figma-white-card">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text" id="requestsTableTitle">Danh sách đơn từ &amp; Chờ phê duyệt</div>
+                <div id="requestsTableSubtitle" style="font-size: 12px; color: #64748b;">
+                  Quản trị viên có thể trực tiếp Phê duyệt hoặc Từ chối đơn của nhân viên tại đây
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="requestsFilterStatus" class="figma-filter-pill" onchange="filterRequestsTable()">
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="PENDING" selected>Đang chờ duyệt (Cần xử lý)</option>
+                  <option value="APPROVED">Đã phê duyệt</option>
+                  <option value="REJECTED">Đã từ chối</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- BẢNG DANH SÁCH -->
+            <table class="figma-table" id="requestsTableFull">
+              <thead>
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Nhân viên gửi đơn</th>
+                  <th>Phòng ban</th>
+                  <th>Loại nghỉ phép</th>
+                  <th>Thời gian xin nghỉ</th>
+                  <th>Số ngày</th>
+                  <th>Lý do</th>
+                  <th>Ngày gửi</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Hành động / Phê duyệt</th>
                 </tr>
+              </thead>
+              <tbody id="requestsTableFullBody">
+                <!-- Nạp động từ API GET /api/leave -->
               </tbody>
             </table>
           </div>
@@ -1733,7 +1969,7 @@ input:checked + .slider:before {
               <h1 class="page-heading-title">Chi tiết đơn từ</h1>
               <div class="page-heading-desc">Theo dõi thông tin đơn đã gửi và lịch sử phê duyệt.</div>
               <div style="margin-top: 8px;">
-                <a class="link-action-blue" style="font-size: 13px;" onclick="navigateToView('dashboard')">← Quay lại danh sách đơn</a>
+                <a class="link-action-blue" style="font-size: 13px; cursor: pointer;" onclick="navigateToView('requests')">← Quay lại danh sách đơn</a>
               </div>
             </div>
             <div style="font-size: 13px; color: #64748b; font-weight: 600;" id="reqDetailHeaderCode">Mã đơn: NP-2026-024</div>
@@ -1745,40 +1981,40 @@ input:checked + .slider:before {
               <div class="figma-white-card" style="margin-bottom: 20px;">
                 <div class="card-title-flex">
                   <div>
-                    <div style="font-size: 18px; font-weight: 700; color: #1e293b;">Đơn xin nghỉ phép</div>
-                    <div style="font-size: 12px; color: #64748b;">NP-2026-024 • Gửi ngày 30/10/2026 • 08:15</div>
+                    <div id="reqDetailLeaveTitle" style="font-size: 18px; font-weight: 700; color: #1e293b;">Đơn xin nghỉ phép</div>
+                    <div id="reqDetailMeta" style="font-size: 12px; color: #64748b;">NP-2026-024 • Gửi ngày 30/10/2026 • 08:15</div>
                   </div>
-                  <span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>
+                  <span id="reqDetailStatusBadge" class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>
                 </div>
 
                 <div class="detail-info-grid">
                   <div class="info-field-group">
                     <span class="info-label">Nhân viên</span>
-                    <span class="info-val">Vũ Đức Hiếu • NV-001</span>
+                    <span id="reqDetailEmpName" class="info-val">Vũ Đức Hiếu • NV-001</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Quản lý trực tiếp / Người duyệt</span>
-                    <span class="info-val">Nguyễn Thanh Lâm</span>
+                    <span id="reqDetailApproverName" class="info-val">Nguyễn Thanh Lâm</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Phòng ban</span>
-                    <span class="info-val">Phòng Kỹ Thuật</span>
+                    <span id="reqDetailDept" class="info-val">Phòng Kỹ Thuật</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Loại nghỉ</span>
-                    <span class="info-val">Nghỉ phép năm • Có hưởng lương</span>
+                    <span id="reqDetailLeaveType" class="info-val">Nghỉ phép năm • Có hưởng lương</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Từ ngày</span>
-                    <span class="info-val">02/11/2026 • 08:00</span>
+                    <span id="reqDetailStartDate" class="info-val">02/11/2026 • 08:00</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Đến ngày</span>
-                    <span class="info-val">02/11/2026 • 16:00</span>
+                    <span id="reqDetailEndDate" class="info-val">02/11/2026 • 16:00</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Thời lượng</span>
-                    <span class="info-val">01 ngày • 08 giờ</span>
+                    <span id="reqDetailDuration" class="info-val">01 ngày • 08 giờ</span>
                   </div>
                 </div>
               </div>
@@ -1786,7 +2022,7 @@ input:checked + .slider:before {
               <!-- Lý do và tài liệu đính kèm -->
               <div class="figma-white-card" style="margin-bottom: 20px;">
                 <div class="card-title-text" style="margin-bottom: 10px;">Lý do và tài liệu đính kèm</div>
-                <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+                <p id="reqDetailReason" style="font-size: 13px; color: #334155; line-height: 1.6;">
                   Tôi xin nghỉ phép để giải quyết công việc gia đình. Các hạng mục đang thực hiện đã được bàn giao cho Huỳnh Gia Kiệt trước ngày nghỉ.
                 </p>
 
@@ -1794,27 +2030,30 @@ input:checked + .slider:before {
                   <div class="file-info-left">
                     <span style="font-size: 20px;">📄</span>
                     <div>
-                      <div style="font-weight: 600;">Bien-ban-ban-giao.pdf</div>
+                      <div id="reqDetailAttachmentName" style="font-weight: 600;">Bien-ban-ban-giao.pdf</div>
                       <div style="font-size: 11px; color: #94a3b8;">PDF • 245 KB • Đính kèm khi gửi đơn</div>
                     </div>
                   </div>
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Bắt đầu tải xuống file Bien-ban-ban-giao.pdf', 'success')">Tải xuống ↓</a>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="showToast('Bắt đầu tải xuống file đính kèm...', 'success')">Tải xuống ↓</a>
                 </div>
 
-                <!-- Alert Vàng Đang chờ phê duyệt (SCR_REQ_02 Figma) -->
-                <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 14px 18px; margin-top: 16px; display: flex; gap: 12px; align-items: flex-start;">
-                  <span style="font-size: 18px; color: #ca8a04;">ⓘ</span>
+                <!-- Alert Trạng thái phê duyệt (SCR_REQ_02 Figma) -->
+                <div id="reqDetailApproverBox" style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 14px 18px; margin-top: 16px; display: flex; gap: 12px; align-items: flex-start;">
+                  <span id="reqDetailApproverIcon" style="font-size: 18px; color: #ca8a04;">ⓘ</span>
                   <div>
-                    <strong style="color: #854d0e; font-size: 13.5px;">Đang chờ Nguyễn Thanh Lâm phê duyệt</strong>
-                    <div style="font-size: 12.5px; color: #a16207; margin-top: 2px;">Đơn đã được gửi đến quản lý trực tiếp. Bạn sẽ nhận được thông báo khi có kết quả.</div>
+                    <strong id="reqDetailApproverAlert" style="color: #854d0e; font-size: 13.5px;">Đang chờ Nguyễn Thanh Lâm phê duyệt</strong>
+                    <div id="reqDetailApproverAlertSub" style="font-size: 12.5px; color: #a16207; margin-top: 2px;">Đơn đã được gửi đến quản lý trực tiếp. Bạn sẽ nhận được thông báo khi có kết quả.</div>
                   </div>
                 </div>
               </div>
 
               <!-- Buttons hành động -->
-              <div style="display: flex; gap: 12px;">
-                <button class="btn-secondary-outline" style="background: #ffffff; border: 1px solid #cbd5e1; color: #334155; padding: 9px 20px; border-radius: 10px; font-weight: 600; cursor: pointer;" onclick="navigateToView('dashboard')">Về danh sách đơn</button>
-                <button class="btn-primary-blue" style="padding: 9px 20px; font-weight: 600;" onclick="openCreateLeaveModal()">+ Tạo đơn xin nghỉ phép</button>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;" id="reqDetailActionButtons">
+                <button class="btn-secondary-outline" style="background: #ffffff; border: 1px solid #cbd5e1; color: #334155; padding: 9px 20px; border-radius: 10px; font-weight: 600; cursor: pointer;" onclick="navigateToView('requests')">← Về danh sách đơn</button>
+                <button class="btn-primary-blue" style="padding: 9px 20px; font-weight: 600;" onclick="navigateToView('requests'); scrollToCreateForm();">+ Tạo đơn mới</button>
+                <div id="reqDetailAdminDecisionGroup" style="display: inline-flex; gap: 8px;">
+                  <!-- Duyệt / Từ chối cho Admin / Quản lý -->
+                </div>
               </div>
             </div>
 
@@ -1824,24 +2063,24 @@ input:checked + .slider:before {
                 <div class="card-title-text">Lịch sử trạng thái</div>
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 14px;">Trình tự xử lý • Giờ Việt Nam (GMT+7)</div>
 
-                <div class="status-timeline">
+                <div class="status-timeline" id="reqDetailTimeline">
                   <!-- Bước 1 -->
                   <div class="timeline-step">
                     <div class="step-icon-circle step-icon-blue">✔</div>
                     <div class="step-content">
                       <div class="step-title">Đã gửi đơn</div>
-                      <div class="step-time">30/10/2026 • 08:15</div>
-                      <div class="step-desc">Vũ Đức Hiếu đã gửi đơn xin nghỉ phép. Hệ thống chuyển đơn đến quản lý trực tiếp.</div>
+                      <div class="step-time" id="reqDetailTimelineTime1">30/10/2026 • 08:15</div>
+                      <div class="step-desc" id="reqDetailTimelineDesc1">Nhân viên đã gửi đơn xin nghỉ phép. Hệ thống chuyển đơn đến quản lý trực tiếp.</div>
                     </div>
                   </div>
 
                   <!-- Bước 2 -->
-                  <div class="timeline-step">
-                    <div class="step-icon-circle" style="background: #fef3c7; color: #d97706; border: 1px solid #fde68a;">●</div>
+                  <div class="timeline-step" id="reqDetailTimelineStep2">
+                    <div class="step-icon-circle" id="reqDetailStep2Icon" style="background: #fef3c7; color: #d97706; border: 1px solid #fde68a;">●</div>
                     <div class="step-content">
-                      <div class="step-title" style="color: #d97706; font-weight: 700;">Đang chờ phê duyệt</div>
-                      <div class="step-time"><span style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Bước hiện tại</span></div>
-                      <div class="step-desc">
+                      <div class="step-title" id="reqDetailStep2Title" style="color: #d97706; font-weight: 700;">Đang chờ phê duyệt</div>
+                      <div class="step-time"><span id="reqDetailStep2Badge" style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Bước hiện tại</span></div>
+                      <div class="step-desc" id="reqDetailStep2Desc">
                         Nguyễn Thanh Lâm • Quản lý Phòng Kỹ Thuật. Chưa có phản hồi từ người duyệt.
                       </div>
                     </div>
@@ -1856,10 +2095,12 @@ input:checked + .slider:before {
                   Đơn đang chờ xử lý, chưa được tính là nghỉ phép. Liên hệ quản lý nếu cần xử lý gấp.
                 </p>
                 <div style="margin-top: 10px;">
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Liên hệ bộ phận nhân sự: hr@htqlns.com - Ext: 101', 'info')">Liên hệ phòng Nhân sự →</a>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="showToast('Liên hệ bộ phận nhân sự: hr@htqlns.com - Ext: 101', 'info')">Liên hệ phòng Nhân sự →</a>
                 </div>
               </div>
             </div>
+          </div>
+        </section>
           </div>
         </section>
 
