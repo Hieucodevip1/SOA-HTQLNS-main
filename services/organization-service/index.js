@@ -888,20 +888,52 @@ app.use(
   '/events',
   events.createWebhookRouter({
     'user.registered': async (event) => {
-      const { userId, email, empId } = event.data || {};
+      const { userId, email, empId, username, fullName } = event.data || {};
       console.log(`[ORG-SERVICE] Nhận event user.registered: tài khoản "${email}" (id: ${userId})`);
-      // Nếu user đăng ký chưa có emp_id, thử liên kết với employee theo email
-      if (!empId && email) {
-        const useDb = await isDbAvailable();
-        if (useDb) {
-          try {
-            const rows = await db.query('SELECT id FROM employees WHERE email = ? LIMIT 1', [email], DB_NAME);
-            if (rows.length > 0) {
-              const matchedEmpId = rows[0].id;
-              await db.query('UPDATE htqlns_auth.users SET emp_id = ? WHERE id = ?', [matchedEmpId, userId]);
-              console.log(`[ORG-SERVICE] Đã tự động gắn emp_id ${matchedEmpId} cho user ${userId}`);
-            }
-          } catch {}
+      const finalId = empId || userId || crypto.randomUUID();
+      const fName = fullName || username || (email ? email.split('@')[0] : 'Nhân sự mới');
+      const code = 'EMP_' + (username ? username.toUpperCase() : Math.floor(10000 + Math.random() * 90000));
+
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          const rows = await db.query('SELECT id FROM employees WHERE email = ? LIMIT 1', [email], DB_NAME);
+          if (rows.length > 0) {
+            const matchedEmpId = rows[0].id;
+            await db.query('UPDATE htqlns_auth.users SET emp_id = ? WHERE id = ?', [matchedEmpId, userId]);
+            console.log(`[ORG-SERVICE] Đã tự động gắn emp_id ${matchedEmpId} cho user ${userId}`);
+          } else {
+            await db.query(
+              `INSERT INTO employees (id, code, full_name, email, phone, status, contract_type)
+               VALUES (?, ?, ?, ?, ?, 'PENDING_ASSIGNMENT', 'PENDING')`,
+              [finalId, code, fName, email, '-'],
+              DB_NAME
+            );
+            try {
+              await db.query('UPDATE htqlns_auth.users SET emp_id = ? WHERE id = ?', [finalId, userId]);
+            } catch {}
+          }
+        } catch (err) {
+          console.warn('[ORG-SERVICE] Lỗi thêm employee từ event:', err.message);
+        }
+      } else {
+        const existing = Array.from(memoryEmployees.values()).find(e => e.email === email);
+        if (!existing) {
+          memoryEmployees.set(finalId, {
+            id: finalId,
+            username: username || (email ? email.split('@')[0] : 'user'),
+            code: 'CHỜ CẤP MÃ',
+            full_name: fName,
+            email: email,
+            phone: '-',
+            department_id: null,
+            position_id: null,
+            manager_id: null,
+            contract_type: 'PENDING',
+            status: 'PENDING_ASSIGNMENT',
+            created_at: new Date().toISOString()
+          });
+          console.log(`[ORG-SERVICE] Đã tự động tạo memoryEmployee chờ tiếp nhận cho: ${email}`);
         }
       }
     }

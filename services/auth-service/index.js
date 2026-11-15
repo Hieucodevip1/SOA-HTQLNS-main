@@ -286,7 +286,8 @@ app.post('/api/auth/register', async (req, res) => {
       empId: finalEmpId,
       username,
       email,
-      role: assignedRole
+      role: assignedRole,
+      fullName: finalFullName
     }, { source: 'auth-service' });
 
     return created(res, {
@@ -662,7 +663,13 @@ app.post('/api/auth/logout', async (req, res) => {
 // ==============================================================================
 app.get('/api/auth/users', async (req, res) => {
   try {
-    const currentUser = req.user;
+    let currentUser = req.user;
+    if (!currentUser && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        currentUser = jwt.verifyToken(req.headers['authorization'].slice(7).trim(), env.JWT_SECRET);
+      } catch {}
+    }
+
     if (!currentUser || !['ADMIN', 'HR'].includes(currentUser.role)) {
       return forbidden(res, 'Chỉ ADMIN hoặc HR mới có quyền xem danh sách người dùng');
     }
@@ -682,6 +689,7 @@ app.get('/api/auth/users', async (req, res) => {
         emp_id: u.emp_id,
         username: u.username,
         email: u.email,
+        fullName: u.full_name || u.fullName || u.username,
         role: u.role,
         biometric_enabled: u.biometric_enabled,
         status: u.status
