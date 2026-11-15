@@ -219,9 +219,10 @@ async function handleLoginSubmit(e) {
 
     safeSetStorage('htqlns_token', state.token);
     safeSetStorage('htqlns_user', JSON.stringify(state.user));
+    safeSetStorage('htqlns_current_view', 'dashboard');
 
     showToast(`Đăng nhập thành công! Xin chào ${state.user.fullName || state.user.username}`, 'success');
-    initPortalDashboard();
+    initPortalDashboard('dashboard');
   } catch (err) {
     console.error('Lỗi đăng nhập:', err);
     showToast(err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác (Mặc định: 123456)', 'error');
@@ -284,6 +285,7 @@ function handleLogoutClick() {
   state.user = null;
   safeRemoveStorage('htqlns_token');
   safeRemoveStorage('htqlns_user');
+  safeRemoveStorage('htqlns_current_view');
 
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -479,6 +481,7 @@ function navigateToView(viewName) {
   }
 
   state.currentView = viewName;
+  safeSetStorage('htqlns_current_view', viewName);
 
   // Cập nhật tab active trên Sidebar
   document.querySelectorAll('.figma-nav-item').forEach((item) => {
@@ -510,7 +513,10 @@ function navigateToView(viewName) {
   if (viewName === 'employees') loadEmployeesData();
   if (viewName === 'departments') loadDepartmentsData();
   if (viewName === 'attendance-history') loadAttendanceHistoryData();
-  if (viewName === 'my-attendance') loadMyAttendanceData();
+  if (viewName === 'my-attendance') {
+    loadMyAttendanceData();
+    checkTodayAttendanceStatus();
+  }
   if (viewName === 'rbac') loadRbacUsersData();
   if (viewName === 'stats') loadStatsData();
   if (viewName === 'soa-monitor') loadSoaServicesStatus();
@@ -741,6 +747,53 @@ async function loadMyAttendanceData() {
       <td>${r.status === 'ON_TIME' ? '<span class="badge-status badge-approved">Đúng giờ</span>' : '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn</span>'}</td>
     </tr>
   `).join('');
+
+  checkTodayAttendanceStatus();
+}
+
+// Kiểm tra trạng thái chấm công hôm nay để đồng bộ nút Check-in / Check-out (F5 hoặc mở trang)
+async function checkTodayAttendanceStatus() {
+  if (!state.token || !state.user) return;
+  const checkinBtn = document.getElementById('btnMyCheckIn');
+  const checkoutBtn = document.getElementById('btnMyCheckOut');
+  if (!checkinBtn) return;
+
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const res = await apiCall('/api/attendance');
+    if (res && res.success && Array.isArray(res.data)) {
+      const todayRecord = res.data.find(r => {
+        if (!r.work_date) return false;
+        const rDate = new Date(r.work_date).toISOString().slice(0, 10);
+        return rDate === todayStr;
+      });
+
+      if (todayRecord) {
+        if (todayRecord.check_in_time) {
+          const inTime = new Date(todayRecord.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+          checkinBtn.disabled = true;
+          checkinBtn.innerText = `Đã Check-in (${inTime})`;
+          checkinBtn.style.opacity = '0.7';
+          if (checkoutBtn) checkoutBtn.disabled = false;
+        }
+        if (todayRecord.check_out_time) {
+          const outTime = new Date(todayRecord.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+          if (checkoutBtn) {
+            checkoutBtn.disabled = true;
+            checkoutBtn.innerText = `Đã Check-out (${outTime})`;
+            checkoutBtn.style.opacity = '0.7';
+          }
+        }
+      } else {
+        checkinBtn.disabled = false;
+        checkinBtn.innerText = 'Check In';
+        checkinBtn.style.opacity = '1';
+        if (checkoutBtn) checkoutBtn.disabled = true;
+      }
+    }
+  } catch (err) {
+    console.warn('Lỗi kiểm tra trạng thái chấm công:', err.message);
+  }
 }
 
 // ==============================================================================
@@ -1490,17 +1543,20 @@ async function submitNewEmployee() {
 // ==============================================================================
 // 10. KHỞI TẠO DASHBOARD PORTAL
 // ==============================================================================
-function initPortalDashboard() {
+function initPortalDashboard(targetView = null) {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').style.display = 'flex';
 
   updateTopbarUser();
   applyRoleBasedUI();
-  navigateToView('dashboard');
+
+  const savedView = targetView || safeGetStorage('htqlns_current_view', 'dashboard');
+  navigateToView(savedView);
+  checkTodayAttendanceStatus();
 }
 
 // ==============================================================================
-// 11. KHỞI CHẠY ỨNG DỤNG (WINDOW LOAD)
+// 11. KHỞI CHẠY ỨNG DỤNG (WINDOW LOAD & F5 REFRESH)
 // ==============================================================================
 window.addEventListener('DOMContentLoaded', () => {
   // Đồng hồ số thời gian thực cho view chấm công cá nhân
@@ -1511,7 +1567,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
-  // MẶC ĐỊNH KHI MỞ TRANG: LUÔN HIỂN THỊ GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ
-  // Người dùng đăng nhập hoặc chọn 1-Click tài khoản để vào Dashboard
-  showScreenView('login');
+  // KIỂM TRA PHIÊN ĐĂNG NHẬP (SESSION RESTORATION KHI F5):
+  // Nếu người dùng đã đăng nhập trước đó và token JWT còn hạn:
+  // -> Khôi phục chính xác màn hình đang làm việc và đồng bộ trạng thái chấm công
+  if (state.token && state.user && isTokenValid(state.token)) {
+    const lastView = safeGetStorage('htqlns_current_view', 'dashboard');
+    initPortalDashboard(lastView);
+  } else {
+    // Nếu chưa đăng nhập hoặc token đã hết hạn -> hiển thị màn hình Đăng nhập
+    showScreenView('login');
+  }
 });
