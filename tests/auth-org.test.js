@@ -92,6 +92,44 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(data.success, false);
     });
 
+    test('Public registration cannot assign HR or MANAGER (HTTP 403)', async () => {
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: `elevate_${Date.now()}`,
+          email: `elevate_${Date.now()}@example.test`,
+          password: 'password123',
+          role: 'HR'
+        })
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    test('Forged x-user header cannot grant registration privileges (HTTP 403)', async () => {
+      const forged = Buffer.from(JSON.stringify({ role: 'ADMIN', userId: 'fake' })).toString('base64');
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user': forged },
+        body: JSON.stringify({
+          username: `forged_${Date.now()}`,
+          email: `forged_${Date.now()}@example.test`,
+          password: 'password123',
+          role: 'MANAGER'
+        })
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    test('Biometric flag alone cannot bypass password authentication', async () => {
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', biometric: true })
+      });
+      assert.strictEqual(res.status, 400);
+    });
+
     test('Đăng ký tài khoản người dùng mới thành công (HTTP 201)', async () => {
       const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/register`, {
         method: 'POST',
