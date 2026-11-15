@@ -43,13 +43,16 @@ const app = createServiceApp(SERVICE_NAME, {
 });
 
 async function fetchInternalJson(url) {
-  try {
-    const res = await fetch(url, { headers: { 'x-internal-key': env.INTERNAL_API_KEY } });
-    const data = await res.json();
-    return data.success ? data.data : [];
-  } catch {
-    return [];
+  const res = await fetch(url, {
+    headers: { 'x-internal-key': env.INTERNAL_API_KEY },
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!res.ok) throw new Error(`Upstream request failed (${res.status}): ${url}`);
+  const data = await res.json();
+  if (!data.success || !Array.isArray(data.data)) {
+    throw new Error(`Invalid monthly summary from ${url}`);
   }
+  return data.data;
 }
 
 // ==============================================================================
@@ -226,6 +229,18 @@ app.post(['/api/v1/payrolls/calculate', '/api/payroll/calculate'], requireAuth([
     const month = Number(req.body.month || new Date().getMonth() + 1);
     const year = Number(req.body.year || new Date().getFullYear());
     const standardDays = Number(req.body.standardWorkingDays || 22);
+    if (!Number.isInteger(month) || month < 1 || month > 12 ||
+        !Number.isInteger(year) || year < 2000 || year > 2100 ||
+        !Number.isFinite(standardDays) || standardDays <= 0 || standardDays > 31) {
+      return res.status(400).json({ success: false, error: 'Kỳ lương hoặc số ngày công chuẩn không hợp lệ' });
+    }
+
+    // Fetch all required summaries before changing a payroll period.
+    const [attSummary, leaveSummary, otSummary] = await Promise.all([
+      fetchInternalJson(`${ATTENDANCE_URL}/internal/attendances/monthly-summary?month=${month}&year=${year}`),
+      fetchInternalJson(`${LEAVE_URL}/internal/leaves/monthly-summary?month=${month}&year=${year}`),
+      fetchInternalJson(`${SHIFT_URL}/internal/ot/summary?month=${month}&year=${year}`)
+    ]);
 
     // Tạo hoặc lấy kỳ lương
     let [periods] = await pool.query('SELECT * FROM payroll_periods WHERE month = ? AND year = ?', [month, year]);
@@ -246,10 +261,6 @@ app.post(['/api/v1/payrolls/calculate', '/api/payroll/calculate'], requireAuth([
 
     // Tổng hợp dữ liệu từ 3 microservice: Attendance, Leave, Shift (OT)
     const [configs] = await pool.query('SELECT * FROM payroll_configs');
-    const attSummary = await fetchInternalJson(`${ATTENDANCE_URL}/internal/attendances/monthly-summary?month=${month}&year=${year}`);
-    const leaveSummary = await fetchInternalJson(`${LEAVE_URL}/internal/leaves/monthly-summary?month=${month}&year=${year}`);
-    const otSummary = await fetchInternalJson(`${SHIFT_URL}/internal/ot/summary?month=${month}&year=${year}`);
-
     const attMap = Object.fromEntries(attSummary.map((r) => [r.emp_id, r]));
     const leaveMap = Object.fromEntries(leaveSummary.map((r) => [r.emp_id, r]));
 
