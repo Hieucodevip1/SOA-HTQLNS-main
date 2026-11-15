@@ -291,7 +291,7 @@ app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], require
 
 app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, res, next) => {
   try {
-    const { empId, fromDate, toDate, status } = req.query;
+    const { empId, fromDate, toDate, status, department, dept, workDate } = req.query;
     const targetEmpId = req.user.role === 'EMPLOYEE' ? getEmpIdFromUser(req.user) : (empId || null);
 
     const conditions = [];
@@ -301,6 +301,10 @@ app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, r
       conditions.push('a.emp_id = ?');
       params.push(targetEmpId);
     }
+    if (workDate) {
+      conditions.push('a.work_date = ?');
+      params.push(workDate);
+    }
     if (fromDate) {
       conditions.push('a.work_date >= ?');
       params.push(fromDate);
@@ -309,21 +313,69 @@ app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, r
       conditions.push('a.work_date <= ?');
       params.push(toDate);
     }
-    if (status) {
+    if (status && status !== 'ALL') {
       conditions.push('a.status = ?');
       params.push(status);
+    }
+    const filterDept = department || dept;
+    if (filterDept && filterDept !== 'ALL') {
+      conditions.push('(d.code = ? OR d.name LIKE ?)');
+      params.push(filterDept, `%${filterDept}%`);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.query(
-      `SELECT a.*, w.name AS location_name
+      `SELECT a.*, 
+              w.name AS location_name,
+              COALESCE(e.full_name, a.emp_id) AS emp_name,
+              COALESCE(e.code, CONCAT('NV-', RIGHT(a.emp_id, 4))) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS dept_name,
+              d.code AS dept_code,
+              adj.id AS adjustment_id,
+              adj.reason AS adjustment_reason,
+              adj.status AS adjustment_status
        FROM attendance_logs a
        LEFT JOIN work_locations w ON a.location_id = w.id
+       LEFT JOIN htqlns_organization.employees e ON a.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       LEFT JOIN attendance_adjustments adj ON (adj.attendance_id = a.id OR (adj.emp_id = a.emp_id AND adj.work_date = a.work_date))
        ${whereClause}
-       ORDER BY a.work_date DESC`,
+       ORDER BY a.work_date DESC, a.created_at DESC`,
       params
     );
 
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Tra cứu danh sách đơn giải trình chấm công
+app.get(['/api/v1/attendance-adjustments', '/api/attendance/adjustments'], requireAuth(), async (req, res, next) => {
+  try {
+    const isEmp = req.user.role === 'EMPLOYEE';
+    const empId = getEmpIdFromUser(req.user);
+    const conditions = [];
+    const params = [];
+
+    if (isEmp && empId) {
+      conditions.push('adj.emp_id = ?');
+      params.push(empId);
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [rows] = await pool.query(
+      `SELECT adj.*,
+              COALESCE(e.full_name, adj.emp_id) AS emp_name,
+              COALESCE(e.code, CONCAT('NV-', RIGHT(adj.emp_id, 4))) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS dept_name
+       FROM attendance_adjustments adj
+       LEFT JOIN htqlns_organization.employees e ON adj.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       ${whereClause}
+       ORDER BY adj.created_at DESC`,
+      params
+    );
     res.json({ success: true, data: rows });
   } catch (err) {
     next(err);
@@ -359,7 +411,7 @@ app.post(['/api/v1/attendance-adjustments', '/api/attendance/explanations', '/ap
 });
 
 // Duyệt đơn giải trình công (SCR_ATT_04)
-app.patch('/api/v1/attendance-adjustments/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAGER']), async (req, res, next) => {
+app.patch(['/api/v1/attendance-adjustments/:id/decision', '/api/attendance/adjustments/:id/decision', '/api/attendance/adjustments/:id/status'], requireAuth(['ADMIN', 'HR', 'MANAGER']), async (req, res, next) => {
   try {
     const { decision, rejectReason = null } = req.body;
     if (!['APPROVED', 'REJECTED'].includes(decision)) {

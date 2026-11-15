@@ -115,6 +115,51 @@ async function findUserByLogin(login) {
   return null;
 }
 
+// Helper bổ sung thông tin hồ sơ nhân sự cho user
+async function enrichUserProfile(user, useDb) {
+  let fullName = user.username;
+  let empCode = null;
+  let deptName = null;
+
+  if (useDb && user.emp_id) {
+    try {
+      const empRows = await db.query(
+        `SELECT e.code, e.full_name, d.name AS dept_name 
+         FROM htqlns_organization.employees e 
+         LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id 
+         WHERE e.id = ? LIMIT 1`,
+        [user.emp_id]
+      );
+      if (empRows.length > 0) {
+        fullName = empRows[0].full_name;
+        empCode = empRows[0].code;
+        deptName = empRows[0].dept_name;
+      }
+    } catch (e) {}
+  }
+
+  if (!empCode) {
+    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; }
+    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; }
+    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; }
+    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Nhân sự'; }
+  }
+
+  return {
+    id: user.id,
+    empId: user.emp_id,
+    empCode,
+    username: user.username,
+    fullName,
+    deptName,
+    email: user.email,
+    role: user.role,
+    biometricEnabled: Boolean(user.biometric_enabled),
+    status: user.status,
+    lastLoginAt: user.last_login_at
+  };
+}
+
 // Khởi tạo Express Service App
 const app = createServiceApp('auth-service', {
   port: PORT,
@@ -144,7 +189,7 @@ app.use((req, res, next) => {
 // ==============================================================================
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, role, emp_id, biometric_enabled } = req.body;
+    const { username, email, password, role, emp_id, biometric_enabled, first_name, last_name, phone } = req.body;
 
     if (!username || !email || !password) {
       return badRequest(res, 'Vui lòng cung cấp đầy đủ: username, email và password');
@@ -178,21 +223,53 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
-    const empId = emp_id || null;
+    let finalEmpId = emp_id || null;
+    let finalFullName = `${first_name || ''} ${last_name || ''}`.trim() || username;
     const isBiometric = Boolean(biometric_enabled);
 
     const useDb = await isDbAvailable();
     if (useDb) {
+      if (!finalEmpId) {
+        try {
+          const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1');
+          if (empRows.length > 0) {
+            finalEmpId = empRows[0].id;
+            finalFullName = empRows[0].full_name;
+          } else {
+            finalEmpId = crypto.randomUUID();
+            const fName = first_name || username;
+            const lName = last_name || (assignedRole === 'MANAGER' ? '(Quản lý)' : '(Nhân viên)');
+            finalFullName = `${fName} ${lName}`.trim();
+            const empCode = 'EMP_' + Math.floor(10000 + Math.random() * 90000);
+
+            let deptId = null;
+            try {
+              const deptRows = await db.query('SELECT id FROM htqlns_organization.departments LIMIT 1');
+              deptId = deptRows[0]?.id || null;
+            } catch {}
+
+            await db.query(
+              `INSERT INTO htqlns_organization.employees 
+               (id, code, full_name, email, phone, department_id, join_date, contract_type, status)
+               VALUES (?, ?, ?, ?, ?, ?, CURDATE(), 'OFFICIAL', 'ACTIVE')`,
+              [finalEmpId, empCode, finalFullName, email, phone || '0911223344', deptId]
+            );
+          }
+        } catch (e) {
+          console.warn('[AUTH] Tự động tạo hồ sơ nhân sự organization:', e.message);
+        }
+      }
+
       await db.query(
         `INSERT INTO users (id, emp_id, username, email, password_hash, role, biometric_enabled, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [userId, empId, username, email, passwordHash, assignedRole, isBiometric],
+        [userId, finalEmpId, username, email, passwordHash, assignedRole, isBiometric],
         DB_NAME
       );
     } else {
       memoryUsers.set(userId, {
         id: userId,
-        emp_id: empId,
+        emp_id: finalEmpId,
         username,
         email,
         password_hash: passwordHash,
@@ -205,7 +282,7 @@ app.post('/api/auth/register', async (req, res) => {
     // Bắn sự kiện user.registered lên Event Bus
     events.publish('user.registered', {
       userId,
-      empId,
+      empId: finalEmpId,
       username,
       email,
       role: assignedRole
@@ -213,8 +290,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     return created(res, {
       id: userId,
-      emp_id: empId,
+      emp_id: finalEmpId,
       username,
+      fullName: finalFullName,
       email,
       role: assignedRole
     }, 'Đăng ký tài khoản thành công');
@@ -296,17 +374,12 @@ app.post('/api/auth/login', async (req, res) => {
       loginAt: new Date().toISOString()
     }, { source: 'auth-service' });
 
+    const userProfile = await enrichUserProfile(user, useDb);
+
     return success(res, {
       token,
       refreshToken,
-      user: {
-        id: user.id,
-        empId: user.emp_id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        biometricEnabled: Boolean(user.biometric_enabled)
-      }
+      user: userProfile
     }, 200, 'Đăng nhập thành công');
   } catch (err) {
     return error(res, 'Lỗi đăng nhập: ' + err.message);
@@ -390,16 +463,10 @@ app.get('/api/auth/me', async (req, res) => {
       return notFound(res, 'Không tìm thấy thông tin tài khoản');
     }
 
-    return success(res, {
-      id: user.id,
-      empId: user.emp_id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      biometricEnabled: Boolean(user.biometric_enabled),
-      status: user.status,
-      lastLoginAt: user.last_login_at
-    });
+    const useDb = await isDbAvailable();
+    const userProfile = await enrichUserProfile(user, useDb);
+
+    return success(res, userProfile);
   } catch (err) {
     return error(res, err.message);
   }

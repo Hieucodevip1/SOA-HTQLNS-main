@@ -1406,6 +1406,14 @@ input:checked + .slider:before {
               <span class="input-icon-right" onclick="togglePasswordVisibility('regConfirmPassword')">👁️</span>
             </div>
 
+            <div class="figma-input-wrapper">
+              <label style="display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; padding-left: 12px; font-weight: 500;">Vai trò tài khoản:</label>
+              <select id="regRole" class="figma-pill-input" style="cursor: pointer; appearance: auto; -webkit-appearance: menulist; padding-top: 10px; padding-bottom: 10px;">
+                <option value="EMPLOYEE">👨‍💻 Nhân viên (Employee)</option>
+                <option value="MANAGER">👨‍💼 Quản lý bộ phận (Manager)</option>
+              </select>
+            </div>
+
             <button type="submit" class="btn-figma-dark" id="btnRegisterAction">Register</button>
 
             <div class="auth-divider">
@@ -1542,218 +1550,342 @@ input:checked + .slider:before {
             <div class="page-heading-desc" id="dashGreetingSub">Xin chào Thầy Lâm, đây là tình hình đội nhóm hôm nay.</div>
           </div>
 
-          <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
-          <div class="filter-pill-bar">
-            <div class="pill-dropdown-group">
-              <div class="figma-filter-pill" onclick="openDateFilterModal()" style="cursor: pointer;" title="Nhấp để đổi ngày xem">
-                <span id="currentDatePillText">📅 30/10/2026 • Hôm nay</span> ▾
+          <!-- ==================== KHU VỰC DASHBOARD CHO ADMIN / MANAGER ==================== -->
+          <div id="dashAdminOverviewSection">
+            <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
+            <div class="filter-pill-bar">
+              <div class="pill-dropdown-group">
+                <div class="figma-filter-pill" onclick="openDateFilterModal()" style="cursor: pointer;" title="Nhấp để đổi ngày xem">
+                  <span id="currentDatePillText">📅 30/10/2026 • Hôm nay</span> ▾
+                </div>
+                <div class="figma-filter-pill" onclick="openDeptFilterModal()" style="cursor: pointer;" title="Nhấp để đổi phòng ban">
+                  <span id="currentDeptPillText">🏢 Phòng Kỹ Thuật • 40 người</span> ▾
+                </div>
               </div>
-              <div class="figma-filter-pill" onclick="openDeptFilterModal()" style="cursor: pointer;" title="Nhấp để đổi phòng ban">
-                <span id="currentDeptPillText">🏢 Phòng Kỹ Thuật • 40 người</span> ▾
-              </div>
-            </div>
-            <div class="update-time-meta">Cập nhật lúc: 09:00 • Ca 08:00 - 16:00</div>
-          </div>
-
-          <!-- 4 THẺ CHỈ SỐ METRIC (FIGMA IMAGE 3) - CÓ THỂ BẤM TƯƠNG TÁC -->
-          <div class="metrics-row-4">
-            <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn cơ quan">
-              <div class="metric-header">
-                <span>Đã đi làm</span>
-                <span>👤</span>
-              </div>
-              <div class="metric-value-huge metric-value-green">34 / 40</div>
-              <div class="metric-footer-note">85% nhân sự • Gồm 3 người đi muộn →</div>
+              <div class="update-time-meta">Cập nhật lúc: 09:00 • Ca 08:00 - 16:00</div>
             </div>
 
-            <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
-              <div class="metric-header">
-                <span>Nghỉ phép</span>
-                <span>📅</span>
+            <!-- 4 THẺ CHỈ SỐ METRIC (FIGMA IMAGE 3) - CÓ THỂ BẤM TƯƠNG TÁC -->
+            <div class="metrics-row-4">
+              <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn cơ quan">
+                <div class="metric-header">
+                  <span>Đã đi làm</span>
+                  <span>👤</span>
+                </div>
+                <div class="metric-value-huge metric-value-green">34 / 40</div>
+                <div class="metric-footer-note">85% nhân sự • Gồm 3 người đi muộn →</div>
               </div>
-              <div class="metric-value-huge metric-value-blue">04</div>
-              <div class="metric-footer-note">Đã được duyệt nghỉ hôm nay →</div>
+
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
+                <div class="metric-header">
+                  <span>Nghỉ phép</span>
+                  <span>📅</span>
+                </div>
+                <div class="metric-value-huge metric-value-blue">04</div>
+                <div class="metric-footer-note">Đã được duyệt nghỉ hôm nay →</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
+                <div class="metric-header">
+                  <span>Đi muộn</span>
+                  <span>⏰</span>
+                </div>
+                <div class="metric-value-huge metric-value-orange">03</div>
+                <div class="metric-footer-note">Là một phần trong 34 người đi làm ↓</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem và xử lý đơn chờ duyệt">
+                <div class="metric-header">
+                  <span>Đơn chờ duyệt</span>
+                  <span>📄</span>
+                </div>
+                <div class="metric-value-huge metric-value-blue">07</div>
+                <div class="metric-footer-note">Tất cả ngày yêu cầu • Cần xử lý →</div>
+              </div>
             </div>
 
-            <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
-              <div class="metric-header">
-                <span>Đi muộn</span>
-                <span>⏰</span>
-              </div>
-              <div class="metric-value-huge metric-value-orange">03</div>
-              <div class="metric-footer-note">Là một phần trong 34 người đi làm ↓</div>
-            </div>
+            <!-- PHÂN BỔ CHẤM CÔNG HÔM NAY (DONUT CHART) & NHÂN VIÊN ĐI MUỘN -->
+            <div class="middle-grid-2">
+              <!-- Card Trái: Biểu đồ Donut Phân bổ chấm công -->
+              <div class="figma-white-card">
+                <div class="card-title-flex">
+                  <div class="card-title-text">Phân bổ chấm công hôm nay</div>
+                </div>
 
-            <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem và xử lý đơn chờ duyệt">
-              <div class="metric-header">
-                <span>Đơn chờ duyệt</span>
-                <span>📄</span>
-              </div>
-              <div class="metric-value-huge metric-value-blue">07</div>
-              <div class="metric-footer-note">Tất cả ngày yêu cầu • Cần xử lý →</div>
-            </div>
-          </div>
+                <div class="donut-chart-container">
+                  <div class="donut-svg-wrap" style="width: 130px; height: 130px; min-width: 130px; position: relative;">
+                    <svg viewBox="0 0 36 36" style="width: 130px; height: 130px; transform: rotate(-90deg); display: block;">
+                      <!-- Vòng nền -->
+                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" stroke-width="3.8"></circle>
+                      <!-- Đúng giờ (31/40 = 77.5%) -->
+                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="3.8" stroke-dasharray="77.5 22.5" stroke-dashoffset="0"></circle>
+                      <!-- Đi muộn (3/40 = 7.5%) -->
+                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="3.8" stroke-dasharray="7.5 92.5" stroke-dashoffset="-77.5"></circle>
+                      <!-- Nghỉ phép (4/40 = 10%) -->
+                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="3.8" stroke-dasharray="10 90" stroke-dashoffset="-85"></circle>
+                      <!-- Chưa chấm công (2/40 = 5%) -->
+                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#94a3b8" stroke-width="3.8" stroke-dasharray="5 95" stroke-dashoffset="-95"></circle>
+                    </svg>
+                    <div class="donut-center-label">
+                      <div class="donut-center-number">40</div>
+                      <div class="donut-center-sub">nhân viên</div>
+                    </div>
+                  </div>
 
-          <!-- PHÂN BỔ CHẤM CÔNG HÔM NAY (DONUT CHART) & NHÂN VIÊN ĐI MUỘN -->
-          <div class="middle-grid-2">
-            <!-- Card Trái: Biểu đồ Donut Phân bổ chấm công -->
-            <div class="figma-white-card">
-              <div class="card-title-flex">
-                <div class="card-title-text">Phân bổ chấm công hôm nay</div>
-              </div>
+                  <div class="donut-legend-list">
+                    <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem danh sách đúng giờ">
+                      <div class="legend-dot-label">
+                        <span class="dot-color dot-ontime"></span>
+                        <span>Đúng giờ</span>
+                      </div>
+                      <span class="legend-count">31</span>
+                    </div>
 
-              <div class="donut-chart-container">
-                <div class="donut-svg-wrap" style="width: 130px; height: 130px; min-width: 130px; position: relative;">
-                  <svg viewBox="0 0 36 36" style="width: 130px; height: 130px; transform: rotate(-90deg); display: block;">
-                    <!-- Vòng nền -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" stroke-width="3.8"></circle>
-                    <!-- Đúng giờ (31/40 = 77.5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="3.8" stroke-dasharray="77.5 22.5" stroke-dashoffset="0"></circle>
-                    <!-- Đi muộn (3/40 = 7.5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="3.8" stroke-dasharray="7.5 92.5" stroke-dashoffset="-77.5"></circle>
-                    <!-- Nghỉ phép (4/40 = 10%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="3.8" stroke-dasharray="10 90" stroke-dashoffset="-85"></circle>
-                    <!-- Chưa chấm công (2/40 = 5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#94a3b8" stroke-width="3.8" stroke-dasharray="5 95" stroke-dashoffset="-95"></circle>
-                  </svg>
-                  <div class="donut-center-label">
-                    <div class="donut-center-number">40</div>
-                    <div class="donut-center-sub">nhân viên</div>
+                    <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
+                      <div class="legend-dot-label">
+                        <span class="dot-color dot-late"></span>
+                        <span>Đi muộn</span>
+                      </div>
+                      <span class="legend-count">03</span>
+                    </div>
+
+                    <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
+                      <div class="legend-dot-label">
+                        <span class="dot-color dot-leave"></span>
+                        <span>Nghỉ phép</span>
+                      </div>
+                      <span class="legend-count">04</span>
+                    </div>
+
+                    <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn bộ nhân sự">
+                      <div class="legend-dot-label">
+                        <span class="dot-color dot-absent"></span>
+                        <span>Chưa chấm công</span>
+                      </div>
+                      <span class="legend-count">02</span>
+                    </div>
                   </div>
                 </div>
 
-                <div class="donut-legend-list">
-                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem danh sách đúng giờ">
-                    <div class="legend-dot-label">
-                      <span class="dot-color dot-ontime"></span>
-                      <span>Đúng giờ</span>
-                    </div>
-                    <span class="legend-count">31</span>
-                  </div>
-
-                  <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
-                    <div class="legend-dot-label">
-                      <span class="dot-color dot-late"></span>
-                      <span>Đi muộn</span>
-                    </div>
-                    <span class="legend-count">03</span>
-                  </div>
-
-                  <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
-                    <div class="legend-dot-label">
-                      <span class="dot-color dot-leave"></span>
-                      <span>Nghỉ phép</span>
-                    </div>
-                    <span class="legend-count">04</span>
-                  </div>
-
-                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn bộ nhân sự">
-                    <div class="legend-dot-label">
-                      <span class="dot-color dot-absent"></span>
-                      <span>Chưa chấm công</span>
-                    </div>
-                    <span class="legend-count">02</span>
-                  </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 10px;">
+                  31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên.
                 </div>
               </div>
 
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 10px;">
-                31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên.
+              <!-- Card Phải: Bảng Nhân viên đi muộn (Có thể tương tác bấm xem) -->
+              <div class="figma-white-card" id="lateEmployeesCard">
+                <div class="card-title-flex">
+                  <div class="card-title-text">Nhân viên đi muộn hôm nay</div>
+                  <span class="badge-status" style="background: #fef3c7; color: #b45309;" id="dashLateCountBadge">• 3 người</span>
+                </div>
+
+                <table class="figma-table">
+                  <thead>
+                    <tr>
+                      <th>Nhân viên</th>
+                      <th>Giờ vào</th>
+                      <th>Đi muộn</th>
+                      <th>Chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashLateEmployeesTableBody">
+                    <tr>
+                      <td>
+                        <div style="font-weight: 700;">Huỳnh Gia Kiệt</div>
+                        <div style="font-size: 11px; color: #94a3b8;">NV-002</div>
+                      </td>
+                      <td>08:12</td>
+                      <td><span style="color: #d97706; font-weight: 600;">12 phút</span></td>
+                      <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Huỳnh Gia Kiệt', 'NV-002', '12 phút', '08:12', 'Phòng Kỹ Thuật')">Xem xét →</a></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div style="font-weight: 700;">Nguyễn Gia Hảo</div>
+                        <div style="font-size: 11px; color: #94a3b8;">NV-003</div>
+                      </td>
+                      <td>08:07</td>
+                      <td><span style="color: #d97706; font-weight: 600;">7 phút</span></td>
+                      <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Nguyễn Gia Hảo', 'NV-003', '7 phút', '08:07', 'Phòng Kỹ Thuật')">Xem xét →</a></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div style="font-weight: 700;">Trần Hoài An</div>
+                        <div style="font-size: 11px; color: #94a3b8;">NV-008</div>
+                      </td>
+                      <td>08:21</td>
+                      <td><span style="color: #d97706; font-weight: 600;">21 phút</span></td>
+                      <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Trần Hoài An', 'NV-008', '21 phút', '08:21', 'Phòng Kỹ Thuật')">Xem xét →</a></td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div style="margin-top: 14px; text-align: left;">
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('attendance-history')">Xem bảng chấm công hôm nay →</a>
+                </div>
               </div>
             </div>
 
-            <!-- Card Phải: Bảng Nhân viên đi muộn (Có thể tương tác bấm xem) -->
-            <div class="figma-white-card" id="lateEmployeesCard">
+            <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (CHO QUẢN TRỊ VIÊN / QUẢN LÝ) -->
+            <div id="dashPendingApprovalCard" class="figma-white-card">
               <div class="card-title-flex">
-                <div class="card-title-text">Nhân viên đi muộn</div>
-                <span class="badge-status" style="background: #fef3c7; color: #b45309;">• 3 người</span>
+                <div>
+                  <div class="card-title-text">Đơn đang chờ phê duyệt</div>
+                  <div id="dashPendingApprovalSub" style="font-size: 12px; color: #64748b;">Danh sách đơn từ của nhân viên cần xét duyệt trực tiếp</div>
+                </div>
+                <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Quản lý tất cả đơn từ →</a>
               </div>
 
               <table class="figma-table">
                 <thead>
                   <tr>
-                    <th>Nhân viên</th>
-                    <th>Giờ vào</th>
-                    <th>Đi muộn</th>
-                    <th>Chi tiết</th>
+                    <th>Nhân viên / Mã đơn</th>
+                    <th>Phòng ban</th>
+                    <th>Loại đơn</th>
+                    <th>Thời gian yêu cầu</th>
+                    <th>Lý do</th>
+                    <th style="text-align: center;">Thao tác xét duyệt</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
+                <tbody id="dashPendingApprovalTableBody">
+                  <tr id="req-row-NP-2026-024">
                     <td>
-                      <div style="font-weight: 700;">Huỳnh Gia Kiệt</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-002</div>
+                      <div style="font-weight: 700;">Vũ Đức Hiếu</div>
+                      <div style="font-size: 11px; color: #94a3b8;">NP-2026-024</div>
                     </td>
-                    <td>08:12</td>
-                    <td><span style="color: #d97706; font-weight: 600;">12 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Huỳnh Gia Kiệt', 'NV-002', '12 phút', '08:12')">Xem xét →</a></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <div style="font-weight: 700;">Nguyễn Gia Hảo</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-003</div>
+                    <td>Phòng Kỹ Thuật</td>
+                    <td>Nghỉ phép năm</td>
+                    <td>02/11/2026 • 1 ngày</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Giải quyết việc gia đình</td>
+                    <td style="text-align: center;">
+                      <button class="btn-approve-sm" onclick="handleDirectApproveLeave('NP-2026-024')">✓ Duyệt</button>
+                      <button class="btn-reject-sm" onclick="handleDirectRejectLeave('NP-2026-024')">✕ Từ chối</button>
+                      <button class="btn-detail-sm" onclick="openRequestDetail('NP-2026-024')">Chi tiết ↗</button>
                     </td>
-                    <td>08:07</td>
-                    <td><span style="color: #d97706; font-weight: 600;">7 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Nguyễn Gia Hảo', 'NV-003', '7 phút', '08:07')">Xem xét →</a></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <div style="font-weight: 700;">Trần Hoài An</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-008</div>
-                    </td>
-                    <td>08:21</td>
-                    <td><span style="color: #d97706; font-weight: 600;">21 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Trần Hoài An', 'NV-008', '21 phút', '08:21')">Xem xét →</a></td>
                   </tr>
                 </tbody>
               </table>
-
-              <div style="margin-top: 14px; text-align: left;">
-                <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('attendance-history')">Xem bảng chấm công hôm nay →</a>
-              </div>
             </div>
           </div>
 
-          <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (CHO QUẢN TRỊ VIÊN / QUẢN LÝ) -->
-          <div id="dashPendingApprovalCard" class="figma-white-card">
-            <div class="card-title-flex">
-              <div>
-                <div class="card-title-text">Đơn đang chờ phê duyệt</div>
-                <div id="dashPendingApprovalSub" style="font-size: 12px; color: #64748b;">Danh sách đơn từ của nhân viên cần xét duyệt trực tiếp</div>
+          <!-- ==================== KHU VỰC DASHBOARD CHO NHÂN VIÊN (EMPLOYEE) ==================== -->
+          <div id="dashEmployeeOverviewSection" style="display: none;">
+            <!-- Card Chấm công hôm nay của nhân viên -->
+            <div class="figma-white-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0;">
+              <div class="card-title-flex" style="align-items: center;">
+                <div>
+                  <div class="card-title-text" style="color: #065f46; font-size: 16px;">⏱️ Điểm danh & Trạng thái Làm việc Hôm nay</div>
+                  <div id="dashEmpTodayDateText" style="font-size: 13px; color: #047857;">Hôm nay: Thứ Hai, 30/10/2026 • Ca hành chính (08:00 - 17:00)</div>
+                </div>
+                <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 13px; font-weight: 700;">🟢 Sẵn sàng chấm công</span>
               </div>
-              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Quản lý tất cả đơn từ →</a>
+
+              <div class="metrics-row-4" style="margin-top: 16px;">
+                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
+                  <div style="font-size: 12px; color: #64748b;">Giờ vào ca (Check-in)</div>
+                  <div style="font-size: 24px; font-weight: 700; color: #059669;" id="dashEmpCheckInVal">--:--</div>
+                  <div style="font-size: 11px; color: #64748b;" id="dashEmpCheckInNote">Chưa check-in</div>
+                </div>
+                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
+                  <div style="font-size: 12px; color: #64748b;">Giờ ra ca (Check-out)</div>
+                  <div style="font-size: 24px; font-weight: 700; color: #2563eb;" id="dashEmpCheckOutVal">--:--</div>
+                  <div style="font-size: 11px; color: #64748b;" id="dashEmpCheckOutNote">Chưa check-out</div>
+                </div>
+                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
+                  <div style="font-size: 12px; color: #64748b;">Thời gian làm việc</div>
+                  <div style="font-size: 24px; font-weight: 700; color: #0f172a;" id="dashEmpHoursVal">0.0 h</div>
+                  <div style="font-size: 11px; color: #059669;" id="dashEmpHoursNote">Tiêu chuẩn: 8.0 h</div>
+                </div>
+                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5; display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+                  <button type="button" class="btn-primary-blue" id="dashEmpCheckInBtn" onclick="handleDashboardCheckIn()" style="width: 100%; padding: 8px 12px; font-size: 13px;">📍 Điểm danh Check-in</button>
+                  <button type="button" class="btn-figma-dark" id="dashEmpCheckOutBtn" onclick="handleDashboardCheckOut()" style="width: 100%; padding: 8px 12px; font-size: 13px; margin: 0; background: #475569;">🚪 Check-out ra ca</button>
+                </div>
+              </div>
             </div>
 
-            <table class="figma-table">
-              <thead>
-                <tr>
-                  <th>Nhân viên / Mã đơn</th>
-                  <th>Phòng ban</th>
-                  <th>Loại đơn</th>
-                  <th>Thời gian yêu cầu</th>
-                  <th>Lý do</th>
-                  <th style="text-align: center;">Thao tác xét duyệt</th>
-                </tr>
-              </thead>
-              <tbody id="dashPendingApprovalTableBody">
-                <tr id="req-row-NP-2026-024">
-                  <td>
-                    <div style="font-weight: 700;">Vũ Đức Hiếu</div>
-                    <div style="font-size: 11px; color: #94a3b8;">NP-2026-024</div>
-                  </td>
-                  <td>Phòng Kỹ Thuật</td>
-                  <td>Nghỉ phép năm</td>
-                  <td>02/11/2026 • 1 ngày</td>
-                  <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Giải quyết việc gia đình</td>
-                  <td style="text-align: center;">
-                    <button class="btn-approve-sm" onclick="handleDirectApproveLeave('NP-2026-024')">✓ Duyệt</button>
-                    <button class="btn-reject-sm" onclick="handleDirectRejectLeave('NP-2026-024')">✕ Từ chối</button>
-                    <button class="btn-detail-sm" onclick="openRequestDetail('NP-2026-024')">Chi tiết ↗</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <!-- 4 Thẻ KPI cá nhân tháng này -->
+            <div class="metrics-row-4" style="margin-bottom: 20px;">
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Nhấp để xem bảng công cá nhân">
+                <div class="metric-header">
+                  <span>Công thực tế tháng này</span>
+                  <span>📅</span>
+                </div>
+                <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">22 / 22</div>
+                <div class="metric-footer-note">Đạt 100% công chuẩn →</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Nhấp để xem các ngày đi muộn">
+                <div class="metric-header">
+                  <span>Số lần đi muộn</span>
+                  <span>⏰</span>
+                </div>
+                <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">0</div>
+                <div class="metric-footer-note">Chấp hành tốt giờ giấc →</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem quỹ phép">
+                <div class="metric-header">
+                  <span>Quỹ phép năm còn lại</span>
+                  <span>🏖️</span>
+                </div>
+                <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">10 / 12</div>
+                <div class="metric-footer-note">Ngày phép có lương →</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;" title="Nhấp để xem phiếu lương & tăng ca">
+                <div class="metric-header">
+                  <span>Giờ tăng ca (OT)</span>
+                  <span>⚡</span>
+                </div>
+                <div class="metric-value-huge metric-value-purple" id="dashEmpKpiOtHours">4.5 h</div>
+                <div class="metric-footer-note">Đã được phê duyệt →</div>
+              </div>
+            </div>
+
+            <!-- Lưới 2 cột: Lịch sử chấm công gần đây & Đơn từ của tôi -->
+            <div class="middle-grid-2">
+              <!-- Cột trái: 5 ngày chấm công gần nhất kèm nút giải trình -->
+              <div class="figma-white-card">
+                <div class="card-title-flex">
+                  <div class="card-title-text">Lịch sử chấm công gần đây của bạn</div>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('my-attendance')">Xem toàn bộ →</a>
+                </div>
+                <table class="figma-table">
+                  <thead>
+                    <tr>
+                      <th>Ngày</th>
+                      <th>Vào ca</th>
+                      <th>Ra ca</th>
+                      <th>Trạng thái</th>
+                      <th>Giải trình</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashEmpRecentAttendanceBody">
+                    <!-- Render dynamically -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Cột phải: Đơn từ gần đây của tôi -->
+              <div class="figma-white-card">
+                <div class="card-title-flex">
+                  <div class="card-title-text">Đơn từ xin nghỉ phép của bạn</div>
+                  <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12px;" onclick="navigateToView('requests')">+ Tạo đơn</button>
+                </div>
+                <table class="figma-table">
+                  <thead>
+                    <tr>
+                      <th>Mã đơn</th>
+                      <th>Loại nghỉ</th>
+                      <th>Thời gian</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashEmpRecentRequestsBody">
+                    <!-- Render dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <!-- BẢNG ĐƠN TỪ CỦA TÔI (CHO NHÂN VIÊN) -->
@@ -2729,6 +2861,7 @@ input:checked + .slider:before {
                   <th>Vị trí việc làm</th>
                   <th>Hợp đồng</th>
                   <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="employeesTableFullBody">
@@ -2766,6 +2899,7 @@ input:checked + .slider:before {
                   <th>Số lượng NV</th>
                   <th>Mô tả chức năng</th>
                   <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác / Giải trình</th>
                 </tr>
               </thead>
               <tbody id="departmentsTableFullBody">
@@ -2957,15 +3091,15 @@ input:checked + .slider:before {
           <div class="figma-white-card">
             <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
               <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="date" value="2026-10-30" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
-                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                <input type="date" id="attFilterDate" value="2026-10-30" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                <select id="attFilterDept" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
                   <option value="ALL">Tất cả phòng ban</option>
-                  <option value="TECH">Phòng Kỹ Thuật</option>
-                  <option value="HR">Phòng Nhân sự</option>
-                  <option value="FIN">Phòng Tài Chính</option>
-                  <option value="BIZ">Phòng Kinh Doanh</option>
+                  <option value="Phòng Kỹ Thuật">Phòng Kỹ Thuật</option>
+                  <option value="Phòng Nhân sự">Phòng Nhân sự</option>
+                  <option value="Phòng Tài Chính - Kế Toán">Phòng Tài Chính</option>
+                  <option value="Phòng Kinh Doanh">Phòng Kinh Doanh</option>
                 </select>
-                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                <select id="attFilterStatus" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
                   <option value="ALL">Tất cả trạng thái</option>
                   <option value="ON_TIME">Đúng giờ</option>
                   <option value="LATE">Đi muộn</option>
@@ -3059,6 +3193,7 @@ input:checked + .slider:before {
                   <th>Thời lượng</th>
                   <th>Phương thức</th>
                   <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác / Giải trình</th>
                 </tr>
               </thead>
               <tbody id="myAttendanceTableBody">
@@ -3239,6 +3374,7 @@ input:checked + .slider:before {
                   <th>Mức độ</th>
                   <th>Số trường hợp vi phạm</th>
                   <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác / Giải trình</th>
                 </tr>
               </thead>
               <tbody>

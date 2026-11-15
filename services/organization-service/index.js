@@ -815,17 +815,33 @@ const updateEmployeeHandler = async (req, res) => {
 app.put('/api/organization/employees/:id', updateEmployeeHandler);
 app.put('/api/employees/:id', updateEmployeeHandler);
 
-// Đánh dấu nhân viên nghỉ việc hoặc xóa (ADMIN, HR)
+// Đánh dấu nhân viên nghỉ việc hoặc xóa (ADMIN, HR, MANAGER)
 const deleteEmployeeHandler = async (req, res) => {
   try {
     const id = req.params.id;
+    const isPermanent = req.query.permanent === 'true' || req.query.hard === 'true';
     const useDb = await isDbAvailable();
 
     if (useDb) {
-      await db.query("UPDATE employees SET status = 'RESIGNED' WHERE id = ?", [id], DB_NAME);
+      if (isPermanent) {
+        try {
+          await db.query("UPDATE htqlns_auth.users SET status = 'INACTIVE' WHERE emp_id = ?");
+        } catch {}
+        await db.query("DELETE FROM employees WHERE id = ?", [id], DB_NAME);
+        await logAudit('DELETE_EMPLOYEE', req.user, 'EMPLOYEE', id, { action: 'PERMANENT_DELETE' }, req);
+        events.publish('employee.deleted', { id }, { source: 'organization-service' });
+        return success(res, { id, deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
+      } else {
+        await db.query("UPDATE employees SET status = 'RESIGNED' WHERE id = ?", [id], DB_NAME);
+      }
     } else {
-      const emp = memoryEmployees.get(id);
-      if (emp) emp.status = 'RESIGNED';
+      if (isPermanent) {
+        memoryEmployees.delete(id);
+        return success(res, { id, deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
+      } else {
+        const emp = memoryEmployees.get(id);
+        if (emp) emp.status = 'RESIGNED';
+      }
     }
 
     await logAudit('RESIGN_EMPLOYEE', req.user, 'EMPLOYEE', id, { status: 'RESIGNED' }, req);

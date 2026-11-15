@@ -132,7 +132,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -148,7 +148,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -164,7 +164,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -191,7 +191,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -207,7 +207,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -223,7 +223,7 @@
         {
           "methods": ["POST", "PUT", "DELETE"],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
     },
@@ -456,7 +456,15 @@
       "service": "attendance-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/attendance/adjustments",
+      "service": "attendance-service",
+      "rules": [
+        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
     {

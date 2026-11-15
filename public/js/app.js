@@ -240,6 +240,7 @@ async function handleRegisterSubmit(e) {
   const email = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPassword').value;
   const confirmPassword = document.getElementById('regConfirmPassword').value;
+  const role = document.getElementById('regRole')?.value || 'EMPLOYEE';
   const btn = document.getElementById('btnRegisterAction');
 
   if (password !== confirmPassword) {
@@ -257,7 +258,9 @@ async function handleRegisterSubmit(e) {
         username,
         email,
         password,
-        role: 'EMPLOYEE'
+        role,
+        first_name: firstName,
+        last_name: lastName
       })
     });
 
@@ -265,7 +268,8 @@ async function handleRegisterSubmit(e) {
       throw new Error(res?.error || res?.message || 'Đăng ký không thành công');
     }
 
-    showToast(`Đăng ký tài khoản ${username} thành công! Mời bạn đăng nhập.`, 'success');
+    const roleLabel = role === 'MANAGER' ? 'Quản lý' : 'Nhân viên';
+    showToast(`Đăng ký tài khoản ${username} (${roleLabel}) thành công! Mời bạn đăng nhập.`, 'success');
     toggleAuthMode('login');
     document.getElementById('loginUsername').value = username;
     document.getElementById('loginPassword').value = password;
@@ -343,7 +347,16 @@ function updateTopbarUser() {
   if (!state.user) return;
   const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
   const isEmployee = state.user.role === 'EMPLOYEE' || state.user.username === 'employee';
-  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : (isEmployee ? 'Vũ Đức Hiếu' : state.user.username));
+
+  let displayName = state.user.fullName;
+  if (!displayName) {
+    if (state.user.username === 'employee') displayName = 'Vũ Đức Hiếu';
+    else if (state.user.username === 'manager') displayName = 'Thầy Lâm';
+    else if (state.user.username === 'admin') displayName = 'Nguyễn Quản Trị (Admin)';
+    else if (state.user.username === 'hr_admin') displayName = 'Trần Thị Thu Hà (HR)';
+    else displayName = state.user.username;
+  }
+
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
                       (state.user.role === 'HR' ? 'Phòng Nhân sự' :
                       (state.user.role === 'MANAGER' ? 'Quản lý | Kỹ thuật' : 'Nhân viên | Kỹ thuật'));
@@ -360,7 +373,11 @@ function updateTopbarUser() {
     avatarEl.innerText = (parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : displayName.slice(0, 2)).toUpperCase();
   }
   if (greetSub) {
-    greetSub.innerText = `Xin chào ${displayName}, đây là tình hình đội nhóm hôm nay.`;
+    if (state.user.role === 'EMPLOYEE') {
+      greetSub.innerText = `Xin chào ${displayName}, chúc bạn một ngày làm việc hiệu quả và năng suất!`;
+    } else {
+      greetSub.innerText = `Xin chào ${displayName}, đây là tình hình đội nhóm và chuyên cần hôm nay.`;
+    }
   }
 }
 
@@ -376,6 +393,9 @@ function applyRoleBasedUI() {
   const navEmployees = document.getElementById('nav-employees');
   const pendingRequestsCard = document.getElementById('dashPendingApprovalCard');
   const personalRequestsCard = document.getElementById('dashEmployeePersonalRequestsCard');
+
+  const adminOverviewSection = document.getElementById('dashAdminOverviewSection');
+  const empOverviewSection = document.getElementById('dashEmployeeOverviewSection');
 
   // 1. Quản lý phân quyền: CHỈ ADMIN được hiển thị và thao tác
   if (navRbac) navRbac.style.display = (role === 'ADMIN') ? 'flex' : 'none';
@@ -393,7 +413,22 @@ function applyRoleBasedUI() {
   if (navEmpHistory) navEmpHistory.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
   if (navEmployees) navEmployees.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
 
-  // 6. Điều chỉnh nội dung Dashboard & Thống kê cá nhân:
+  // 6. Điều chỉnh phân hệ Dashboard theo vai trò:
+  if (role === 'EMPLOYEE') {
+    if (adminOverviewSection) adminOverviewSection.style.display = 'none';
+    if (empOverviewSection) empOverviewSection.style.display = 'block';
+    if (pendingRequestsCard) pendingRequestsCard.style.display = 'none';
+    if (personalRequestsCard) personalRequestsCard.style.display = 'block';
+    loadEmployeeDashboardData();
+  } else {
+    if (adminOverviewSection) adminOverviewSection.style.display = 'block';
+    if (empOverviewSection) empOverviewSection.style.display = 'none';
+    if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
+    if (personalRequestsCard) personalRequestsCard.style.display = 'none';
+    loadDashboardPendingRequests();
+  }
+
+  // 7. Thống kê chuyên cần cá nhân (nếu ở view stats)
   const statEmployeePersonalCard = document.getElementById('statEmployeePersonalCard');
   if (statEmployeePersonalCard) {
     statEmployeePersonalCard.style.display = (role === 'EMPLOYEE') ? 'block' : 'none';
@@ -1236,9 +1271,11 @@ function renderEmployeesTable(list) {
   if (!tbody) return;
 
   if (!list || list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu nhân sự</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu nhân sự</td></tr>`;
     return;
   }
+
+  const canDelete = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
 
   tbody.innerHTML = list
     .map(
@@ -1252,10 +1289,32 @@ function renderEmployeesTable(list) {
       <td>${e.position_title || e.position_name || '-'}</td>
       <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
       <td><span class="badge-status ${e.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${e.status}</span></td>
+      <td style="text-align: center;">
+        ${canDelete ? `<button class="btn-reject-sm" onclick="confirmDeleteEmployee('${e.id}', '${e.full_name || e.code}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;">🗑️ Xóa</button>` : '-'}
+      </td>
     </tr>
   `
     )
     .join('');
+}
+
+async function confirmDeleteEmployee(id, name) {
+  if (!confirm(`Bạn có chắc chắn muốn xóa nhân viên "${name}" khỏi hệ thống không?`)) {
+    return;
+  }
+  try {
+    const res = await apiCall(`/api/organization/employees/${id}?permanent=true`, {
+      method: 'DELETE'
+    });
+    if (res && res.success) {
+      showToast(`Đã xóa nhân viên "${name}" thành công!`, 'success');
+      loadEmployeesData();
+    } else {
+      throw new Error(res?.error || 'Xóa nhân viên thất bại');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 function handleEmployeeFilter() {
@@ -1274,23 +1333,41 @@ async function loadAttendanceHistoryData() {
   const tbody = document.getElementById('attendanceHistoryTableBody');
   if (!tbody) return;
 
+  const filterDate = document.getElementById('attFilterDate')?.value || '';
+  const filterDept = document.getElementById('attFilterDept')?.value || 'ALL';
+  const filterStatus = document.getElementById('attFilterStatus')?.value || 'ALL';
+
   tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b; padding: 20px;">Đang tải dữ liệu từ Attendance Service (:3003)...</td></tr>`;
 
   let records = [];
   try {
-    const res = await apiCall('/api/attendance');
+    let queryParams = [];
+    if (filterStatus && filterStatus !== 'ALL') queryParams.push(`status=${filterStatus}`);
+    if (filterDept && filterDept !== 'ALL') queryParams.push(`dept=${encodeURIComponent(filterDept)}`);
+    if (filterDate) queryParams.push(`workDate=${filterDate}`);
+    const qs = queryParams.length ? `?${queryParams.join('&')}` : '';
+
+    const res = await apiCall(`/api/attendance${qs}`);
     if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
       records = res.data.map(r => {
-        const empCode = r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : 'NV-001';
+        const empCode = r.emp_code || (r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : 'NV-001');
         return {
+          id: r.id,
+          emp_id: r.emp_id,
           code: empCode,
-          name: r.emp_name || (r.emp_id === 'e0000001-0000-0000-0000-000000000004' ? 'Vũ Đức Hiếu' : `Nhân viên (${empCode})`),
+          name: r.emp_name || `Nhân viên (${empCode})`,
           dept: r.dept_name || 'Phòng Kỹ Thuật',
+          dept_code: r.dept_code || 'TECH',
+          work_date: r.work_date ? new Date(r.work_date).toISOString().split('T')[0] : '2026-10-30',
           date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026',
           in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
           out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
           hours: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time && r.check_out_time ? '8.0 h' : '0.0 h'),
-          status: r.status
+          status: r.status,
+          late_minutes: r.late_minutes || 0,
+          adj_id: r.adjustment_id || null,
+          adj_reason: r.adjustment_reason || null,
+          adj_status: r.adjustment_status || null
         };
       });
     }
@@ -1300,21 +1377,49 @@ async function loadAttendanceHistoryData() {
 
   if (!records.length) {
     records = [
-      { code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1 h', status: 'ON_TIME' },
-      { code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8 h', status: 'LATE' },
-      { code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0 h', status: 'LATE' },
-      { code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2 h', status: 'ON_TIME' },
-      { code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1 h', status: 'ON_TIME' },
-      { code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5 h', status: 'ON_TIME' },
-      { code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính', date: '30/10/2026', in: '-', out: '-', hours: '0.0 h', status: 'LEAVE' },
-      { code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6 h', status: 'LATE' }
+      { id: 'att-1', code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-2', code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8 h', status: 'LATE', late_minutes: 12, adj_id: 'adj-02', adj_reason: 'Kẹt xe ngập đường tại giao lộ Nguyễn Tri Phương', adj_status: 'PENDING' },
+      { id: 'att-3', code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0 h', status: 'LATE', late_minutes: 7, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-4', code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-5', code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', dept_code: 'HR', work_date: '2026-10-30', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-6', code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', dept_code: 'BIZ', work_date: '2026-10-30', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-7', code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính - Kế Toán', dept_code: 'FIN', work_date: '2026-10-30', date: '30/10/2026', in: '-', out: '-', hours: '0.0 h', status: 'LEAVE', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
+      { id: 'att-8', code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6 h', status: 'LATE', late_minutes: 21, adj_id: 'adj-08', adj_reason: 'Hỏng xe máy giữa cầu vượt', adj_status: 'PENDING' }
     ];
   }
 
-  tbody.innerHTML = records.map(r => {
+  // Áp dụng bộ lọc chính xác
+  let filtered = records;
+  if (filterDept && filterDept !== 'ALL') {
+    filtered = filtered.filter(r => (r.dept && r.dept.includes(filterDept)) || (r.dept_code && r.dept_code === filterDept));
+  }
+  if (filterStatus && filterStatus !== 'ALL') {
+    filtered = filtered.filter(r => r.status === filterStatus);
+  }
+  if (filterDate) {
+    filtered = filtered.filter(r => r.work_date === filterDate);
+  }
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 20px;">Không có bản ghi chấm công nào phù hợp bộ lọc</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
     let badge = '<span class="badge-status badge-approved">Đúng giờ</span>';
-    if (r.status === 'LATE') badge = '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn</span>';
+    if (r.status === 'LATE') badge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
     if (r.status === 'LEAVE') badge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+
+    const cleanName = (r.name || '').replace(/'/g, "\\'");
+    const cleanDept = (r.dept || '').replace(/'/g, "\\'");
+    const cleanReason = (r.adj_reason || '').replace(/'/g, "\\'");
+
+    let actionBtn = `<a class="link-action-blue" style="cursor: pointer;" onclick="openOnTimeDetailModal('${cleanName}', '${r.code}', '${r.in}', '${r.out}', '${cleanDept}')">Chi tiết</a>`;
+    if (r.status === 'LATE') {
+      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #d97706; font-weight: 600;" onclick="openLateDetailModal('${cleanName}', '${r.code}', '${r.late_minutes || 15} phút', '${r.in}', '${cleanDept}', '${cleanReason}', '${r.adj_id || ''}', '${r.adj_status || ''}')">Xem xét giải trình →</a>`;
+    } else if (r.status === 'LEAVE') {
+      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #2563eb;" onclick="navigateToView('requests')">Xem đơn nghỉ ↗</a>`;
+    }
 
     return `
       <tr>
@@ -1326,7 +1431,7 @@ async function loadAttendanceHistoryData() {
         <td>${r.out}</td>
         <td><strong>${r.hours}</strong></td>
         <td>${badge}</td>
-        <td><a class="link-action-blue" onclick="openLateDetailModal('${r.name}', '${r.code}', '15 phút', '${r.in}')">Chi tiết</a></td>
+        <td>${actionBtn}</td>
       </tr>
     `;
   }).join('');
@@ -1337,19 +1442,25 @@ async function loadMyAttendanceData() {
   const tbody = document.getElementById('myAttendanceTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 15px;">Đang nạp dữ liệu chấm công cá nhân...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 15px;">Đang nạp dữ liệu chấm công cá nhân...</td></tr>`;
 
   let records = [];
   try {
     const res = await apiCall('/api/attendance');
     if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
       records = res.data.map(r => ({
+        id: r.id,
+        work_date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
         date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
         in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
         out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
         duration: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time ? 'Đang trong ca' : '-'),
         type: r.check_in_method === 'WIFI' ? 'Wi-Fi Office' : (r.check_in_method === 'GPS' ? 'GPS Mobile' : (r.location_name || 'Văn phòng')),
-        status: r.status
+        status: r.status,
+        late_minutes: r.late_minutes || 0,
+        adj_id: r.adjustment_id || null,
+        adj_reason: r.adjustment_reason || null,
+        adj_status: r.adjustment_status || null
       }));
     }
   } catch (err) {
@@ -1358,25 +1469,43 @@ async function loadMyAttendanceData() {
 
   if (!records.length) {
     records = [
-      { date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-      { date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-      { date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE' },
-      { date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-      { date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-      { date: '25/10/2026', in: '08:02', out: '16:00', duration: '7h 58m', type: 'Wi-Fi Office', status: 'ON_TIME' }
+      { id: 'my-1', date: '30/10/2026', work_date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
+      { id: 'my-2', date: '29/10/2026', work_date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
+      { id: 'my-3', date: '28/10/2026', work_date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE', late_minutes: 12, adj_status: null },
+      { id: 'my-4', date: '27/10/2026', work_date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
+      { id: 'my-5', date: '26/10/2026', work_date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null }
     ];
   }
 
-  tbody.innerHTML = records.map(r => `
-    <tr>
-      <td><strong>${r.date}</strong></td>
-      <td>${r.in}</td>
-      <td>${r.out}</td>
-      <td>${r.duration}</td>
-      <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${r.type}</span></td>
-      <td>${r.status === 'ON_TIME' ? '<span class="badge-status badge-approved">Đúng giờ</span>' : '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn</span>'}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = records.map(r => {
+    let statusBadge = '<span class="badge-status badge-approved">Đúng giờ</span>';
+    let adjCell = '<span style="color: #94a3b8;">-</span>';
+
+    if (r.status === 'LATE') {
+      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
+      if (r.adj_status === 'APPROVED') {
+        adjCell = '<span class="badge-status badge-approved">✓ Đã duyệt giải trình</span>';
+      } else if (r.adj_status === 'PENDING') {
+        adjCell = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Chờ duyệt giải trình</span>';
+      } else {
+        adjCell = `<button class="btn-primary-blue" style="padding: 4px 10px; font-size: 11.5px; border-radius: 6px;" onclick="openSubmitAdjustmentModal('${r.id || ''}', '${r.date}', '${r.in}')">📝 Gửi giải trình</button>`;
+      }
+    } else if (r.status === 'LEAVE') {
+      statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+    }
+
+    return `
+      <tr>
+        <td><strong>${r.date}</strong></td>
+        <td>${r.in}</td>
+        <td>${r.out}</td>
+        <td>${r.duration}</td>
+        <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${r.type}</span></td>
+        <td>${statusBadge}</td>
+        <td style="text-align: center;">${adjCell}</td>
+      </tr>
+    `;
+  }).join('');
 
   checkTodayAttendanceStatus();
 }
@@ -1869,31 +1998,278 @@ function selectDeptFilter(name, count) {
   showToast(`Đã lọc dữ liệu theo: ${name} (${count} nhân sự)`, 'success');
 }
 
-function openLateDetailModal(name, code, lateTime, checkinTime) {
+function openOnTimeDetailModal(name, code, checkinTime, checkoutTime, dept) {
+  const html = `
+    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
+      <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 12px; color: #065f46;">
+        <strong>✅ Tình trạng:</strong> Chấm công Đúng giờ (Giờ vào: ${checkinTime || '07:55'} - Giờ ra: ${checkoutTime || '16:05'})
+      </div>
+      <div><strong>Nhân viên:</strong> ${name} (${code})</div>
+      <div><strong>Phòng ban:</strong> ${dept || 'Phòng Kỹ Thuật'}</div>
+      <div><strong>Phương thức chấm công:</strong> Wi-Fi công ty (HTQLNS-Community-5G) • Tọa độ GPS hợp lệ</div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        <button class="btn-figma-dark" style="padding: 8px 20px; font-size: 13px;" onclick="closeModal()">Đóng</button>
+      </div>
+    </div>
+  `;
+  openModal(`Chi tiết chấm công – ${name}`, html);
+}
+
+function openLateDetailModal(name, code, lateTime, checkinTime, dept, reason, adjId, adjStatus) {
+  const hasReason = Boolean(reason && reason.trim().length > 0);
+  const statusBadge = adjStatus === 'APPROVED' ? '<span class="badge-status badge-approved">✓ Đã chấp thuận</span>' :
+                      (adjStatus === 'REJECTED' ? '<span class="badge-status badge-rejected">✕ Đã từ chối</span>' :
+                      (hasReason ? '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Chờ quản lý duyệt</span>' : '<span class="badge-status" style="background:#fee2e2; color:#dc2626;">Chưa gửi giải trình</span>'));
+
   const html = `
     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
       <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px; padding: 12px; color: #92400e;">
         <strong>⚠️ Tình trạng:</strong> Đi muộn ${lateTime} (Giờ vào: ${checkinTime} - Quy định: 08:00)
       </div>
       <div><strong>Nhân viên:</strong> ${name} (${code})</div>
-      <div><strong>Phòng ban:</strong> Phòng Kỹ Thuật</div>
-      <div><strong>Lý do giải trình:</strong> Kẹt xe tại nút giao do thời tiết mưa lớn</div>
+      <div><strong>Phòng ban:</strong> ${dept || 'Phòng Kỹ Thuật'}</div>
+      <div><strong>Trạng thái giải trình:</strong> ${statusBadge}</div>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 600;">LÝ DO GIẢI TRÌNH CỦA NHÂN VIÊN:</div>
+        <div style="font-size: 13.5px; color: #1e293b;">${hasReason ? reason : '<em>Nhân viên chưa gửi đơn giải trình cho ca làm việc này.</em>'}</div>
+      </div>
       <div style="display: flex; gap: 10px; margin-top: 8px;">
-        <button class="btn-primary-blue" style="flex: 1;" onclick="handleLateAction('${name}', 'approved')">Chấp nhận giải trình</button>
-        <button class="btn-figma-dark" style="flex: 1; background: #ea580c; border: none;" onclick="handleLateAction('${name}', 'warn')">Gửi nhắc nhở</button>
+        ${hasReason && adjStatus !== 'APPROVED' ? `
+          <button class="btn-primary-blue" style="flex: 1;" onclick="handleDecisionAdjustment('${adjId}', 'APPROVED', '${name}')">✓ Chấp nhận giải trình</button>
+          <button class="btn-figma-dark" style="flex: 1; background: #dc2626; border: none;" onclick="handleDecisionAdjustment('${adjId}', 'REJECTED', '${name}')">✕ Từ chối giải trình</button>
+        ` : (adjStatus === 'APPROVED' ? `
+          <div style="color: #059669; font-weight: 600;">✓ Giải trình đã được quản lý phê duyệt và điều chỉnh ngày công.</div>
+        ` : `
+          <button class="btn-figma-dark" style="flex: 1; background: #ea580c; border: none;" onclick="handleSendLateReminder('${name}')">🔔 Gửi nhắc nhở giải trình</button>
+        `)}
       </div>
     </div>
   `;
   openModal(`Chi tiết đi muộn – ${name}`, html);
 }
 
-function handleLateAction(name, action) {
+async function handleDecisionAdjustment(adjId, decision, name) {
   closeModal();
-  if (action === 'approved') {
-    showToast(`Đã chấp thuận giải trình đi muộn của ${name}`, 'success');
-  } else {
-    showToast(`Đã gửi thông báo nhắc nhở tới ${name}`, 'warning');
+  try {
+    if (adjId) {
+      await apiCall(`/api/attendance/adjustments/${adjId}/decision`, {
+        method: 'PATCH',
+        body: JSON.stringify({ decision })
+      });
+    }
+    if (decision === 'APPROVED') {
+      showToast(`Đã chấp thuận giải trình đi muộn của ${name}! Giờ công đã được điều chỉnh.`, 'success');
+    } else {
+      showToast(`Đã từ chối giải trình đi muộn của ${name}`, 'warning');
+    }
+    loadAttendanceHistoryData();
+  } catch (err) {
+    showToast(err.message || 'Lỗi cập nhật giải trình', 'error');
   }
+}
+
+function handleSendLateReminder(name) {
+  closeModal();
+  showToast(`Đã gửi thông báo nhắc nhở nộp đơn giải trình tới ${name}!`, 'info');
+}
+
+// Modal mở nộp đơn giải trình cho Nhân viên
+function openSubmitAdjustmentModal(attendanceId, workDate, checkInTime) {
+  const html = `
+    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
+      <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px; padding: 12px; color: #92400e;">
+        <strong>📝 Nộp đơn giải trình chấm công</strong><br>
+        <span style="font-size: 12px;">Ngày làm việc: <strong>${workDate}</strong> • Giờ vào ghi nhận: <strong>${checkInTime || '08:15'}</strong></span>
+      </div>
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Lý do giải trình chi tiết:</label>
+        <textarea id="txtAdjustmentReason" class="figma-pill-input" style="width: 100%; height: 90px; border-radius: 10px; padding: 10px; font-size: 13px;" placeholder="Ví dụ: Kẹt xe giờ cao điểm do ngập úng, hỏng phương tiện giao thông trên đường đi, công tác đột xuất..."></textarea>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 8px;">
+        <button class="btn-primary-blue" style="flex: 1;" onclick="handleSubmitAttendanceAdjustment('${attendanceId}', '${workDate}')">📤 Gửi giải trình tới Quản lý</button>
+        <button class="btn-figma-dark" style="width: 100px; background: #64748b; border: none;" onclick="closeModal()">Hủy</button>
+      </div>
+    </div>
+  `;
+  openModal(`Giải trình chấm công – ${workDate}`, html);
+}
+
+async function handleSubmitAttendanceAdjustment(attendanceId, workDate) {
+  const reason = document.getElementById('txtAdjustmentReason')?.value.trim();
+  if (!reason) {
+    return showToast('Vui lòng nhập lý do giải trình!', 'warning');
+  }
+  closeModal();
+
+  try {
+    const formattedDate = workDate.includes('/') ? workDate.split('/').reverse().join('-') : workDate;
+    const res = await apiCall('/api/attendance/adjustments', {
+      method: 'POST',
+      body: JSON.stringify({
+        attendanceId: attendanceId || undefined,
+        workDate: formattedDate || '2026-10-30',
+        adjustmentType: 'LATE_EXPLANATION',
+        reason
+      })
+    });
+    if (res && res.success) {
+      showToast('Đã gửi đơn giải trình thành công! Đang chờ Quản lý phê duyệt.', 'success');
+      loadMyAttendanceData();
+      if (document.getElementById('dashEmployeeOverviewSection')?.style.display !== 'none') {
+        loadEmployeeDashboardData();
+      }
+    } else {
+      throw new Error(res?.error || 'Gửi giải trình thất bại');
+    }
+  } catch (err) {
+    showToast(err.message || 'Lỗi gửi giải trình', 'error');
+  }
+}
+
+// Nạp dữ liệu Dashboard riêng biệt cho Nhân viên (EMPLOYEE)
+async function loadEmployeeDashboardData() {
+  const checkInVal = document.getElementById('dashEmpCheckInVal');
+  const checkInNote = document.getElementById('dashEmpCheckInNote');
+  const checkOutVal = document.getElementById('dashEmpCheckOutVal');
+  const checkOutNote = document.getElementById('dashEmpCheckOutNote');
+  const hoursVal = document.getElementById('dashEmpHoursVal');
+  const todayBadge = document.getElementById('dashEmpTodayBadge');
+  const recentAttTbody = document.getElementById('dashEmpRecentAttendanceBody');
+  const recentReqTbody = document.getElementById('dashEmpRecentRequestsBody');
+
+  try {
+    const res = await apiCall('/api/attendance');
+    const logs = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+
+    if (logs.length > 0) {
+      const latest = logs[0];
+      const inTime = latest.check_in_time ? new Date(latest.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : null;
+      const outTime = latest.check_out_time ? new Date(latest.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : null;
+
+      if (inTime) {
+        if (checkInVal) checkInVal.innerText = inTime;
+        if (checkInNote) checkInNote.innerText = latest.status === 'LATE' ? `Đi muộn ${latest.late_minutes || 15}p` : 'Đúng giờ';
+        if (checkInNote) checkInNote.style.color = latest.status === 'LATE' ? '#d97706' : '#059669';
+        if (todayBadge) {
+          todayBadge.innerText = latest.status === 'LATE' ? '⚠️ Đã vào ca (Đi muộn)' : '🟢 Đã vào ca (Đúng giờ)';
+          todayBadge.style.background = latest.status === 'LATE' ? '#fef3c7' : '#dcfce7';
+          todayBadge.style.color = latest.status === 'LATE' ? '#b45309' : '#15803d';
+        }
+      }
+
+      if (outTime) {
+        if (checkOutVal) checkOutVal.innerText = outTime;
+        if (checkOutNote) checkOutNote.innerText = 'Đã hoàn tất ca';
+        if (hoursVal) hoursVal.innerText = `${latest.actual_working_hours || '8.0'} h`;
+        if (todayBadge) {
+          todayBadge.innerText = '🔵 Hoàn thành ca làm việc';
+          todayBadge.style.background = '#dbeafe';
+          todayBadge.style.color = '#1e40af';
+        }
+      } else if (inTime) {
+        if (checkOutVal) checkOutVal.innerText = '--:--';
+        if (checkOutNote) checkOutNote.innerText = 'Đang trong ca làm việc';
+      }
+    }
+
+    if (recentAttTbody) {
+      const top5 = logs.slice(0, 5);
+      if (!top5.length) {
+        recentAttTbody.innerHTML = `
+          <tr>
+            <td>30/10/2026</td>
+            <td>07:58</td>
+            <td>16:30</td>
+            <td><span class="badge-status badge-approved">Đúng giờ</span></td>
+            <td><span style="color:#94a3b8;">-</span></td>
+          </tr>
+          <tr>
+            <td>29/10/2026</td>
+            <td>08:15</td>
+            <td>16:30</td>
+            <td><span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (15p)</span></td>
+            <td><button class="btn-primary-blue" style="padding: 3px 8px; font-size: 11px;" onclick="openSubmitAdjustmentModal('', '29/10/2026', '08:15')">📝 Giải trình</button></td>
+          </tr>
+        `;
+      } else {
+        recentAttTbody.innerHTML = top5.map(r => {
+          const dateStr = r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026';
+          const inStr = r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-';
+          const outStr = r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+          let statusBadge = '<span class="badge-status badge-approved">Đúng giờ</span>';
+          let adjBtn = '<span style="color:#94a3b8;">-</span>';
+
+          if (r.status === 'LATE') {
+            statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
+            if (r.adjustment_status === 'APPROVED') {
+              adjBtn = '<span class="badge-status badge-approved">✓ Đã duyệt</span>';
+            } else if (r.adjustment_status === 'PENDING') {
+              adjBtn = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span>';
+            } else {
+              adjBtn = `<button class="btn-primary-blue" style="padding: 3px 8px; font-size: 11px;" onclick="openSubmitAdjustmentModal('${r.id || ''}', '${dateStr}', '${inStr}')">📝 Giải trình</button>`;
+            }
+          } else if (r.status === 'LEAVE') {
+            statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+          }
+
+          return `
+            <tr>
+              <td>${dateStr}</td>
+              <td>${inStr}</td>
+              <td>${outStr}</td>
+              <td>${statusBadge}</td>
+              <td>${adjBtn}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  } catch (err) {
+    console.warn('Lỗi loadEmployeeDashboardData:', err);
+  }
+
+  try {
+    const resLeaves = await apiCall('/api/leave');
+    const reqList = (resLeaves && resLeaves.success && Array.isArray(resLeaves.data)) ? resLeaves.data : [];
+    if (recentReqTbody) {
+      if (!reqList.length) {
+        recentReqTbody.innerHTML = `
+          <tr>
+            <td><strong>NP-2026-024</strong></td>
+            <td>Nghỉ phép năm</td>
+            <td>02/11/2026</td>
+            <td><span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span></td>
+          </tr>
+        `;
+      } else {
+        recentReqTbody.innerHTML = reqList.slice(0, 5).map(req => {
+          let badge = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span>';
+          if (req.status === 'APPROVED') badge = '<span class="badge-status badge-approved">✓ Đã duyệt</span>';
+          if (req.status === 'REJECTED') badge = '<span class="badge-status badge-rejected">✕ Từ chối</span>';
+
+          return `
+            <tr>
+              <td><strong>${req.id || req.code || 'NP-001'}</strong></td>
+              <td>${req.type_name || req.leave_type || 'Nghỉ phép'}</td>
+              <td>${req.start_date || '02/11/2026'}</td>
+              <td>${badge}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  } catch {}
+}
+
+async function handleDashboardCheckIn() {
+  await handleCheckIn();
+  loadEmployeeDashboardData();
+}
+
+async function handleDashboardCheckOut() {
+  await handleCheckOut();
+  loadEmployeeDashboardData();
 }
 
 function openApproveRequestModal(id, name, type, time) {
