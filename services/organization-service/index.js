@@ -225,13 +225,15 @@ const app = createServiceApp('organization-service', {
   }
 });
 
-// Middleware giải mã thông tin x-user
+// Identity must come from a verified bearer token, never raw x-user JSON.
 app.use((req, res, next) => {
-  const forwardedUser = req.headers['x-user'];
-  if (forwardedUser && !req.user) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
     try {
-      req.user = JSON.parse(Buffer.from(forwardedUser, 'base64').toString('utf8'));
-    } catch {}
+      req.user = require('../../shared/jwt').verifyToken(authHeader.slice(7).trim());
+    } catch {
+      req.user = null;
+    }
   }
   next();
 });
