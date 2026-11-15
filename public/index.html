@@ -1391,37 +1391,43 @@ input:checked + .slider:before {
       </div>
 
       <nav class="sidebar-nav-list">
-        <a class="figma-nav-item active" id="nav-dashboard" onclick="navigateToView('dashboard')">
+        <a class="figma-nav-item active" id="nav-dashboard" onclick="navigateToView('dashboard')" style="cursor: pointer;">
           <span class="figma-nav-icon">🏠</span> Tổng quan
         </a>
-        <a class="figma-nav-item" id="nav-employees" onclick="navigateToView('employees')">
+        <a class="figma-nav-item" id="nav-employees" onclick="navigateToView('employees')" style="cursor: pointer;">
           <span class="figma-nav-icon">📋</span> Nhân viên
         </a>
-        <a class="figma-nav-item" id="nav-attendance-history-nv" onclick="navigateToView('attendance-history')">
+        <a class="figma-nav-item" id="nav-attendance-history" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
           <span class="figma-nav-icon">📄</span> Lịch sử chấm công NV
         </a>
-        <a class="figma-nav-item" id="nav-attendance-my" onclick="navigateToView('my-attendance')">
+        <a class="figma-nav-item" id="nav-my-attendance" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
           <span class="figma-nav-icon">👤</span> Lịch sử chấm công
         </a>
-        <a class="figma-nav-item" id="nav-rbac" onclick="navigateToView('departments')">
+        <a class="figma-nav-item" id="nav-departments" onclick="navigateToView('departments')" style="cursor: pointer;">
           <span class="figma-nav-icon">📊</span> Quản lý phân quyền
         </a>
-        <a class="figma-nav-item" id="nav-stats" onclick="navigateToView('stats')">
+        <a class="figma-nav-item" id="nav-stats" onclick="navigateToView('stats')" style="cursor: pointer;">
           <span class="figma-nav-icon">📈</span> Thống kê
         </a>
-        <a class="figma-nav-item" id="nav-requests" onclick="navigateToView('requests')">
+        <a class="figma-nav-item" id="nav-requests" onclick="navigateToView('requests')" style="cursor: pointer;">
           <span class="figma-nav-icon">📝</span> Đơn từ
         </a>
-        <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')">
+        <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')" style="cursor: pointer;">
           <span class="figma-nav-icon">⚙️</span> Thiết lập chấm công
         </a>
-        <a class="figma-nav-item" id="nav-profile" onclick="navigateToView('profile')">
+        <a class="figma-nav-item" id="nav-profile" onclick="navigateToView('profile')" style="cursor: pointer;">
           <span class="figma-nav-icon">👤</span> Hồ sơ cá nhân
         </a>
-        <a class="figma-nav-item" id="nav-soa" onclick="navigateToView('soa-monitor')">
+        <a class="figma-nav-item" id="nav-soa-monitor" onclick="navigateToView('soa-monitor')" style="cursor: pointer;">
           <span class="figma-nav-icon">🌐</span> Hạ tầng SOA
         </a>
       </nav>
+
+      <div style="padding: 10px 14px; border-top: 1px solid var(--border-light);">
+        <button type="button" onclick="handleLogoutClick()" style="width: 100%; background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+          <span>🚪</span> Đăng xuất
+        </button>
+      </div>
 
       <div class="sidebar-bottom-help">
         <div>Hỗ trợ sử dụng</div>
@@ -1435,17 +1441,17 @@ input:checked + .slider:before {
       <!-- TOPBAR HEADER -->
       <header class="figma-topbar">
         <div class="topbar-search-wrap">
-          <input type="text" class="topbar-search-input" placeholder="Tìm kiếm trong hệ thống">
+          <input type="text" class="topbar-search-input" placeholder="Tìm kiếm trong hệ thống (nhấn Enter)" onkeydown="handleTopbarSearch(event)">
           <span class="topbar-search-icon">🔍</span>
         </div>
 
-        <div class="topbar-right-profile">
-          <button class="notif-bell-btn" title="Thông báo mới" onclick="showToast('Không có thông báo mới', 'success')">
+        <div class="topbar-right-profile" style="display: flex; align-items: center; gap: 14px;">
+          <button class="notif-bell-btn" title="Thông báo mới" onclick="openNotificationsModal()" style="cursor: pointer;">
             🔔
             <span class="notif-badge-dot"></span>
           </button>
 
-          <div class="user-info-box" onclick="handleLogoutClick()">
+          <div class="user-info-box" onclick="navigateToView('profile')" style="cursor: pointer;" title="Nhấp để xem hồ sơ cá nhân">
             <div class="user-text-meta">
               <div class="user-name-title" id="topbarUserName">Xin chào, Thầy Lâm</div>
               <div class="user-role-sub" id="topbarUserRole">Quản lý | Nhân sự</div>
@@ -1454,6 +1460,10 @@ input:checked + .slider:before {
               TL
             </div>
           </div>
+
+          <button type="button" class="btn-logout-header" onclick="handleLogoutClick()" title="Đăng xuất khỏi hệ thống" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+            <span>🚪</span> Đăng xuất
+          </button>
         </div>
       </header>
 
@@ -1473,52 +1483,52 @@ input:checked + .slider:before {
           <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
           <div class="filter-pill-bar">
             <div class="pill-dropdown-group">
-              <div class="figma-filter-pill">
-                <span>📅 30/10/2026 • Hôm nay</span> ▾
+              <div class="figma-filter-pill" onclick="openDateFilterModal()" style="cursor: pointer;" title="Nhấp để đổi ngày xem">
+                <span id="currentDatePillText">📅 30/10/2026 • Hôm nay</span> ▾
               </div>
-              <div class="figma-filter-pill">
-                <span>🏢 Phòng Kỹ Thuật • 40 người</span> ▾
+              <div class="figma-filter-pill" onclick="openDeptFilterModal()" style="cursor: pointer;" title="Nhấp để đổi phòng ban">
+                <span id="currentDeptPillText">🏢 Phòng Kỹ Thuật • 40 người</span> ▾
               </div>
             </div>
             <div class="update-time-meta">Cập nhật lúc: 09:00 • Ca 08:00 - 16:00</div>
           </div>
 
-          <!-- 4 THẺ CHỈ SỐ METRIC (FIGMA IMAGE 3) -->
+          <!-- 4 THẺ CHỈ SỐ METRIC (FIGMA IMAGE 3) - CÓ THỂ BẤM TƯƠNG TÁC -->
           <div class="metrics-row-4">
-            <div class="figma-metric-card">
+            <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn cơ quan">
               <div class="metric-header">
                 <span>Đã đi làm</span>
                 <span>👤</span>
               </div>
               <div class="metric-value-huge metric-value-green">34 / 40</div>
-              <div class="metric-footer-note">85% nhân sự • Gồm 3 người đi muộn</div>
+              <div class="metric-footer-note">85% nhân sự • Gồm 3 người đi muộn →</div>
             </div>
 
-            <div class="figma-metric-card">
+            <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
               <div class="metric-header">
                 <span>Nghỉ phép</span>
                 <span>📅</span>
               </div>
               <div class="metric-value-huge metric-value-blue">04</div>
-              <div class="metric-footer-note">Đã được duyệt nghỉ hôm nay</div>
+              <div class="metric-footer-note">Đã được duyệt nghỉ hôm nay →</div>
             </div>
 
-            <div class="figma-metric-card">
+            <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
               <div class="metric-header">
                 <span>Đi muộn</span>
                 <span>⏰</span>
               </div>
               <div class="metric-value-huge metric-value-orange">03</div>
-              <div class="metric-footer-note">Là một phần trong 34 người đi làm</div>
+              <div class="metric-footer-note">Là một phần trong 34 người đi làm ↓</div>
             </div>
 
-            <div class="figma-metric-card">
+            <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem và xử lý đơn chờ duyệt">
               <div class="metric-header">
                 <span>Đơn chờ duyệt</span>
                 <span>📄</span>
               </div>
               <div class="metric-value-huge metric-value-blue">07</div>
-              <div class="metric-footer-note">Tất cả ngày yêu cầu • Cần xử lý</div>
+              <div class="metric-footer-note">Tất cả ngày yêu cầu • Cần xử lý →</div>
             </div>
           </div>
 
@@ -1551,7 +1561,7 @@ input:checked + .slider:before {
                 </div>
 
                 <div class="donut-legend-list">
-                  <div class="legend-item">
+                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem danh sách đúng giờ">
                     <div class="legend-dot-label">
                       <span class="dot-color dot-ontime"></span>
                       <span>Đúng giờ</span>
@@ -1559,7 +1569,7 @@ input:checked + .slider:before {
                     <span class="legend-count">31</span>
                   </div>
 
-                  <div class="legend-item">
+                  <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
                     <div class="legend-dot-label">
                       <span class="dot-color dot-late"></span>
                       <span>Đi muộn</span>
@@ -1567,7 +1577,7 @@ input:checked + .slider:before {
                     <span class="legend-count">03</span>
                   </div>
 
-                  <div class="legend-item">
+                  <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
                     <div class="legend-dot-label">
                       <span class="dot-color dot-leave"></span>
                       <span>Nghỉ phép</span>
@@ -1575,7 +1585,7 @@ input:checked + .slider:before {
                     <span class="legend-count">04</span>
                   </div>
 
-                  <div class="legend-item">
+                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn bộ nhân sự">
                     <div class="legend-dot-label">
                       <span class="dot-color dot-absent"></span>
                       <span>Chưa chấm công</span>
@@ -1590,8 +1600,8 @@ input:checked + .slider:before {
               </div>
             </div>
 
-            <!-- Card Phải: Bảng Nhân viên đi muộn -->
-            <div class="figma-white-card">
+            <!-- Card Phải: Bảng Nhân viên đi muộn (Có thể tương tác bấm xem) -->
+            <div class="figma-white-card" id="lateEmployeesCard">
               <div class="card-title-flex">
                 <div class="card-title-text">Nhân viên đi muộn</div>
                 <span class="badge-status" style="background: #fef3c7; color: #b45309;">• 3 người</span>
@@ -1614,7 +1624,7 @@ input:checked + .slider:before {
                     </td>
                     <td>08:12</td>
                     <td><span style="color: #d97706; font-weight: 600;">12 phút</span></td>
-                    <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem →</a></td>
+                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Huỳnh Gia Kiệt', 'NV-002', '12 phút', '08:12')">Xem xét →</a></td>
                   </tr>
                   <tr>
                     <td>
@@ -1623,7 +1633,7 @@ input:checked + .slider:before {
                     </td>
                     <td>08:07</td>
                     <td><span style="color: #d97706; font-weight: 600;">7 phút</span></td>
-                    <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem →</a></td>
+                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Nguyễn Gia Hảo', 'NV-003', '7 phút', '08:07')">Xem xét →</a></td>
                   </tr>
                   <tr>
                     <td>
@@ -1632,25 +1642,25 @@ input:checked + .slider:before {
                     </td>
                     <td>08:21</td>
                     <td><span style="color: #d97706; font-weight: 600;">21 phút</span></td>
-                    <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem →</a></td>
+                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Trần Hoài An', 'NV-008', '21 phút', '08:21')">Xem xét →</a></td>
                   </tr>
                 </tbody>
               </table>
 
               <div style="margin-top: 14px; text-align: left;">
-                <a class="link-action-blue" style="font-size: 12px;" onclick="navigateToView('attendance-history')">Xem bảng chấm công hôm nay →</a>
+                <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('attendance-history')">Xem bảng chấm công hôm nay →</a>
               </div>
             </div>
           </div>
 
-          <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (FIGMA IMAGE 3 BOTTOM) -->
+          <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (FIGMA IMAGE 3 BOTTOM - CÓ THỂ DUYỆT / TỪ CHỐI) -->
           <div class="figma-white-card">
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Đơn đang chờ phê duyệt</div>
-                <div style="font-size: 12px; color: #64748b;">7 đơn cần xử lý - Không thuộc phân bổ chấm công hôm nay</div>
+                <div style="font-size: 12px; color: #64748b;">7 đơn cần xử lý - Nhấp để duyệt hoặc từ chối trực tiếp</div>
               </div>
-              <a class="link-action-blue" style="font-size: 12px;" onclick="navigateToView('requests')">Xem tất cả 7 đơn →</a>
+              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem tất cả 7 đơn →</a>
             </div>
 
             <table class="figma-table">
@@ -1664,7 +1674,7 @@ input:checked + .slider:before {
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr id="req-row-NP-2026-024">
                   <td>
                     <div style="font-weight: 700;">Vũ Đức Hiếu</div>
                     <div style="font-size: 11px; color: #94a3b8;">NP-2026-024</div>
@@ -1672,9 +1682,9 @@ input:checked + .slider:before {
                   <td>Nghỉ phép năm</td>
                   <td>02/11/2026 • 1 ngày</td>
                   <td>Hôm nay, 08:15</td>
-                  <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem xét →</a></td>
+                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('NP-2026-024', 'Vũ Đức Hiếu', 'Nghỉ phép năm', '02/11/2026 (1 ngày)')">Xem xét →</a></td>
                 </tr>
-                <tr>
+                <tr id="req-row-BS-2026-018">
                   <td>
                     <div style="font-weight: 700;">Lê Ngọc Mai</div>
                     <div style="font-size: 11px; color: #94a3b8;">BS-2026-018</div>
@@ -1682,9 +1692,9 @@ input:checked + .slider:before {
                   <td>Bổ sung chấm công</td>
                   <td>29/10/2026 • Giờ ra</td>
                   <td>Hôm nay, 08:05</td>
-                  <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem xét →</a></td>
+                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('BS-2026-018', 'Lê Ngọc Mai', 'Bổ sung chấm công', '29/10/2026 (Giờ ra)')">Xem xét →</a></td>
                 </tr>
-                <tr>
+                <tr id="req-row-NP-2026-023">
                   <td>
                     <div style="font-weight: 700;">Phạm Minh Tuấn</div>
                     <div style="font-size: 11px; color: #94a3b8;">NP-2026-023</div>
@@ -1692,9 +1702,9 @@ input:checked + .slider:before {
                   <td>Nghỉ phép năm</td>
                   <td>03/11/2026 • 1 ngày</td>
                   <td>29/10, 16:30</td>
-                  <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem xét →</a></td>
+                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('NP-2026-023', 'Phạm Minh Tuấn', 'Nghỉ phép năm', '03/11/2026 (1 ngày)')">Xem xét →</a></td>
                 </tr>
-                <tr>
+                <tr id="req-row-GM-2026-009">
                   <td>
                     <div style="font-weight: 700;">Đỗ Thu Hà</div>
                     <div style="font-size: 11px; color: #94a3b8;">GM-2026-009</div>
@@ -1702,7 +1712,7 @@ input:checked + .slider:before {
                   <td>Giải trình đi muộn</td>
                   <td>29/10/2026 • 15 phút</td>
                   <td>29/10, 15:10</td>
-                  <td><a class="link-action-blue" onclick="openRequestDetail('NP-2026-021')">Xem xét →</a></td>
+                  <td><a class="link-action-blue" style="cursor: pointer;" onclick="openApproveRequestModal('GM-2026-009', 'Đỗ Thu Hà', 'Giải trình đi muộn', '29/10/2026 (15 phút)')">Xem xét →</a></td>
                 </tr>
               </tbody>
             </table>
@@ -2193,6 +2203,305 @@ input:checked + .slider:before {
                 <!-- Nạp thời gian thực qua Registry API -->
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             VIEW 7: LỊCH SỬ CHẤM CÔNG NHÂN VIÊN TOÀN CƠ QUAN
+             ==================================================================== -->
+        <section id="view-attendance-history" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Chấm công / Lịch sử chấm công NV</div>
+          <div class="page-main-header">
+            <h1 class="page-heading-title">Lịch sử Chấm công Nhân sự</h1>
+            <div class="page-heading-desc">Theo dõi nhật ký vào ca, ra ca và thời gian làm việc toàn cơ quan.</div>
+          </div>
+
+          <div class="figma-white-card">
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="date" value="2026-10-30" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                  <option value="ALL">Tất cả phòng ban</option>
+                  <option value="TECH">Phòng Kỹ Thuật</option>
+                  <option value="HR">Phòng Nhân sự</option>
+                  <option value="FIN">Phòng Tài Chính</option>
+                  <option value="BIZ">Phòng Kinh Doanh</option>
+                </select>
+                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="ON_TIME">Đúng giờ</option>
+                  <option value="LATE">Đi muộn</option>
+                  <option value="LEAVE">Nghỉ phép</option>
+                </select>
+              </div>
+              <div>
+                <button class="btn-primary-blue" onclick="showToast('Đang trích xuất file Excel báo cáo chấm công...', 'success')">📥 Xuất Excel</button>
+              </div>
+            </div>
+
+            <table class="figma-table" style="margin-top: 14px;">
+              <thead>
+                <tr>
+                  <th>Mã NV</th>
+                  <th>Họ và tên</th>
+                  <th>Phòng ban</th>
+                  <th>Ngày</th>
+                  <th>Giờ vào</th>
+                  <th>Giờ ra</th>
+                  <th>Số giờ</th>
+                  <th>Trạng thái</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceHistoryTableBody">
+                <!-- Nạp qua loadAttendanceHistoryData() -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             VIEW 8: LỊCH SỬ CHẤM CÔNG CÁ NHÂN & ĐIỂM DANH
+             ==================================================================== -->
+        <section id="view-my-attendance" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Cá nhân / Lịch sử chấm công của tôi</div>
+          <div class="page-main-header">
+            <h1 class="page-heading-title">Chấm công Cá nhân</h1>
+            <div class="page-heading-desc">Điểm danh vào/ra ca làm việc và theo dõi bảng công cá nhân.</div>
+          </div>
+
+          <!-- WIDGET CHECK-IN / CHECK-OUT TRỰC TIẾP -->
+          <div class="figma-white-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #1e293b, #0f172a); color: #ffffff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+              <div>
+                <div style="font-size: 13px; color: #94a3b8; font-weight: 600;">HỆ THỐNG ĐIỂM DANH THỜI GIAN THỰC</div>
+                <div style="font-size: 32px; font-weight: 800; color: #38bdf8; letter-spacing: 1px; margin: 4px 0;" id="liveClockText">08:00:00</div>
+                <div style="font-size: 13px; color: #cbd5e1;">📍 Tọa độ GPS: 10.762622, 106.660172 • Wi-Fi: <strong>HTQLNS-Community-5G</strong></div>
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn-figma-dark" id="btnMyCheckIn" onclick="handleCheckIn()" style="background: #10b981; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
+                  🟢 Điểm danh vào ca
+                </button>
+                <button type="button" class="btn-figma-dark" id="btnMyCheckOut" onclick="handleCheckOut()" style="background: #ef4444; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
+                  🔴 Điểm danh ra ca
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 THẺ TỔNG HỢP CÔNG CÁ NHÂN -->
+          <div class="metrics-row-4" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Ngày công tháng này</span><span>📅</span></div>
+              <div class="metric-value-huge metric-value-green">22 / 24</div>
+              <div class="metric-footer-note">Đạt 91.6% chỉ tiêu ngày công</div>
+            </div>
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Đi muộn trong tháng</span><span>⏰</span></div>
+              <div class="metric-value-huge metric-value-orange">01 lần</div>
+              <div class="metric-footer-note">Tổng thời gian trễ: 12 phút</div>
+            </div>
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Quỹ phép còn lại</span><span>🏖️</span></div>
+              <div class="metric-value-huge metric-value-blue">11 ngày</div>
+              <div class="metric-footer-note">Phép năm 2026: 12 ngày / năm</div>
+            </div>
+          </div>
+
+          <div class="figma-white-card">
+            <div class="card-title-flex">
+              <div class="card-title-text">Nhật ký chấm công gần nhất</div>
+            </div>
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Giờ vào</th>
+                  <th>Giờ ra</th>
+                  <th>Thời lượng</th>
+                  <th>Phương thức</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="myAttendanceTableBody">
+                <!-- Nạp qua loadMyAttendanceData() -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             VIEW 9: BÁO CÁO THỐNG KÊ CHUYÊN CẦN
+             ==================================================================== -->
+        <section id="view-stats" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Báo cáo / Thống kê chuyên cần & Ngày công</div>
+          <div class="page-main-header">
+            <h1 class="page-heading-title">Báo cáo & Thống kê Chấm công</h1>
+            <div class="page-heading-desc">Tổng hợp số liệu chuyên cần, tỷ lệ đi làm và phân tích đơn từ theo chu kỳ.</div>
+          </div>
+
+          <div class="metrics-row-4" style="margin-bottom: 20px;">
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Tỷ lệ đi làm đúng giờ</span><span>🎯</span></div>
+              <div class="metric-value-huge metric-value-green">87.5%</div>
+              <div class="metric-footer-note">Tăng 2.1% so với tháng trước</div>
+            </div>
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Tỷ lệ đi muộn</span><span>⚠️</span></div>
+              <div class="metric-value-huge metric-value-orange">7.5%</div>
+              <div class="metric-footer-note">Trung bình trễ 11.2 phút/lần</div>
+            </div>
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Tỷ lệ nghỉ phép</span><span>🏖️</span></div>
+              <div class="metric-value-huge metric-value-blue">5.0%</div>
+              <div class="metric-footer-note">100% đơn được duyệt đúng quy định</div>
+            </div>
+            <div class="figma-metric-card">
+              <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏱️</span></div>
+              <div class="metric-value-huge metric-value-blue">6,420 h</div>
+              <div class="metric-footer-note">95 nhân sự toàn công ty</div>
+            </div>
+          </div>
+
+          <div class="figma-white-card">
+            <div class="card-title-flex">
+              <div class="card-title-text">Bảng tổng hợp chuyên cần theo từng phòng ban</div>
+              <button class="btn-primary-blue" onclick="showToast('Đang xuất báo cáo thống kê phòng ban...', 'success')">📊 Xuất báo cáo</button>
+            </div>
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Phòng ban</th>
+                  <th>Nhân sự</th>
+                  <th>Số công chuẩn</th>
+                  <th>Số công thực tế</th>
+                  <th>Đi muộn</th>
+                  <th>Nghỉ phép</th>
+                  <th>Tỷ lệ chuyên cần</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Phòng Kỹ Thuật</strong></td>
+                  <td>40</td>
+                  <td>880 công</td>
+                  <td>862 công</td>
+                  <td><span style="color: #d97706; font-weight: 600;">8 lượt</span></td>
+                  <td>14 ngày</td>
+                  <td><span class="badge-status badge-approved">97.9%</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Phòng Kinh Doanh</strong></td>
+                  <td>28</td>
+                  <td>616 công</td>
+                  <td>598 công</td>
+                  <td><span style="color: #d97706; font-weight: 600;">5 lượt</span></td>
+                  <td>9 ngày</td>
+                  <td><span class="badge-status badge-approved">97.1%</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Phòng Tài Chính - Kế Toán</strong></td>
+                  <td>15</td>
+                  <td>330 công</td>
+                  <td>325 công</td>
+                  <td><span style="color: #d97706; font-weight: 600;">2 lượt</span></td>
+                  <td>4 ngày</td>
+                  <td><span class="badge-status badge-approved">98.5%</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Phòng Nhân sự</strong></td>
+                  <td>12</td>
+                  <td>264 công</td>
+                  <td>261 công</td>
+                  <td><span style="color: #10b981; font-weight: 600;">0 lượt</span></td>
+                  <td>3 ngày</td>
+                  <td><span class="badge-status badge-approved">98.9%</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             VIEW 10: HỒ SƠ CÁ NHÂN & ĐỔI MẬT KHẨU
+             ==================================================================== -->
+        <section id="view-profile" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Tài khoản / Hồ sơ cá nhân</div>
+          <div class="page-main-header">
+            <h1 class="page-heading-title">Hồ sơ Cá nhân & Bảo mật</h1>
+            <div class="page-heading-desc">Quản lý thông tin tài khoản, cập nhật mật khẩu và bảo mật sinh trắc học.</div>
+          </div>
+
+          <div class="middle-grid-2">
+            <!-- Card Trái: Thông tin người dùng -->
+            <div class="figma-white-card">
+              <div class="card-title-flex">
+                <div class="card-title-text">Thông tin tài khoản</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-light);">
+                <div style="width: 64px; height: 64px; border-radius: 50%; background: #de4b4b; color: #ffffff; font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center;">
+                  TL
+                </div>
+                <div>
+                  <h2 style="font-size: 18px; font-weight: 700; color: #1e293b;" id="profDisplayName">Thầy Lâm</h2>
+                  <div style="font-size: 13px; color: #64748b;" id="profRole">MANAGER</div>
+                </div>
+              </div>
+
+              <div class="detail-info-grid">
+                <div class="info-field-group">
+                  <span class="info-label">Tên đăng nhập</span>
+                  <span class="info-val" id="profUsername">manager</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label">Email</span>
+                  <span class="info-val" id="profEmail">manager@htqlns.com</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label">Phòng ban</span>
+                  <span class="info-val">Phòng Kỹ Thuật</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label">Trạng thái</span>
+                  <span class="info-val"><span class="badge-status badge-approved">Đang hoạt động</span></span>
+                </div>
+              </div>
+
+              <div style="margin-top: 24px;">
+                <button class="btn-figma-dark" style="background: #dc2626; border: none; padding: 10px 20px;" onclick="handleLogoutClick()">🚪 Đăng xuất tài khoản</button>
+              </div>
+            </div>
+
+            <!-- Card Phải: Đổi mật khẩu & Sinh trắc học -->
+            <div class="figma-white-card">
+              <div class="card-title-flex">
+                <div class="card-title-text">Bảo mật & Đổi mật khẩu</div>
+              </div>
+
+              <form onsubmit="event.preventDefault(); showToast('Đổi mật khẩu thành công!', 'success');">
+                <div class="figma-input-wrapper" style="margin-bottom: 12px;">
+                  <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu hiện tại</label>
+                  <input type="password" class="figma-pill-input" placeholder="Nhập mật khẩu hiện tại" value="123456" required>
+                </div>
+                <div class="figma-input-wrapper" style="margin-bottom: 12px;">
+                  <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu mới</label>
+                  <input type="password" class="figma-pill-input" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" required minlength="6">
+                </div>
+                <div class="figma-input-wrapper" style="margin-bottom: 16px;">
+                  <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Xác nhận mật khẩu mới</label>
+                  <input type="password" class="figma-pill-input" placeholder="Nhập lại mật khẩu mới" required minlength="6">
+                </div>
+                <button type="submit" class="btn-primary-blue" style="width: 100%;">Cập nhật mật khẩu</button>
+              </form>
+
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+                <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Xác thực Sinh trắc học (Figma Image 5)</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; color: #475569;">Bật FaceID / Vân tay khi đăng nhập</span>
+                  <input type="checkbox" checked onchange="showToast('Đã lưu cấu hình sinh trắc học!', 'success')" style="transform: scale(1.3); cursor: pointer;">
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 

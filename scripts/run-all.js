@@ -5,11 +5,44 @@
  */
 
 require('../shared/env');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '..');
+
+// Tự động giải phóng các cổng microservice nếu bị tiến trình cũ chiếm dụng (tránh lỗi EADDRINUSE)
+function freePortsIfInUse() {
+  if (process.platform === 'win32') {
+    const ports = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3500, 3600];
+    try {
+      const netstat = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+      const currentPid = process.pid;
+      const pidsToKill = new Set();
+
+      for (const line of netstat.split(/\r?\n/)) {
+        if (!line.includes('LISTENING')) continue;
+        for (const port of ports) {
+          if (line.includes(`:${port} `)) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parseInt(parts[parts.length - 1], 10);
+            if (pid && pid !== currentPid) {
+              pidsToKill.add(pid);
+            }
+          }
+        }
+      }
+
+      for (const pid of pidsToKill) {
+        try {
+          execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+        } catch {}
+      }
+    } catch {}
+  }
+}
+
+freePortsIfInUse();
 
 // Danh sách các thành phần của hệ thống SOA HTQLNS
 const ALL_COMPONENTS = [
@@ -92,7 +125,7 @@ function launchComponent(name, relPath, idx) {
 }
 
 console.log('\n========================================================================');
-console.log('   🚀 KHỞI ĐỘNG HỆ THỐNG HTQLNS – KIẾN TRÚC HƯỚNG DỊCH VỤ (SOA)');
+console.log('   KHỞI ĐỘNG HỆ THỐNG HTQLNS – KIẾN TRÚC HƯỚNG DỊCH VỤ (SOA)');
 console.log('========================================================================\n');
 
 const targetList = COMPONENTS.filter(([name]) => !only || only.includes(name));
@@ -123,10 +156,14 @@ function gracefulShutdown() {
   console.log('\n\n🛑 Đang dừng toàn bộ các tiến trình microservices HTQLNS...');
   for (const [name, child] of children.entries()) {
     try {
-      child.kill('SIGTERM');
+      if (process.platform === 'win32' && child.pid) {
+        execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' });
+      } else {
+        child.kill('SIGTERM');
+      }
     } catch {}
   }
-  setTimeout(() => process.exit(0), 1200);
+  setTimeout(() => process.exit(0), 500);
 }
 
 process.on('SIGINT', gracefulShutdown);

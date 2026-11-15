@@ -435,6 +435,113 @@
           "roles": ["ADMIN", "HR", "MANAGER"]
         }
       ]
+    },
+    {
+      "prefix": "/api/v1/work-locations",
+      "service": "attendance-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/attendances",
+      "service": "attendance-service",
+      "rules": [
+        { "methods": ["*"], "auth": true, "roles": ["*"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/attendance-adjustments",
+      "service": "attendance-service",
+      "rules": [
+        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/leave-types",
+      "service": "leave-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/leave-balances",
+      "service": "leave-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/leave-requests",
+      "service": "leave-service",
+      "rules": [
+        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/shifts",
+      "service": "shift-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/shift-assignments",
+      "service": "shift-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/ot-requests",
+      "service": "shift-service",
+      "rules": [
+        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/payroll-configs",
+      "service": "payroll-service",
+      "rules": [
+        { "methods": ["GET", "POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/payrolls",
+      "service": "payroll-service",
+      "rules": [
+        { "methods": ["GET", "POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/payslips",
+      "service": "payroll-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/notifications",
+      "service": "notification-service",
+      "rules": [
+        { "methods": ["GET", "PATCH", "PUT"], "auth": true, "roles": ["*"] },
+        { "methods": ["POST", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
+      "prefix": "/api/v1/analytics",
+      "service": "analytics-service",
+      "rules": [
+        { "methods": ["GET"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
     }
   ]
 }

@@ -440,6 +440,10 @@ const server = http.createServer(async (req, res) => {
       forwardHeaders['content-type'] = req.headers['content-type'];
     }
 
+    if (req.headers['authorization']) {
+      forwardHeaders['authorization'] = req.headers['authorization'];
+    }
+
     if (authenticatedUser) {
       forwardHeaders['x-user'] = Buffer.from(JSON.stringify(authenticatedUser)).toString('base64');
     }

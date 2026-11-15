@@ -114,5 +114,6 @@ function registerService(serviceInfo) {
 module.exports = {
   ServiceRegistrar,
   registerService,
+  register: registerService,
   startRegistration: registerService
 };

@@ -145,39 +145,49 @@ function requireInternalKey(req, res, next) {
  */
 function requireAuth(allowedRoles = []) {
   return (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Chưa đăng nhập hoặc thiếu Bearer Token',
-        code: 401
-      });
+    // 1. Giải mã thông tin x-user chuyển tiếp từ API Gateway
+    if (!req.user && req.headers['x-user']) {
+      try {
+        req.user = JSON.parse(Buffer.from(req.headers['x-user'], 'base64').toString('utf8'));
+      } catch {}
     }
 
-    const token = authHeader.slice(7).trim();
-    try {
-      const payload = jwt.verifyToken(token);
-      req.user = payload;
-
-      if (allowedRoles.length > 0) {
-        const userRole = payload.role;
-        if (!userRole || !allowedRoles.includes(userRole)) {
-          return res.status(403).json({
-            success: false,
-            error: `Bạn không có quyền thực hiện hành động này. Yêu cầu một trong các quyền: [${allowedRoles.join(', ')}]`,
-            code: 403
-          });
-        }
+    // 2. Kiểm tra header Authorization nếu chưa có req.user
+    if (!req.user) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+          success: false,
+          error: 'Chưa đăng nhập hoặc thiếu Bearer Token',
+          code: 401
+        });
       }
 
-      next();
-    } catch (err) {
-      return res.status(401).json({
-        success: false,
-        error: `Token không hợp lệ: ${err.message}`,
-        code: 401
-      });
+      const token = authHeader.slice(7).trim();
+      try {
+        const payload = jwt.verifyToken(token);
+        req.user = payload;
+      } catch (err) {
+        return res.status(401).json({
+          success: false,
+          error: `Token không hợp lệ: ${err.message}`,
+          code: 401
+        });
+      }
     }
+
+    if (allowedRoles.length > 0) {
+      const userRole = req.user.role;
+      if (!userRole || (!allowedRoles.includes(userRole) && !allowedRoles.includes('*'))) {
+        return res.status(403).json({
+          success: false,
+          error: `Bạn không có quyền thực hiện hành động này. Yêu cầu một trong các quyền: [${allowedRoles.join(', ')}]`,
+          code: 403
+        });
+      }
+    }
+
+    next();
   };
 }
 
