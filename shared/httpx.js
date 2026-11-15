@@ -1,7 +1,9 @@
 /**
  * shared/httpx.js
- * Tiện ích chuẩn hóa phản hồi HTTP JSON cho các RESTful API trong hệ thống HTQLNS
+ * Tiện ích chuẩn hóa phản hồi HTTP JSON & đọc body cho các RESTful API trong hệ thống HTQLNS
  */
+
+const env = require('./env');
 
 function success(res, data = null, statusCode = 200, message = 'Thành công') {
   return res.status(statusCode).json({
@@ -44,6 +46,74 @@ function conflict(res, message = 'Dữ liệu xung đột hoặc đã tồn tạ
   return error(res, message, 409);
 }
 
+/**
+ * Gửi phản hồi HTTP cho raw Node.js http.ServerResponse
+ */
+function send(res, status = 200, data = {}, headers = {}) {
+  const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data);
+  const defaultHeaders = {
+    'Content-Type': typeof data === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    ...headers
+  };
+  res.writeHead(status, defaultHeaders);
+  res.end(body);
+}
+
+/**
+ * Đọc toàn bộ request body dưới dạng Buffer
+ */
+function readBody(req, limit = 1048576) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        const err = new Error('Payload Too Large: Nội dung yêu cầu vượt quá giới hạn cho phép');
+        err.status = 413;
+        reject(err);
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+/**
+ * Đọc request body và parse JSON
+ */
+async function readJson(req, limit = 1048576) {
+  const buf = await readBody(req, limit);
+  if (!buf || buf.length === 0) return {};
+  try {
+    return JSON.parse(buf.toString('utf8'));
+  } catch (e) {
+    const err = new Error('JSON cú pháp không hợp lệ: ' + e.message);
+    err.status = 400;
+    throw err;
+  }
+}
+
+/**
+ * Kiểm tra khóa nội bộ x-internal-key cho raw HTTP response
+ */
+function guardInternal(req, res) {
+  const key = req.headers['x-internal-key'];
+  if (!key || key !== env.INTERNAL_API_KEY) {
+    send(res, 403, {
+      success: false,
+      error: 'Truy cập bị từ chối: Yêu cầu khóa nội bộ hợp lệ (x-internal-key)',
+      code: 403
+    });
+    return false;
+  }
+  return true;
+}
+
 module.exports = {
   success,
   created,
@@ -52,5 +122,9 @@ module.exports = {
   unauthorized,
   forbidden,
   notFound,
-  conflict
+  conflict,
+  send,
+  readBody,
+  readJson,
+  guardInternal
 };

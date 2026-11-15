@@ -37,25 +37,29 @@ function formatMessage(level, service, message, extra) {
 }
 
 function createLogger(serviceName = 'htqlns') {
-  return {
-    info(msg, extra) {
-      console.log(formatMessage('info', serviceName, msg, extra));
-    },
-    warn(msg, extra) {
-      console.warn(formatMessage('warn', serviceName, msg, extra));
-    },
-    error(msg, extra) {
-      console.error(formatMessage('error', serviceName, msg, extra));
-    },
-    debug(msg, extra) {
-      if (env.NODE_ENV !== 'production') {
-        console.log(formatMessage('debug', serviceName, msg, extra));
-      }
+  const loggerFn = (msg, extra) => {
+    console.log(formatMessage('info', serviceName, msg, extra));
+  };
+
+  loggerFn.info = (msg, extra) => {
+    console.log(formatMessage('info', serviceName, msg, extra));
+  };
+  loggerFn.warn = (msg, extra) => {
+    console.warn(formatMessage('warn', serviceName, msg, extra));
+  };
+  loggerFn.error = (msg, extra) => {
+    console.error(formatMessage('error', serviceName, msg, extra));
+  };
+  loggerFn.debug = (msg, extra) => {
+    if (env.NODE_ENV !== 'production') {
+      console.log(formatMessage('debug', serviceName, msg, extra));
     }
   };
+
+  return loggerFn;
 }
 
-module.exports = {
+module.exports = Object.assign(createLogger, {
   createLogger,
   logger: createLogger('system')
-};
+});

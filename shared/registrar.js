@@ -11,10 +11,13 @@ class ServiceRegistrar {
     this.host = serviceInfo.host || 'localhost';
     this.port = serviceInfo.port;
     this.url = serviceInfo.url || `http://${this.host}:${this.port}`;
-    this.healthUrl = `${this.url}/health`;
+    this.healthUrl = serviceInfo.healthUrl || `${this.url}/health`;
     this.registryUrl = serviceInfo.registryUrl || env.REGISTRY_URL;
     this.intervalMs = serviceInfo.heartbeatIntervalMs || 10000;
+    this.version = serviceInfo.version || '1.0.0';
+    this.metadata = serviceInfo.metadata || {};
     this.timer = null;
+    this.instanceId = null;
   }
 
   async register() {
@@ -30,11 +33,16 @@ class ServiceRegistrar {
           host: this.host,
           port: this.port,
           url: this.url,
-          healthUrl: this.healthUrl
-        })
+          healthUrl: this.healthUrl,
+          version: this.version,
+          metadata: this.metadata
+        }),
+        signal: AbortSignal.timeout(4000)
       });
 
       if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        this.instanceId = data.instanceId;
         console.log(`[REGISTRAR] ✅ Service [${this.name}] đã đăng ký thành công lên Service Registry (${this.registryUrl})`);
         this.startHeartbeat();
         return true;
@@ -61,19 +69,38 @@ class ServiceRegistrar {
           },
           body: JSON.stringify({
             name: this.name,
-            url: this.url
-          })
+            url: this.url,
+            instanceId: this.instanceId
+          }),
+          signal: AbortSignal.timeout(3000)
         });
-      } catch (err) {
+      } catch {
         // Heartbeat failure logged at debug level
       }
     }, this.intervalMs);
   }
 
-  stop() {
+  async stop() {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    try {
+      await fetch(`${this.registryUrl}/unregister`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-key': env.INTERNAL_API_KEY
+        },
+        body: JSON.stringify({
+          name: this.name,
+          url: this.url,
+          instanceId: this.instanceId
+        }),
+        signal: AbortSignal.timeout(2000)
+      });
+    } catch {
+      // Ignore unregister errors during shutdown
     }
   }
 }
@@ -86,5 +113,6 @@ function registerService(serviceInfo) {
 
 module.exports = {
   ServiceRegistrar,
-  registerService
+  registerService,
+  startRegistration: registerService
 };

@@ -1,0 +1,440 @@
+{
+  "version": 1,
+  "description": "Chính sách API Gateway cho Hệ thống Quản lý Chấm công - Tính lương & Nhân sự (HTQLNS)",
+  "cors": {
+    "origins": ["*"],
+    "allowedHeaders": ["Authorization", "Content-Type", "x-request-id", "x-internal-key"],
+    "allowedMethods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+  },
+  "limits": {
+    "bodyBytes": 10485760,
+    "global": {
+      "windowMs": 60000,
+      "max": 1000
+    }
+  },
+  "routes": [
+    {
+      "prefix": "/api/auth/login",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false,
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 15
+          }
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/register",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false,
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/refresh",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/forgot-password",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false,
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 5
+          }
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/reset-password",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/me",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["GET", "PUT"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/change-password",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth/users",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["*"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/auth",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["*"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization/departments",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization/positions",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization/employees",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["*"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/departments",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/positions",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/employees",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/attendance/check-in",
+      "service": "attendance-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/attendance/check-out",
+      "service": "attendance-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/attendance/explanations",
+      "service": "attendance-service",
+      "rules": [
+        {
+          "methods": ["GET", "POST"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/attendance",
+      "service": "attendance-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/leaves",
+      "service": "leave-service",
+      "rules": [
+        {
+          "methods": ["GET", "POST"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/leave",
+      "service": "leave-service",
+      "rules": [
+        {
+          "methods": ["GET", "POST"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/shifts",
+      "service": "shift-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/shift",
+      "service": "shift-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/ot",
+      "service": "shift-service",
+      "rules": [
+        {
+          "methods": ["GET", "POST"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/payroll",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/payslips",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/notifications",
+      "service": "notification-service",
+      "rules": [
+        {
+          "methods": ["GET", "PUT"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/notification",
+      "service": "notification-service",
+      "rules": [
+        {
+          "methods": ["GET", "PUT"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/analytics",
+      "service": "analytics-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    }
+  ]
+}
