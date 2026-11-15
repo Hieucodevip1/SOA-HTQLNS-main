@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ thống Quản lý Chấm công - Tính lương & Nhân sự (HTQLNS) – Kiến trúc SOA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       1. MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ (SCR_AUTH_01, SCR_AUTH_02)
+       ========================================================================== -->
+  <div id="loginScreen">
+    <!-- Nửa trái: Hero Branding giới thiệu kiến trúc SOA HTQLNS -->
+    <div class="login-split-left">
+      <div class="hero-badge">🚀 KIẾN TRÚC HƯỚNG DỊCH VỤ (SOA)</div>
+      <h1 class="hero-title">Hệ thống Quản lý Chấm công, Tính lương & Nhân sự</h1>
+      <p class="hero-subtitle">
+        Nền tảng quản trị nhân sự số hóa theo Wireframe Figma, tối ưu hóa quy trình chấm công GPS/WiFi, quản lý quỹ phép, phân ca làm việc và tự động tính lương.
+      </p>
+
+      <div class="hero-features">
+        <div class="hero-feature-item">
+          <div class="hero-icon">🛡️</div>
+          <div><strong>API Gateway bảo mật:</strong> JWT Token, RBAC phân quyền và Rate Limiting.</div>
+        </div>
+        <div class="hero-feature-item">
+          <div class="hero-icon">🔍</div>
+          <div><strong>Service Registry tự động:</strong> Dò tìm dịch vụ động, Heartbeat & Health Check.</div>
+        </div>
+        <div class="hero-feature-item">
+          <div class="hero-icon">📨</div>
+          <div><strong>Event Bus bất đồng bộ:</strong> Pub/Sub tin cậy, lưu trữ hàng đợi và Dead-Letter Queue.</div>
+        </div>
+        <div class="hero-feature-item">
+          <div class="hero-icon">🗄️</div>
+          <div><strong>Cơ sở dữ liệu độc lập:</strong> Mỗi Microservice sở hữu cơ sở dữ liệu tự trị riêng.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nửa phải: Form Đăng nhập & Đăng ký -->
+    <div class="login-split-right">
+      <div class="login-card">
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Đăng nhập</button>
+          <button type="button" class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Đăng ký tài khoản</button>
+        </div>
+
+        <!-- FORM ĐĂNG NHẬP -->
+        <div id="formLoginContainer">
+          <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label class="form-label" for="loginUsername">Tên đăng nhập hoặc Email</label>
+              <input type="text" id="loginUsername" class="form-control" placeholder="admin, hr_admin, manager..." required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="loginPassword">Mật khẩu</label>
+              <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 13px;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="loginBiometric"> Xác thực Sinh trắc học (Figma SCR_AUTH_02)
+              </label>
+              <a href="javascript:void(0)" onclick="handleForgotPassword()" style="color: var(--primary); text-decoration: none; font-weight: 500;">Quên mật khẩu?</a>
+            </div>
+
+            <button type="submit" class="btn-primary-block" id="btnLoginSubmit">Đăng nhập hệ thống</button>
+          </form>
+
+          <!-- Nút chọn nhanh tài khoản kiểm thử -->
+          <div class="quick-demo-box">
+            <div class="quick-demo-title">
+              <span>Tài khoản kiểm thử nhanh:</span>
+              <span style="color: #64748b; font-weight: normal;">MK: 123456</span>
+            </div>
+            <div class="quick-buttons">
+              <button type="button" class="btn-quick" onclick="quickLogin('admin')">👑 Admin (Quản trị)</button>
+              <button type="button" class="btn-quick" onclick="quickLogin('hr_admin')">👩‍💼 HR (Nhân sự)</button>
+              <button type="button" class="btn-quick" onclick="quickLogin('manager')">👨‍💼 Manager (Quản lý)</button>
+              <button type="button" class="btn-quick" onclick="quickLogin('employee')">👨‍💻 Employee (Nhân viên)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FORM ĐĂNG KÝ -->
+        <div id="formRegisterContainer" style="display: none;">
+          <form onsubmit="handleRegister(event)">
+            <div class="form-group">
+              <label class="form-label" for="regUsername">Tên đăng nhập</label>
+              <input type="text" id="regUsername" class="form-control" placeholder="Ví dụ: nguyenvanan" required minlength="3">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regEmail">Email công việc</label>
+              <input type="email" id="regEmail" class="form-control" placeholder="an.nguyen@htqlns.com" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regPassword">Mật khẩu</label>
+              <input type="password" id="regPassword" class="form-control" placeholder="Tối thiểu 6 ký tự" required minlength="6">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regRole">Vai trò mong muốn</label>
+              <select id="regRole" class="form-control">
+                <option value="EMPLOYEE">Nhân viên (EMPLOYEE)</option>
+                <option value="MANAGER">Quản lý ca / Trưởng nhóm (MANAGER)</option>
+                <option value="HR">Chuyên viên nhân sự (HR)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn-primary-block" id="btnRegisterSubmit">Tạo tài khoản mới</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       2. GIAO DIỆN CHÍNH (PORTAL APP SAU KHI ĐĂNG NHẬP)
+       ========================================================================== -->
+  <div id="portalApp" style="display: none;">
+    <!-- Sidebar bên trái -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">H</div>
+        <div>
+          <div class="brand-title">HTQLNS PORTAL</div>
+          <div class="brand-badge">SOA Express.js</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="menu-heading">TỔNG QUAN</div>
+        <a class="nav-link active" onclick="switchView('dashboard')">
+          <span class="nav-icon">📊</span> Tổng quan
+        </a>
+
+        <div class="menu-heading">CƠ CẤU & NHÂN SỰ</div>
+        <a class="nav-link" onclick="switchView('departments')">
+          <span class="nav-icon">🏢</span> Phòng ban (SCR_ADM_05)
+        </a>
+        <a class="nav-link" onclick="switchView('positions')">
+          <span class="nav-icon">💼</span> Chức danh công việc
+        </a>
+        <a class="nav-link" onclick="switchView('employees')">
+          <span class="nav-icon">👥</span> Hồ sơ nhân sự (SCR_ADM_06)
+        </a>
+
+        <div class="menu-heading">CHẤM CÔNG & TIỀN LƯƠNG</div>
+        <a class="nav-link" onclick="switchView('attendance')">
+          <span class="nav-icon">⏰</span> Chấm công GPS/WiFi
+        </a>
+        <a class="nav-link" onclick="switchView('leaves')">
+          <span class="nav-icon">🌴</span> Nghỉ phép & Quỹ phép
+        </a>
+        <a class="nav-link" onclick="switchView('shifts')">
+          <span class="nav-icon">🕒</span> Phân ca & Tăng ca OT
+        </a>
+        <a class="nav-link" onclick="switchView('payroll')">
+          <span class="nav-icon">💰</span> Bảng lương & Payslip
+        </a>
+
+        <div class="menu-heading">HẠ TẦNG SOA</div>
+        <a class="nav-link" onclick="switchView('soa-monitor')">
+          <span class="nav-icon">🌐</span> Giám sát Cụm Dịch Vụ
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Khu vực nội dung chính -->
+    <main class="app-main">
+      <header class="app-header">
+        <div class="header-left">
+          <h2 class="page-title" id="pageTitle">Tổng quan hệ thống</h2>
+        </div>
+
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="avatar-circle" id="userAvatar">A</div>
+            <div>
+              <div style="font-weight: 600; font-size: 14px;" id="userName">Admin</div>
+              <span class="role-tag role-ADMIN" id="userRoleBadge">ADMIN</span>
+            </div>
+          </div>
+          <button class="btn-logout" onclick="handleLogout()">Đăng xuất</button>
+        </div>
+      </header>
+
+      <div class="app-content">
+
+        <!-- VIEW 1: TỔNG QUAN (DASHBOARD) -->
+        <section id="view-dashboard" class="portal-view active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div>
+                <div class="stat-label">Tổng số Nhân sự</div>
+                <div class="stat-value" id="statEmpCount">4</div>
+              </div>
+              <div class="stat-icon" style="background: #eff6ff; color: #1d4ed8;">👥</div>
+            </div>
+
+            <div class="stat-card">
+              <div>
+                <div class="stat-label">Phòng ban hoạt động</div>
+                <div class="stat-value" id="statDeptCount">4</div>
+              </div>
+              <div class="stat-icon" style="background: #f0fdf4; color: #16a34a;">🏢</div>
+            </div>
+
+            <div class="stat-card">
+              <div>
+                <div class="stat-label">Vị trí chức danh</div>
+                <div class="stat-value" id="statPosCount">4</div>
+              </div>
+              <div class="stat-icon" style="background: #fefce8; color: #ca8a04;">💼</div>
+            </div>
+
+            <div class="stat-card">
+              <div>
+                <div class="stat-label">Dịch vụ SOA Online</div>
+                <div class="stat-value" id="statServiceCount">5/5</div>
+              </div>
+              <div class="stat-icon" style="background: #fdf2f8; color: #db2777;">🌐</div>
+            </div>
+          </div>
+
+          <div class="card-table" style="margin-bottom: 24px;">
+            <div style="padding: 18px 24px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 15px;">
+              Hồ sơ nhân sự cập nhật gần đây
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>MÃ NV</th>
+                  <th>HỌ VÀ TÊN</th>
+                  <th>EMAIL</th>
+                  <th>PHÒNG BAN</th>
+                  <th>CHỨC DANH</th>
+                  <th>TRẠNG THÁI</th>
+                </tr>
+              </thead>
+              <tbody id="dashEmployeesTableBody">
+                <!-- Dữ liệu nạp qua JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 2: PHÒNG BAN (SCR_ADM_05) -->
+        <section id="view-departments" class="portal-view">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" class="search-input" id="deptSearchInput" placeholder="Tìm theo tên hoặc mã phòng ban..." oninput="filterDepartments()">
+            </div>
+            <button class="btn-primary" onclick="openAddDeptModal()">+ Thêm phòng ban mới</button>
+          </div>
+
+          <div class="card-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>MÃ PHÒNG</th>
+                  <th>TÊN PHÒNG BAN</th>
+                  <th>TRƯỞNG PHÒNG</th>
+                  <th>SỐ NHÂN SỰ</th>
+                  <th>MÔ TẢ</th>
+                  <th>TRẠNG THÁI</th>
+                </tr>
+              </thead>
+              <tbody id="departmentsTableBody">
+                <!-- Nạp dữ liệu qua API -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 3: CHỨC DANH CÔNG VIỆC -->
+        <section id="view-positions" class="portal-view">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" class="search-input" id="posSearchInput" placeholder="Tìm theo chức vụ..." oninput="filterPositions()">
+            </div>
+            <button class="btn-primary" onclick="openAddPositionModal()">+ Thêm chức danh</button>
+          </div>
+
+          <div class="card-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>MÃ CHỨC VỤ</th>
+                  <th>TÊN VỊ TRÍ</th>
+                  <th>PHÒNG BAN</th>
+                  <th>MỨC LƯƠNG TỐI THIỂU</th>
+                  <th>MỨC LƯƠNG TỐI ĐA</th>
+                  <th>TRẠNG THÁI</th>
+                </tr>
+              </thead>
+              <tbody id="positionsTableBody">
+                <!-- Nạp dữ liệu qua API -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 4: HỒ SƠ NHÂN SỰ (SCR_ADM_06) -->
+        <section id="view-employees" class="portal-view">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" class="search-input" id="empSearchInput" placeholder="Tìm theo tên, mã NV, email..." oninput="filterEmployees()">
+            </div>
+            <button class="btn-primary" onclick="openAddEmployeeModal()">+ Thêm nhân sự mới</button>
+          </div>
+
+          <div class="card-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>MÃ SỐ</th>
+                  <th>HỌ VÀ TÊN</th>
+                  <th>EMAIL CÔNG TY</th>
+                  <th>SỐ ĐIỆN THOẠI</th>
+                  <th>PHÒNG BAN</th>
+                  <th>VỊ TRÍ</th>
+                  <th>LOẠI HỢP ĐỒNG</th>
+                  <th>TRẠNG THÁI</th>
+                </tr>
+              </thead>
+              <tbody id="employeesTableBody">
+                <!-- Nạp dữ liệu qua API -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 5: CHẤM CÔNG GPS/WIFI (PREVIEW PHÂN HỆ 3) -->
+        <section id="view-attendance" class="portal-view">
+          <div style="background: #ffffff; padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 20px;">
+            <h3 style="font-size: 16px; margin-bottom: 8px;">Check-in / Check-out Chấm Công (Figma SCR_ATT_01)</h3>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+              Hỗ trợ định vị GPS bán kính văn phòng và xác thực địa chỉ MAC/BSSID mạng WiFi doanh nghiệp.
+            </p>
+            <div style="display: flex; gap: 12px;">
+              <button class="btn-primary" onclick="simulateCheckIn()">📍 Check-in Đi làm</button>
+              <button class="btn-logout" onclick="simulateCheckOut()">⏱️ Check-out Ra về</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: NGHỈ PHÉP (PREVIEW PHÂN HỆ 4) -->
+        <section id="view-leaves" class="portal-view">
+          <div style="background: #ffffff; padding: 24px; border-radius: var(--radius); border: 1px solid var(--border);">
+            <h3 style="font-size: 16px; margin-bottom: 8px;">Quản lý Quỹ phép & Đơn xin nghỉ (Figma SCR_LEAVE_01)</h3>
+            <p style="color: var(--text-muted); font-size: 14px;">
+              Phân hệ Leave Service quản trị các loại nghỉ phép (phép năm, phép ốm, chế độ thai sản), tạo và xét duyệt đơn trực tuyến.
+            </p>
+          </div>
+        </section>
+
+        <!-- VIEW 7: PHÂN CA & TĂNG CA (PREVIEW PHÂN HỆ 5) -->
+        <section id="view-shifts" class="portal-view">
+          <div style="background: #ffffff; padding: 24px; border-radius: var(--radius); border: 1px solid var(--border);">
+            <h3 style="font-size: 16px; margin-bottom: 8px;">Lịch phân ca làm việc & Đăng ký OT (Figma SCR_SHIFT_01)</h3>
+            <p style="color: var(--text-muted); font-size: 14px;">
+              Phân hệ Shift Service quản lý danh mục ca sáng/chiều/đêm, đổi ca linh hoạt và kiểm soát đăng ký làm thêm giờ (OT).
+            </p>
+          </div>
+        </section>
+
+        <!-- VIEW 8: BẢNG LƯƠNG & PAYSLIP (PREVIEW PHÂN HỆ 6) -->
+        <section id="view-payroll" class="portal-view">
+          <div style="background: #ffffff; padding: 24px; border-radius: var(--radius); border: 1px solid var(--border);">
+            <h3 style="font-size: 16px; margin-bottom: 8px;">Động cơ Tính lương tự động & Phiếu lương (Figma SCR_PAY_01)</h3>
+            <p style="color: var(--text-muted); font-size: 14px;">
+              Phân hệ Payroll Service tổng hợp dữ liệu công từ attendance-service, leave-service, shift-service qua Event Bus để xuất phiếu lương Payslip.
+            </p>
+          </div>
+        </section>
+
+        <!-- VIEW 9: GIÁM SÁT HẠ TẦNG SOA (SOA MONITOR) -->
+        <section id="view-soa-monitor" class="portal-view">
+          <div class="table-toolbar">
+            <div style="font-weight: 700; font-size: 16px;">
+              Trạng thái các Thành phần Hạ tầng & Dịch vụ SOA
+            </div>
+            <button class="btn-primary" onclick="loadSoaMonitor()">🔄 Làm mới trạng thái</button>
+          </div>
+
+          <div class="card-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>TÊN MICROSERVICE</th>
+                  <th>CỔNG</th>
+                  <th>ĐỊA CHỈ NỘI BỘ</th>
+                  <th>HEALTH CHECK</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>DATABASE RIÊNG</th>
+                </tr>
+              </thead>
+              <tbody id="soaServicesTableBody">
+                <!-- Nạp dữ liệu qua API Registry -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL CONTAINER -->
+  <div id="modalBox" style="display: none;"></div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastBox"></div>
+
+  <!-- JavaScript ứng dụng -->
+  <script src="js/app.js"></script>
+</body>
+</html>
