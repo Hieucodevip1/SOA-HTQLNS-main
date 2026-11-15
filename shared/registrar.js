@@ -21,6 +21,9 @@ class ServiceRegistrar {
   }
 
   async register() {
+    if (process.env.NODE_ENV === 'test' || process.env.DISABLE_REGISTRY === 'true') {
+      return false;
+    }
     try {
       const response = await fetch(`${this.registryUrl}/register`, {
         method: 'POST',

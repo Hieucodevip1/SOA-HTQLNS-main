@@ -1471,6 +1471,9 @@ input:checked + .slider:before {
         <a class="figma-nav-item" id="nav-shifts" onclick="navigateToView('shifts')" style="cursor: pointer;">
           <span class="figma-nav-icon">⏰</span> Phân ca &amp; Tăng ca (OT)
         </a>
+        <a class="figma-nav-item" id="nav-payroll" onclick="navigateToView('payroll')" style="cursor: pointer;">
+          <span class="figma-nav-icon">💰</span> Bảng lương &amp; Phiếu lương
+        </a>
         <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')" style="cursor: pointer;">
           <span class="figma-nav-icon">⚙️</span> Thiết lập chấm công
         </a>
@@ -2279,6 +2282,187 @@ input:checked + .slider:before {
               </thead>
               <tbody id="tableBodyShiftsList">
                 <!-- Nạp động qua API GET /api/v1/shifts -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <!-- ====================================================================
+             VIEW: BẢNG LƯƠNG & PHIẾU LƯƠNG (SCR_PAY_01, SCR_ADM_04, SCR_ADM_07)
+             ==================================================================== -->
+        <section id="view-payroll" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Trang chủ / Bảng lương &amp; Phiếu lương</div>
+          <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h1 class="page-heading-title">Quản lý Bảng lương &amp; Phiếu lương</h1>
+              <div class="page-heading-desc">Tính toán tự động theo ngày công, phép năm, giờ tăng ca OT và khấu trừ BHXH, thuế TNCN theo luật Việt Nam.</div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="btn-primary-blue" id="btnPayrollCalculate" onclick="openCalculatePayrollModal()" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span>⚡</span> Tính lương tự động
+              </button>
+              <button class="btn-secondary-outline" id="btnPayrollPublish" onclick="handlePublishPayrollClick()" style="display: inline-flex; align-items: center; gap: 6px; color: #047857; border-color: #a7f3d0;">
+                <span>🔒</span> Chốt &amp; Phát hành lương
+              </button>
+              <button class="btn-secondary-outline" id="btnPayrollConfig" onclick="switchPayrollTab('configs')" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span>⚙️</span> Cấu hình lương
+              </button>
+              <button class="btn-secondary-outline" onclick="loadPayrollData()">↻ Làm mới</button>
+            </div>
+          </div>
+
+          <!-- THỐNG KÊ NHANH KPI LƯƠNG -->
+          <div class="metrics-row-4" style="margin-bottom: 24px;">
+            <div class="figma-metric-card" onclick="switchPayrollTab('slips')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Tổng chi phí lương (Gross)</span>
+                <span>💵</span>
+              </div>
+              <div class="metric-value-huge metric-value-blue" id="kpiPayrollTotalGross">0 đ</div>
+              <div class="metric-footer-note" id="kpiPayrollPeriodNote">Kỳ tính lương tháng 11/2026 →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchPayrollTab('slips')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Tổng thực lĩnh (Net)</span>
+                <span>💰</span>
+              </div>
+              <div class="metric-value-huge metric-value-green" id="kpiPayrollTotalNet">0 đ</div>
+              <div class="metric-footer-note">Đã khấu trừ bảo hiểm &amp; thuế →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchPayrollTab('slips')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Nhân sự đã tính lương</span>
+                <span>👥</span>
+              </div>
+              <div class="metric-value-huge metric-value-purple" id="kpiPayrollStaffCount">0</div>
+              <div class="metric-footer-note">Hồ sơ có dữ liệu công tháng →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchPayrollTab('periods')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Trạng thái kỳ lương</span>
+                <span>📋</span>
+              </div>
+              <div class="metric-value-huge metric-value-orange" id="kpiPayrollStatus" style="font-size: 20px; line-height: 38px;">CHƯA CHỐT</div>
+              <div class="metric-footer-note" id="kpiPayrollStatusSub">Đang trong thời gian rà soát →</div>
+            </div>
+          </div>
+
+          <!-- TAB SWITCHER: PHIẾU LƯƠNG / CẤU HÌNH LƯƠNG / KỲ LƯƠNG -->
+          <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 20px;">
+            <button type="button" id="tabBtnPayrollSlips" class="btn-secondary-outline" onclick="switchPayrollTab('slips')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700; background: #ffffff; color: var(--color-primary); border-top: 3px solid var(--color-primary);">
+              📄 Danh sách Phiếu lương (Payslips)
+            </button>
+            <button type="button" id="tabBtnPayrollConfigs" class="btn-secondary-outline" onclick="switchPayrollTab('configs')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
+              ⚙️ Cấu hình lương nhân viên
+            </button>
+            <button type="button" id="tabBtnPayrollPeriods" class="btn-secondary-outline" onclick="switchPayrollTab('periods')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
+              📅 Lịch sử các kỳ lương
+            </button>
+          </div>
+
+          <!-- TAB 1: DANH SÁCH PHIẾU LƯƠNG (SCR_PAY_01) -->
+          <div id="tabContentPayrollSlips" class="figma-white-card" style="margin-bottom: 24px;">
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div class="card-title-text" id="payrollTableTitle">Bảng tổng hợp phiếu lương</div>
+                <div id="payrollTableSub" style="font-size: 12px; color: #64748b;">Bảng lương chi tiết được tính tự động từ dữ liệu Chấm công, Phép năm và Giờ tăng ca OT</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select id="filterPayrollMonth" class="figma-filter-pill" onchange="loadPayslips()">
+                  <option value="11" selected>Tháng 11</option>
+                  <option value="10">Tháng 10</option>
+                  <option value="9">Tháng 9</option>
+                  <option value="8">Tháng 8</option>
+                </select>
+                <select id="filterPayrollYear" class="figma-filter-pill" onchange="loadPayslips()">
+                  <option value="2026" selected>Năm 2026</option>
+                  <option value="2025">Năm 2025</option>
+                </select>
+                <button class="btn-secondary-outline" style="padding: 6px 14px; font-size: 12px;" onclick="loadPayslips()">Lọc</button>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tablePayrollSlips">
+              <thead>
+                <tr>
+                  <th>Mã NV</th>
+                  <th>Họ và tên</th>
+                  <th>Phòng ban</th>
+                  <th>Lương cơ bản</th>
+                  <th>Công TT / Nghỉ phép</th>
+                  <th>OT (Giờ / Tiền)</th>
+                  <th>Phụ cấp</th>
+                  <th>Tổng Gross</th>
+                  <th>Khấu trừ</th>
+                  <th>Thực lĩnh (Net)</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyPayrollSlips">
+                <!-- Nạp động qua API GET /api/v1/payslips -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TAB 2: CẤU HÌNH LƯƠNG NHÂN VIÊN (SCR_ADM_04) -->
+          <div id="tabContentPayrollConfigs" class="figma-white-card" style="display: none; margin-bottom: 24px;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Danh mục cấu hình lương &amp; Định mức phụ cấp</div>
+                <div style="font-size: 12px; color: #64748b;">Thiết lập mức lương cơ sở, phụ cấp ăn trưa, xăng xe và tỷ lệ trích bảo hiểm</div>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tablePayrollConfigs">
+              <thead>
+                <tr>
+                  <th>Mã NV</th>
+                  <th>Họ và tên</th>
+                  <th>Phòng ban / Chức vụ</th>
+                  <th>Lương cơ bản</th>
+                  <th>Phụ cấp ăn trưa</th>
+                  <th>Phụ cấp xăng xe</th>
+                  <th>Tỷ lệ BH (10.5%)</th>
+                  <th>Phạt trễ / phút</th>
+                  <th>Hệ số OT</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyPayrollConfigs">
+                <!-- Nạp động qua API GET /api/v1/payroll-configs -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TAB 3: DANH SÁCH KỲ LƯƠNG (SCR_ADM_07) -->
+          <div id="tabContentPayrollPeriods" class="figma-white-card" style="display: none; margin-bottom: 24px;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Lịch sử chốt kỳ lương hàng tháng</div>
+                <div style="font-size: 12px; color: #64748b;">Theo dõi tiến độ tính lương, duyệt bảng lương và phát hành phiếu lương</div>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tablePayrollPeriods">
+              <thead>
+                <tr>
+                  <th>Kỳ tính lương</th>
+                  <th>Công chuẩn</th>
+                  <th>Số nhân sự</th>
+                  <th>Tổng Gross</th>
+                  <th>Tổng Thực lĩnh (Net)</th>
+                  <th>Trạng thái</th>
+                  <th>Người chốt / Ngày chốt</th>
+                  <th style="text-align: center;">Hành động</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyPayrollPeriods">
+                <!-- Nạp động qua API GET /api/v1/payrolls/periods -->
               </tbody>
             </table>
           </div>
@@ -3189,6 +3373,7 @@ input:checked + .slider:before {
     <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ 5. Thiết lập Wi-Fi / GPS</button>
     <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">👥 6. Danh sách Nhân viên</button>
     <button type="button" class="btn-demo-view" id="btn-demo-shifts" onclick="showScreenView('shifts')">⏰ 7. Phân ca &amp; Tăng ca OT</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-payroll" onclick="showScreenView('payroll')">💰 8. Bảng lương &amp; Phiếu lương</button>
     <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">✕</button>
   </div>
 

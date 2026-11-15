@@ -476,6 +476,30 @@ function applyRoleBasedUI() {
   if (btnShiftOpenCreateShift) {
     btnShiftOpenCreateShift.style.display = (role === 'ADMIN' || role === 'HR') ? 'inline-flex' : 'none';
   }
+
+  // 8. Quyền hạn thao tác tính lương & cấu hình lương
+  const btnPayrollCalc = document.getElementById('btnPayrollCalculate');
+  const btnPayrollPub = document.getElementById('btnPayrollPublish');
+  const btnPayrollCfg = document.getElementById('btnPayrollConfig');
+  const tabPayrollCfg = document.getElementById('tabBtnPayrollConfigs');
+  const tabPayrollPer = document.getElementById('tabBtnPayrollPeriods');
+  const payrollTableTitle = document.getElementById('payrollTableTitle');
+  const payrollTableSub = document.getElementById('payrollTableSub');
+
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR');
+  if (btnPayrollCalc) btnPayrollCalc.style.display = isAdminOrHr ? 'inline-flex' : 'none';
+  if (btnPayrollPub) btnPayrollPub.style.display = isAdminOrHr ? 'inline-flex' : 'none';
+  if (btnPayrollCfg) btnPayrollCfg.style.display = isAdminOrHr ? 'inline-flex' : 'none';
+  if (tabPayrollCfg) tabPayrollCfg.style.display = isAdminOrHr ? 'inline-block' : 'none';
+  if (tabPayrollPer) tabPayrollPer.style.display = (role !== 'EMPLOYEE') ? 'inline-block' : 'none';
+
+  if (role === 'EMPLOYEE') {
+    if (payrollTableTitle) payrollTableTitle.innerText = 'Phiếu lương cá nhân của bạn';
+    if (payrollTableSub) payrollTableSub.innerText = 'Bảng chi tiết các khoản thu nhập, phụ cấp và các khoản trích nộp theo lương';
+  } else {
+    if (payrollTableTitle) payrollTableTitle.innerText = 'Bảng tổng hợp phiếu lương toàn công ty';
+    if (payrollTableSub) payrollTableSub.innerText = 'Bảng lương chi tiết được tính tự động từ dữ liệu Chấm công, Phép năm và Giờ tăng ca OT';
+  }
 }
 
 function navigateToView(viewName) {
@@ -533,6 +557,7 @@ function navigateToView(viewName) {
   if (viewName === 'soa-monitor') loadSoaServicesStatus();
   if (viewName === 'profile') loadProfileData();
   if (viewName === 'shifts') loadShiftsData();
+  if (viewName === 'payroll') loadPayrollData();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2829,4 +2854,568 @@ async function handleShiftDefSubmit(e, shiftId) {
     }
   }
 }
+
+// ==============================================================================
+// 13. PHÂN HỆ QUẢN LÝ BẢNG LƯƠNG & PHIẾU LƯƠNG (SCR_PAY_01, SCR_ADM_04, SCR_ADM_07)
+// ==============================================================================
+
+let currentPayrollSubTab = 'slips';
+let cachedPayslipsList = [];
+let cachedPayrollConfigs = [];
+let cachedPayrollPeriods = [];
+
+function switchPayrollTab(tabName) {
+  currentPayrollSubTab = tabName;
+  const tabBtnSlips = document.getElementById('tabBtnPayrollSlips');
+  const tabBtnConfigs = document.getElementById('tabBtnPayrollConfigs');
+  const tabBtnPeriods = document.getElementById('tabBtnPayrollPeriods');
+  const contentSlips = document.getElementById('tabContentPayrollSlips');
+  const contentConfigs = document.getElementById('tabContentPayrollConfigs');
+  const contentPeriods = document.getElementById('tabContentPayrollPeriods');
+
+  [tabBtnSlips, tabBtnConfigs, tabBtnPeriods].forEach(btn => {
+    if (btn) {
+      btn.style.background = '#f8fafc';
+      btn.style.color = '#64748b';
+      btn.style.borderTop = 'none';
+      btn.style.fontWeight = '600';
+    }
+  });
+
+  if (contentSlips) contentSlips.style.display = 'none';
+  if (contentConfigs) contentConfigs.style.display = 'none';
+  if (contentPeriods) contentPeriods.style.display = 'none';
+
+  if (tabName === 'slips') {
+    if (tabBtnSlips) {
+      tabBtnSlips.style.background = '#ffffff';
+      tabBtnSlips.style.color = 'var(--color-primary)';
+      tabBtnSlips.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnSlips.style.fontWeight = '700';
+    }
+    if (contentSlips) contentSlips.style.display = 'block';
+    loadPayslips();
+  } else if (tabName === 'configs') {
+    if (tabBtnConfigs) {
+      tabBtnConfigs.style.background = '#ffffff';
+      tabBtnConfigs.style.color = 'var(--color-primary)';
+      tabBtnConfigs.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnConfigs.style.fontWeight = '700';
+    }
+    if (contentConfigs) contentConfigs.style.display = 'block';
+    loadPayrollConfigs();
+  } else if (tabName === 'periods') {
+    if (tabBtnPeriods) {
+      tabBtnPeriods.style.background = '#ffffff';
+      tabBtnPeriods.style.color = 'var(--color-primary)';
+      tabBtnPeriods.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnPeriods.style.fontWeight = '700';
+    }
+    if (contentPeriods) contentPeriods.style.display = 'block';
+    loadPayrollPeriods();
+  }
+}
+
+function formatVND(amount) {
+  if (amount === undefined || amount === null || isNaN(amount)) return '0 đ';
+  return Number(amount).toLocaleString('vi-VN') + ' đ';
+}
+
+async function loadPayrollData() {
+  await Promise.allSettled([
+    loadPayslips(),
+    loadPayrollConfigs(),
+    loadPayrollPeriods()
+  ]);
+}
+
+// 1. Danh sách Phiếu lương (SCR_PAY_01)
+async function loadPayslips() {
+  const tbody = document.getElementById('tableBodyPayrollSlips');
+  if (!tbody) return;
+
+  const month = document.getElementById('filterPayrollMonth')?.value || '11';
+  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+
+  try {
+    const res = await apiCall(`/api/v1/payslips?month=${month}&year=${year}`);
+    cachedPayslipsList = res?.data || [];
+
+    // Cập nhật KPIs
+    const totalGross = cachedPayslipsList.reduce((sum, p) => sum + Number(p.gross_salary || 0), 0);
+    const totalNet = cachedPayslipsList.reduce((sum, p) => sum + Number(p.net_salary || 0), 0);
+
+    const kpiGross = document.getElementById('kpiPayrollTotalGross');
+    const kpiNet = document.getElementById('kpiPayrollTotalNet');
+    const kpiStaff = document.getElementById('kpiPayrollStaffCount');
+    const kpiPeriodNote = document.getElementById('kpiPayrollPeriodNote');
+
+    if (kpiGross) kpiGross.innerText = formatVND(totalGross);
+    if (kpiNet) kpiNet.innerText = formatVND(totalNet);
+    if (kpiStaff) kpiStaff.innerText = cachedPayslipsList.length;
+    if (kpiPeriodNote) kpiPeriodNote.innerText = `Kỳ tính lương tháng ${month}/${year} →`;
+
+    if (!cachedPayslipsList.length) {
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có dữ liệu bảng lương kỳ tháng ${month}/${year}. Hãy bấm "Tính lương tự động".</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = cachedPayslipsList.map(p => {
+      const isConfirmed = p.status === 'CONFIRMED' || p.status === 'PAID';
+      const statusBadge = isConfirmed
+        ? '<span class="badge-status badge-approved">Đã chốt</span>'
+        : '<span class="badge-status badge-pending">Dự thảo</span>';
+
+      return `
+        <tr>
+          <td><strong>${p.emp_code || p.emp_id}</strong></td>
+          <td><span style="font-weight: 600; color: #0f172a;">${p.emp_name || 'Nhân viên'}</span></td>
+          <td>${p.department_name || 'Phòng Kỹ Thuật'}</td>
+          <td>${formatVND(p.base_salary)}</td>
+          <td>${Number(p.actual_work_days).toFixed(1)} / ${Number(p.paid_leave_days).toFixed(1)} ngày</td>
+          <td>${Number(p.ot_hours).toFixed(1)}h (${formatVND(p.ot_pay)})</td>
+          <td>${formatVND(p.total_allowance)}</td>
+          <td><strong>${formatVND(p.gross_salary)}</strong></td>
+          <td style="color: #ef4444;">-${formatVND(Number(p.insurance_deduction) + Number(p.late_deduction) + Number(p.tax_deduction))}</td>
+          <td><strong style="color: #047857; font-size: 13.5px;">${formatVND(p.net_salary)}</strong></td>
+          <td>${statusBadge}</td>
+          <td style="text-align: center;">
+            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="openPayslipDetailModal('${p.id}')">Xem phiếu</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Lỗi tải phiếu lương:', err);
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+// 2. Danh mục cấu hình lương (SCR_ADM_04)
+async function loadPayrollConfigs() {
+  const tbody = document.getElementById('tableBodyPayrollConfigs');
+  if (!tbody) return;
+
+  try {
+    const res = await apiCall('/api/v1/payroll-configs');
+    cachedPayrollConfigs = res?.data || [];
+
+    if (!cachedPayrollConfigs.length) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có cấu hình lương nhân viên</td></tr>`;
+      return;
+    }
+
+    const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
+    tbody.innerHTML = cachedPayrollConfigs.map(c => `
+      <tr>
+        <td><strong>${c.emp_code || c.emp_id}</strong></td>
+        <td><span style="font-weight: 600; color: #0f172a;">${c.emp_name || 'Nhân viên'}</span></td>
+        <td>${c.department_name || 'Phòng ban'}</td>
+        <td><strong>${formatVND(c.base_salary)}</strong></td>
+        <td>${formatVND(c.lunch_allowance)}</td>
+        <td>${formatVND(c.transport_allowance)}</td>
+        <td>${(Number(c.insurance_rate) * 100).toFixed(1)}%</td>
+        <td>${formatVND(c.late_penalty_per_minute)}</td>
+        <td>x${Number(c.ot_multiplier_weekday).toFixed(1)} / x${Number(c.ot_multiplier_weekend).toFixed(1)}</td>
+        <td style="text-align: center;">
+          ${isAdminOrHr ? `
+            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openEditPayrollConfigModal(${JSON.stringify(c)})'>Sửa</button>
+          ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Lỗi tải cấu hình lương:', err);
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+// 3. Danh sách kỳ lương (SCR_ADM_07)
+async function loadPayrollPeriods() {
+  const tbody = document.getElementById('tableBodyPayrollPeriods');
+  if (!tbody) return;
+
+  try {
+    const res = await apiCall('/api/v1/payrolls/periods');
+    cachedPayrollPeriods = res?.data || [];
+
+    // Cập nhật trạng thái kỳ lương hiện hành
+    const month = document.getElementById('filterPayrollMonth')?.value || '11';
+    const year = document.getElementById('filterPayrollYear')?.value || '2026';
+    const currentPeriod = cachedPayrollPeriods.find(p => Number(p.month) === Number(month) && Number(p.year) === Number(year));
+
+    const kpiStatus = document.getElementById('kpiPayrollStatus');
+    const kpiStatusSub = document.getElementById('kpiPayrollStatusSub');
+    if (kpiStatus) {
+      if (!currentPeriod) {
+        kpiStatus.innerText = 'CHƯA TẠO';
+        kpiStatus.style.color = '#64748b';
+        if (kpiStatusSub) kpiStatusSub.innerText = 'Chưa chạy tính lương tự động';
+      } else if (currentPeriod.status === 'LOCKED' || currentPeriod.status === 'PAID') {
+        kpiStatus.innerText = 'ĐÃ CHỐT';
+        kpiStatus.style.color = '#047857';
+        if (kpiStatusSub) kpiStatusSub.innerText = 'Đã phát hành phiếu lương chính thức';
+      } else {
+        kpiStatus.innerText = 'DỰ THẢO';
+        kpiStatus.style.color = '#d97706';
+        if (kpiStatusSub) kpiStatusSub.innerText = 'Đang rà soát số liệu công & OT';
+      }
+    }
+
+    if (!cachedPayrollPeriods.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có lịch sử kỳ lương nào được tạo</td></tr>`;
+      return;
+    }
+
+    const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
+    tbody.innerHTML = cachedPayrollPeriods.map(p => {
+      const isLocked = p.status === 'LOCKED' || p.status === 'PAID';
+      const statusBadge = isLocked
+        ? '<span class="badge-status badge-approved">Đã chốt lương</span>'
+        : '<span class="badge-status badge-pending">Đang tính toán</span>';
+
+      return `
+        <tr>
+          <td><strong>Tháng ${p.month}/${p.year}</strong></td>
+          <td>${p.standard_working_days} ngày</td>
+          <td>${p.total_employees} nhân sự</td>
+          <td><strong>${formatVND(p.total_gross_salary)}</strong></td>
+          <td><strong style="color: #047857;">${formatVND(p.total_net_salary)}</strong></td>
+          <td>${statusBadge}</td>
+          <td style="font-size: 11.5px; color: #64748b;">${p.closed_at ? formatLeaveDateTime(p.closed_at) : '—'}</td>
+          <td style="text-align: center;">
+            ${(isAdminOrHr && !isLocked) ? `
+              <button class="btn-primary-blue" style="padding: 4px 10px; font-size: 11.5px; background: #047857; border-color: #047857;" onclick="handlePublishPeriodDirect('${p.id}', ${p.month}, ${p.year})">Chốt kỳ này</button>
+            ` : `<span style="font-size: 11px; color: #94a3b8;">${isLocked ? 'Hoàn tất' : '—'}</span>`}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Lỗi tải danh sách kỳ lương:', err);
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+// 4. Popup tính lương tự động
+function openCalculatePayrollModal() {
+  const month = document.getElementById('filterPayrollMonth')?.value || '11';
+  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+
+  const html = `
+    <form id="formModalCalcPayroll" onsubmit="handleCalcPayrollSubmit(event)">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Tháng tính lương *</label>
+          <select id="calcModalMonth" class="topbar-search-input">
+            ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `
+              <option value="${m}" ${m === Number(month) ? 'selected' : ''}>Tháng ${m}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Năm *</label>
+          <input type="number" id="calcModalYear" class="topbar-search-input" value="${year}" required>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Số ngày công chuẩn trong tháng *</label>
+        <input type="number" id="calcModalStandardDays" class="topbar-search-input" value="22" step="0.5" min="15" max="31" required>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Mặc định 22 ngày công theo chế độ nghỉ Thứ 7, Chủ Nhật.</div>
+      </div>
+
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; font-size: 12px; color: #166534; margin-bottom: 16px; line-height: 1.5;">
+        <strong>⚡ Quy trình tổng hợp tự động:</strong>
+        <div style="margin-top: 4px;">
+          • Lấy dữ liệu công thực tế và phạt đi muộn từ <strong>attendance-service</strong><br>
+          • Lấy ngày nghỉ phép năm có lương từ <strong>leave-service</strong><br>
+          • Lấy tổng giờ tăng ca OT đã duyệt từ <strong>shift-service</strong><br>
+          • Khấu trừ 10.5% BHXH, BHYT, BHTN &amp; tính thuế TNCN lũy tiến.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+        <button type="submit" id="btnSubmitCalcPayroll" class="btn-primary-blue">Bắt đầu tính lương</button>
+      </div>
+    </form>
+  `;
+  openModal('Chạy tính lương tự động', html);
+}
+
+async function handleCalcPayrollSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const month = Number(document.getElementById('calcModalMonth').value);
+  const year = Number(document.getElementById('calcModalYear').value);
+  const standardWorkingDays = Number(document.getElementById('calcModalStandardDays').value);
+  const btn = document.getElementById('btnSubmitCalcPayroll');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Đang tính toán...';
+  }
+
+  try {
+    const res = await apiCall('/api/v1/payrolls/calculate', {
+      method: 'POST',
+      body: JSON.stringify({
+        month,
+        year,
+        standardWorkingDays
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Tính lương thất bại');
+    }
+
+    showToast(`Đã tính bảng lương tháng ${month}/${year} thành công!`, 'success');
+    closeModal();
+
+    const filterM = document.getElementById('filterPayrollMonth');
+    const filterY = document.getElementById('filterPayrollYear');
+    if (filterM) filterM.value = month;
+    if (filterY) filterY.value = year;
+
+    await loadPayrollData();
+  } catch (err) {
+    console.error('Lỗi tính lương:', err);
+    showToast(err.message || 'Tính lương thất bại', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Bắt đầu tính lương';
+    }
+  }
+}
+
+// 5. Chốt kỳ lương & phát hành phiếu lương
+async function handlePublishPayrollClick() {
+  const month = document.getElementById('filterPayrollMonth')?.value || '11';
+  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+
+  if (!confirm(`Bạn có chắc chắn muốn CHỐT và PHÁT HÀNH phiếu lương tháng ${month}/${year}?\nSau khi chốt, bảng lương sẽ được khóa chính thức và gửi thông báo tới toàn thể nhân viên.`)) {
+    return;
+  }
+
+  try {
+    const res = await apiCall('/api/v1/payrolls/publish', {
+      method: 'POST',
+      body: JSON.stringify({
+        month: Number(month),
+        year: Number(year)
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Chốt kỳ lương thất bại');
+    }
+
+    showToast(`Đã chốt và phát hành phiếu lương tháng ${month}/${year} thành công!`, 'success');
+    await loadPayrollData();
+  } catch (err) {
+    console.error('Lỗi chốt kỳ lương:', err);
+    showToast(err.message || 'Lỗi chốt kỳ lương', 'error');
+  }
+}
+
+async function handlePublishPeriodDirect(periodId, month, year) {
+  if (!confirm(`Chốt và phát hành phiếu lương kỳ tháng ${month}/${year}?`)) return;
+
+  try {
+    const res = await apiCall(`/api/v1/payrolls/${periodId}/publish`, {
+      method: 'PATCH'
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Chốt kỳ lương thất bại');
+    }
+
+    showToast(`Đã chốt và phát hành phiếu lương tháng ${month}/${year}!`, 'success');
+    await loadPayrollData();
+  } catch (err) {
+    console.error('Lỗi chốt kỳ lương:', err);
+    showToast(err.message || 'Lỗi chốt kỳ lương', 'error');
+  }
+}
+
+// 6. Chi tiết phiếu lương Payslip cá nhân (SCR_PAY_01)
+async function openPayslipDetailModal(slipId) {
+  try {
+    const res = await apiCall(`/api/v1/payslips/${slipId}`);
+    const slip = res?.data;
+    if (!slip) throw new Error('Không tìm thấy thông tin phiếu lương');
+
+    const totalDeductions = Number(slip.insurance_deduction || 0) + Number(slip.late_deduction || 0) + Number(slip.tax_deduction || 0);
+
+    const html = `
+      <div style="font-size: 13px; color: #334155;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-weight: 700; font-size: 15px; color: #0f172a;">${slip.emp_name}</div>
+            <span class="badge-status ${slip.status === 'CONFIRMED' || slip.status === 'PAID' ? 'badge-approved' : 'badge-pending'}">
+              ${slip.status === 'CONFIRMED' || slip.status === 'PAID' ? 'Chính thức' : 'Bản dự thảo'}
+            </span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #64748b;">
+            <div>Mã NV: <strong>${slip.emp_code}</strong></div>
+            <div>Phòng ban: <strong>${slip.department_name}</strong></div>
+            <div>Kỳ lương: <strong>Tháng ${slip.month}/${slip.year}</strong></div>
+            <div>Công chuẩn: <strong>${slip.standard_days} ngày</strong></div>
+          </div>
+        </div>
+
+        <div style="font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; justify-content: space-between;">
+          <span>1. CÁC KHOẢN THU NHẬP (GROSS)</span>
+          <span style="color: #2563eb;">${formatVND(slip.gross_salary)}</span>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; line-height: 1.8;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Lương cơ bản hợp đồng:</span>
+            <span>${formatVND(slip.base_salary)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Ngày công thực tế (${Number(slip.actual_work_days).toFixed(1)} ngày) + Phép (${Number(slip.paid_leave_days).toFixed(1)} ngày):</span>
+            <span>${formatVND(Math.round(Number(slip.base_salary) / Number(slip.standard_days) * (Number(slip.actual_work_days) + Number(slip.paid_leave_days))))}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Lương làm thêm giờ (${Number(slip.ot_hours).toFixed(1)} giờ OT):</span>
+            <span>${formatVND(slip.ot_pay)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Tổng phụ cấp (Ăn trưa, xăng xe):</span>
+            <span>${formatVND(slip.total_allowance)}</span>
+          </div>
+        </div>
+
+        <div style="font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; justify-content: space-between;">
+          <span>2. CÁC KHOẢN KHẤU TRỪ</span>
+          <span style="color: #ef4444;">-${formatVND(totalDeductions)}</span>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; line-height: 1.8;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Bảo hiểm (BHXH 8%, BHYT 1.5%, BHTN 1% = 10.5%):</span>
+            <span>-${formatVND(slip.insurance_deduction)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Khấu trừ phạt đi muộn:</span>
+            <span>-${formatVND(slip.late_deduction)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>• Thuế thu nhập cá nhân (TNCN):</span>
+            <span>-${formatVND(slip.tax_deduction)}</span>
+          </div>
+        </div>
+
+        <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 1px solid #a7f3d0; border-radius: 10px; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 11px; color: #065f46; font-weight: 700; text-transform: uppercase;">Thực Lĩnh (Net Salary)</div>
+            <div style="font-size: 11.5px; color: #047857;">Đã trừ đầy đủ bảo hiểm &amp; thuế TNCN</div>
+          </div>
+          <div style="font-size: 22px; font-weight: 800; color: #047857;">
+            ${formatVND(slip.net_salary)}
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+          <button type="button" class="btn-primary-blue" onclick="closeModal()">Đóng phiếu</button>
+        </div>
+      </div>
+    `;
+    openModal(`Phiếu lương tháng ${slip.month}/${slip.year}`, html);
+  } catch (err) {
+    console.error('Lỗi xem phiếu lương:', err);
+    showToast(err.message || 'Không thể mở phiếu lương', 'error');
+  }
+}
+
+// 7. Popup chỉnh sửa cấu hình lương
+function openEditPayrollConfigModal(config) {
+  const html = `
+    <form id="formModalEditConfig" onsubmit="handleEditConfigSubmit(event, '${config.emp_id}')">
+      <div style="margin-bottom: 12px; font-size: 13px; color: #475569;">
+        Nhân viên: <strong style="color: #0f172a;">${config.emp_name}</strong> (${config.emp_code})
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Lương cơ bản hợp đồng (VNĐ) *</label>
+        <input type="number" id="cfgModalBaseSalary" class="topbar-search-input" value="${Number(config.base_salary)}" step="100000" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Phụ cấp ăn trưa</label>
+          <input type="number" id="cfgModalLunch" class="topbar-search-input" value="${Number(config.lunch_allowance)}" step="50000">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Phụ cấp xăng xe/ĐT</label>
+          <input type="number" id="cfgModalTransport" class="topbar-search-input" value="${Number(config.transport_allowance)}" step="50000">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Tỷ lệ BHXH/BHYT/BHTN</label>
+          <input type="number" id="cfgModalInsurance" class="topbar-search-input" value="${Number(config.insurance_rate)}" step="0.005" min="0" max="1">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Phạt trễ/phút (VNĐ)</label>
+          <input type="number" id="cfgModalLatePenalty" class="topbar-search-input" value="${Number(config.late_penalty_per_minute)}" step="500">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+        <button type="submit" id="btnSubmitEditConfig" class="btn-primary-blue">Lưu cấu hình</button>
+      </div>
+    </form>
+  `;
+  openModal('Cấu hình định mức lương nhân sự', html);
+}
+
+async function handleEditConfigSubmit(e, empId) {
+  if (e && e.preventDefault) e.preventDefault();
+  const baseSalary = Number(document.getElementById('cfgModalBaseSalary').value);
+  const lunchAllowance = Number(document.getElementById('cfgModalLunch').value);
+  const transportAllowance = Number(document.getElementById('cfgModalTransport').value);
+  const insuranceRate = Number(document.getElementById('cfgModalInsurance').value);
+  const latePenaltyPerMinute = Number(document.getElementById('cfgModalLatePenalty').value);
+  const btn = document.getElementById('btnSubmitEditConfig');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Đang lưu...';
+  }
+
+  try {
+    const res = await apiCall(`/api/v1/payroll-configs/${empId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        baseSalary,
+        lunchAllowance,
+        transportAllowance,
+        insuranceRate,
+        latePenaltyPerMinute
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Cập nhật cấu hình thất bại');
+    }
+
+    showToast('Cập nhật cấu hình lương thành công!', 'success');
+    closeModal();
+    await loadPayrollConfigs();
+  } catch (err) {
+    console.error('Lỗi cập nhật cấu hình lương:', err);
+    showToast(err.message || 'Lỗi lưu cấu hình', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Lưu cấu hình';
+    }
+  }
+}
+
 

@@ -371,7 +371,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": ["POST", "PATCH", "PUT", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR"]
         }
@@ -387,7 +387,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": ["POST", "PATCH", "PUT", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR"]
         }
@@ -510,14 +510,14 @@
       "prefix": "/api/v1/payroll-configs",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET", "POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        { "methods": ["GET", "POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
       ]
     },
     {
       "prefix": "/api/v1/payrolls",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET", "POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        { "methods": ["GET", "POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
       ]
     },
     {
@@ -525,7 +525,7 @@
       "service": "payroll-service",
       "rules": [
         { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        { "methods": ["POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
       ]
     },
     {
