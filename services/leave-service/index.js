@@ -274,67 +274,77 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
 
 // 5. Duyệt / Từ chối đơn xin nghỉ phép (SCR_REQ_01)
 const handleLeaveDecision = async (req, res, next) => {
+  let connection;
   try {
     const { decision, rejectReason = null } = req.body;
     if (!['APPROVED', 'REJECTED'].includes(decision)) {
       return res.status(400).json({ success: false, error: 'decision phải là APPROVED hoặc REJECTED' });
     }
 
-    const [rows] = await pool.query(
-      `SELECT lr.*, lt.is_paid FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id WHERE lr.id = ?`,
-      [req.params.id]
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `SELECT lr.*, lt.is_paid FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+       WHERE lr.id = ? FOR UPDATE`, [req.params.id]
     );
-    if (!rows.length) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
-    const leave = rows[0];
-    if (leave.status !== 'PENDING') return res.status(400).json({ success: false, error: 'Đơn đã được xử lý' });
+    if (!rows.length || rows[0].status !== 'PENDING') {
+      const error = new Error(!rows.length ? 'Không tìm thấy đơn nghỉ phép' : 'Đơn đã được xử lý');
+      error.status = rows.length ? 409 : 404;
+      throw error;
+    }
 
+    const leave = rows[0];
     const approverId = getEmpIdFromUser(req.user);
-    await pool.query(
+    const year = Number(String(leave.start_date).slice(0, 4));
+    await connection.query(
       `UPDATE leave_requests SET status = ?, approver_id = ?, approved_at = NOW(), reject_reason = ? WHERE id = ?`,
       [decision, approverId, decision === 'REJECTED' ? rejectReason : null, leave.id]
     );
 
-    // Cập nhật quỹ phép năm
-    const year = new Date(leave.start_date).getFullYear();
     if (decision === 'APPROVED') {
-      await pool.query(
-        `UPDATE leave_balances
-         SET pending_days = GREATEST(0, pending_days - ?), used_days = used_days + ?
-         WHERE emp_id = ? AND leave_type_id = ? AND year = ?`,
+      await connection.query(
+        `UPDATE leave_balances SET pending_days = GREATEST(0, pending_days - ?),
+         used_days = used_days + ? WHERE emp_id = ? AND leave_type_id = ? AND year = ?`,
         [leave.total_days, leave.total_days, leave.emp_id, leave.leave_type_id, year]
       );
     } else {
-      await pool.query(
-        `UPDATE leave_balances
-         SET pending_days = GREATEST(0, pending_days - ?)
+      await connection.query(
+        `UPDATE leave_balances SET pending_days = GREATEST(0, pending_days - ?)
          WHERE emp_id = ? AND leave_type_id = ? AND year = ?`,
         [leave.total_days, leave.emp_id, leave.leave_type_id, year]
       );
     }
 
+    await connection.commit();
+    connection.release();
+    connection = null;
+
     events.publish(`LEAVE_REQUEST_${decision}`, {
-      requestId: leave.id,
-      empId: leave.emp_id,
-      startDate: leave.start_date,
-      endDate: leave.end_date,
-      totalDays: leave.total_days,
-      isPaid: Boolean(leave.is_paid)
+      requestId: leave.id, empId: leave.emp_id,
+      startDate: leave.start_date, endDate: leave.end_date,
+      totalDays: leave.total_days, isPaid: Boolean(leave.is_paid)
     }).catch(() => {});
 
     const [updated] = await pool.query(
       `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
-              COALESCE(e.full_name, 'Vũ Đức Hiếu') AS emp_name,
-              COALESCE(e.code, 'NV-001') AS emp_code,
-              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, lr.emp_id) AS emp_code,
+              COALESCE(d.name, 'Chưa phân phòng ban') AS department_name
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
        LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
        LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
-       WHERE lr.id = ?`,
-      [leave.id]
+       WHERE lr.id = ?`, [leave.id]
     );
     res.json({ success: true, message: `Đã ${decision === 'APPROVED' ? 'duyệt' : 'từ chối'} đơn nghỉ phép`, data: updated[0] });
   } catch (err) {
+    if (connection) {
+      await connection.rollback().catch(() => {});
+      connection.release();
+    }
+    if (err.status === 404 || err.status === 409) {
+      return res.status(err.status).json({ success: false, error: err.message });
+    }
     next(err);
   }
 };
