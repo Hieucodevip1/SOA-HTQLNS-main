@@ -5,7 +5,7 @@
  */
 
 const crypto = require('crypto');
-const { createServiceApp, requireAuth } = require('../../shared/service-base');
+const { createServiceApp, requireAuth, requireInternalKey } = require('../../shared/service-base');
 const db = require('../../shared/db');
 const registrar = require('../../shared/registrar');
 const events = require('../../shared/events');
@@ -24,88 +24,118 @@ const app = createServiceApp(SERVICE_NAME, {
   }
 });
 
-async function createNotification({ empId = null, targetRole = null, type = 'SYSTEM', title, content, referenceId = null }) {
-  const id = crypto.randomUUID();
+async function createNotification({ eventId, empId = null, targetRole = null, type = 'SYSTEM', title, content, referenceId = null }) {
+  // Stable identifier makes webhook redelivery idempotent.
+  const id = eventId
+    ? crypto.createHash('sha256').update(`notification:${eventId}`).digest('hex').slice(0, 36)
+    : crypto.randomUUID();
   await pool.query(
-    `INSERT INTO notifications (id, emp_id, target_role, type, title, content, reference_id)
+    `INSERT IGNORE INTO notifications (id, emp_id, target_role, type, title, content, reference_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, empId, targetRole, type, title, content, referenceId]
   );
 }
 
-// Đăng ký lắng nghe các sự kiện từ Event Bus (Pub/Sub)
-function setupEventSubscriptions() {
-  if (typeof events.subscribe !== 'function') return;
-
-  events.subscribe('ATTENDANCE_LATE', async (payload) => {
+// Webhook receives { id, eventType, data } from the Event Bus.
+const notificationHandlers = {
+  'ATTENDANCE_LATE': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       empId: payload.empId,
       type: 'ATTENDANCE_ALERT',
       title: 'Cảnh báo đi muộn',
       content: `Bạn đã check-in muộn ${payload.lateMinutes} phút vào ngày ${payload.workDate}.`,
       referenceId: payload.attendanceId
     });
-  });
+  },
 
-  events.subscribe('LEAVE_REQUEST_CREATED', async (payload) => {
+  'LEAVE_REQUEST_CREATED': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       targetRole: 'MANAGER',
       type: 'LEAVE_STATUS',
       title: 'Có đơn xin nghỉ phép mới chờ duyệt',
       content: `Nhân sự ${payload.empId} vừa gửi đơn xin nghỉ ${payload.totalDays} ngày (${payload.startDate} → ${payload.endDate}).`,
       referenceId: payload.requestId
     });
-  });
+  },
 
-  events.subscribe('LEAVE_REQUEST_APPROVED', async (payload) => {
+  'LEAVE_REQUEST_APPROVED': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       empId: payload.empId,
       type: 'LEAVE_STATUS',
       title: 'Đơn xin nghỉ phép đã được duyệt',
       content: `Đơn nghỉ phép từ ${payload.startDate} đến ${payload.endDate} (${payload.totalDays} ngày) của bạn đã được phê duyệt.`,
       referenceId: payload.requestId
     });
-  });
+  },
 
-  events.subscribe('LEAVE_REQUEST_REJECTED', async (payload) => {
+  'LEAVE_REQUEST_REJECTED': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       empId: payload.empId,
       type: 'LEAVE_STATUS',
       title: 'Đơn xin nghỉ phép bị từ chối',
       content: `Đơn nghỉ phép từ ${payload.startDate} đến ${payload.endDate} của bạn đã bị từ chối.`,
       referenceId: payload.requestId
     });
-  });
+  },
 
-  events.subscribe('OT_REQUEST_APPROVED', async (payload) => {
+  'OT_REQUEST_APPROVED': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       empId: payload.empId,
       type: 'OT_STATUS',
       title: 'Đơn đăng ký tăng ca (OT) đã được duyệt',
       content: `Đăng ký tăng ca ${payload.totalHours} giờ ngày ${payload.workDate} của bạn đã được phê duyệt.`,
       referenceId: payload.requestId
     });
-  });
+  },
 
-  events.subscribe('PAYSLIP_PUBLISHED', async (payload) => {
+  'PAYSLIP_PUBLISHED': async (event) => {
+    const payload = event.data || {};
     await createNotification({
+      eventId: event.id,
       targetRole: 'EMPLOYEE',
       type: 'PAYROLL',
       title: `Phiếu lương tháng ${payload.month}/${payload.year} đã phát hành`,
       content: `Bảng lương kỳ ${payload.month}/${payload.year} đã được chốt. Vui lòng kiểm tra mục Phiếu lương.`,
       referenceId: payload.periodId
     });
-  });
+  },
+};
+
+app.use('/events', requireInternalKey, events.createWebhookRouter(notificationHandlers));
+
+function setupEventSubscriptions() {
+  setTimeout(() => {
+    events.subscribe(Object.keys(notificationHandlers), `http://localhost:${PORT}/events`, {
+      serviceName: SERVICE_NAME
+    }).catch((err) => console.error('[NOTIFICATION] Subscription failed:', err.message));
+  }, 2000);
 }
 
-// API lấy danh sách thông báo của người dùng đang đăng nhập (SCR_NOTIF_01)
+// Broadcast notifications have an independent read status per viewer.
 app.get(['/api/v1/notifications', '/api/notifications', '/api/notification'], requireAuth(), async (req, res, next) => {
   try {
+    const empId = req.user.empId || req.user.emp_id || '';
+    const viewerId = String(req.user.userId || req.user.id || req.user.sub || empId);
     const [rows] = await pool.query(
-      `SELECT * FROM notifications
-       WHERE emp_id = ? OR target_role = ?
-       ORDER BY created_at DESC LIMIT 50`,
-      [req.user.empId || '', req.user.role || '']
+      `SELECT n.id, n.emp_id, n.target_role, n.type, n.title, n.content,
+              n.reference_id, n.created_at,
+              CASE WHEN n.emp_id IS NOT NULL THEN n.is_read ELSE (nr.notification_id IS NOT NULL) END AS is_read,
+              CASE WHEN n.emp_id IS NOT NULL THEN n.read_at ELSE nr.read_at END AS read_at
+       FROM notifications n
+       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.viewer_id = ?
+       WHERE n.emp_id = ? OR (n.emp_id IS NULL AND n.target_role = ?)
+       ORDER BY n.created_at DESC LIMIT 50`,
+      [viewerId, empId, req.user.role || '']
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -113,10 +143,27 @@ app.get(['/api/v1/notifications', '/api/notifications', '/api/notification'], re
   }
 });
 
-// Đánh dấu đã đọc 1 thông báo
+// Only the addressed employee / role recipient can acknowledge a notification.
 app.patch(['/api/v1/notifications/:id/read', '/api/notifications/:id/read'], requireAuth(), async (req, res, next) => {
   try {
-    await pool.query('UPDATE notifications SET is_read = TRUE, read_at = NOW() WHERE id = ?', [req.params.id]);
+    const empId = req.user.empId || req.user.emp_id || '';
+    const viewerId = String(req.user.userId || req.user.id || req.user.sub || empId);
+    if (!viewerId) return res.status(401).json({ success: false, error: 'Thiếu định danh người dùng' });
+
+    const [rows] = await pool.query('SELECT id, emp_id, target_role FROM notifications WHERE id = ?', [req.params.id]);
+    const item = rows[0];
+    if (!item || (item.emp_id !== empId && !(item.emp_id === null && item.target_role === req.user.role))) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy thông báo của bạn' });
+    }
+
+    if (item.emp_id !== null) {
+      await pool.query('UPDATE notifications SET is_read = TRUE, read_at = NOW() WHERE id = ? AND emp_id = ?', [item.id, empId]);
+    } else {
+      await pool.query(
+        'INSERT INTO notification_reads (notification_id, viewer_id, read_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)',
+        [item.id, viewerId]
+      );
+    }
     res.json({ success: true, message: 'Đã đánh dấu đã đọc' });
   } catch (err) {
     next(err);
