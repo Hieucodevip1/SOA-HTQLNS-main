@@ -2320,15 +2320,21 @@ async function handleCheckIn() {
   }
 
   try {
-    // Gọi API Check-in trực tiếp qua Gateway tới attendance-service (:3003)
+    // Use the browser's real coordinates rather than spoofed office GPS/WiFi.
+    if (!navigator.geolocation) {
+      throw new Error('Trình duyệt không hỗ trợ định vị GPS để chấm công');
+    }
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true, timeout: 12000, maximumAge: 0
+      });
+    });
     const res = await apiCall('/api/attendance/check-in', {
       method: 'POST',
       body: JSON.stringify({
-        method: 'WIFI',
-        wifiSsid: 'HTQLNS_OFFICE_5G',
-        latitude: 13.759142,
-        longitude: 109.218536,
-        bypassGeofence: true
+        method: 'GPS',
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
       })
     });
 
