@@ -1980,7 +1980,7 @@ input:checked + .slider:before {
                 <div style="font-size: 32px; line-height: 1;">⏳</div>
                 <div style="flex: 1;">
                   <div style="font-size: 15.5px; font-weight: 700; color: #92400e;">
-                    Tài khoản mới đăng ký — Đang chờ Ban Quản trị tiếp nhận vào ban/phòng
+                    Tài khoản chưa được phân bổ vào phòng ban, vui lòng liên hệ HR (Nút chấm công tạm khóa)
                   </div>
                   <div style="font-size: 13px; color: #b45309; margin-top: 6px; line-height: 1.55;">
                     Chào mừng bạn đến với hệ thống HTQLNS! Tài khoản của bạn đã được khởi tạo thành công trên hệ thống. 
@@ -3666,34 +3666,59 @@ input:checked + .slider:before {
             <!-- Card Trái: Thông tin người dùng -->
             <div class="figma-white-card">
               <div class="card-title-flex">
-                <div class="card-title-text">Thông tin tài khoản</div>
+                <div class="card-title-text">Thông tin hồ sơ nhân sự &amp; Tài khoản</div>
               </div>
               <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-light);">
-                <div style="width: 64px; height: 64px; border-radius: 50%; background: #de4b4b; color: #ffffff; font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center;">
-                  TL
+                <div style="width: 68px; height: 68px; border-radius: 50%; background: #2563eb; color: #ffffff; font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(37,99,235,0.2);" id="profAvatarCircle">
+                  NV
                 </div>
                 <div>
-                  <h2 style="font-size: 18px; font-weight: 700; color: #1e293b;" id="profDisplayName">Quản Lý</h2>
-                  <div style="font-size: 13px; color: #64748b;" id="profRole">MANAGER</div>
+                  <h2 style="font-size: 19px; font-weight: 700; color: #1e293b;" id="profDisplayName">Đang tải...</h2>
+                  <div style="font-size: 13px; color: #64748b; margin-top: 2px;" id="profRole">EMPLOYEE</div>
                 </div>
               </div>
 
-              <div class="detail-info-grid">
+              <!-- Lưới thông tin chi tiết đầy đủ 10 trường -->
+              <div class="detail-info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px;">
                 <div class="info-field-group">
-                  <span class="info-label">Tên đăng nhập</span>
-                  <span class="info-val" id="profUsername">manager</span>
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Tên đăng nhập</span>
+                  <span class="info-val" id="profUsername" style="font-weight: 600; color: #1e293b;">-</span>
                 </div>
                 <div class="info-field-group">
-                  <span class="info-label">Email</span>
-                  <span class="info-val" id="profEmail">manager@htqlns.com</span>
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Họ và tên</span>
+                  <span class="info-val" id="profFullName" style="font-weight: 600; color: #1e293b;">-</span>
                 </div>
                 <div class="info-field-group">
-                  <span class="info-label">Phòng ban</span>
-                  <span class="info-val">Phòng Kỹ Thuật</span>
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Email liên hệ</span>
+                  <span class="info-val" id="profEmail" style="font-weight: 600; color: #1e293b;">-</span>
                 </div>
                 <div class="info-field-group">
-                  <span class="info-label">Trạng thái</span>
-                  <span class="info-val"><span class="badge-status badge-approved">Đang hoạt động</span></span>
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Vai trò hệ thống</span>
+                  <span class="info-val" id="profRoleBadge" style="font-weight: 600;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Phòng ban (department_id)</span>
+                  <span class="info-val" id="profDept" style="font-weight: 700;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Chức danh / Vị trí</span>
+                  <span class="info-val" id="profPosition" style="font-weight: 600; color: #1e293b;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Quản lý trực tiếp (manager_id)</span>
+                  <span class="info-val" id="profManager" style="font-weight: 600; color: #1e293b;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Văn phòng làm việc (Geofence GPS)</span>
+                  <span class="info-val" id="profOffice" style="font-weight: 600; color: #1e293b;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Ca làm việc phân công (shift_id)</span>
+                  <span class="info-val" id="profShift" style="font-weight: 600; color: #1e293b;">-</span>
+                </div>
+                <div class="info-field-group">
+                  <span class="info-label" style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Trạng thái hồ sơ</span>
+                  <span class="info-val" id="profStatus">-</span>
                 </div>
               </div>
 

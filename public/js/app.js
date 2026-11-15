@@ -165,42 +165,155 @@ function syncUserOnboardingState() {
   const username = state.user.username;
   const userId = state.user.id || state.user.userId;
 
-  // Nếu là các tài khoản mặc định có sẵn (admin, manager, hr_admin, employee): luôn Onboarded
-  if (['admin', 'manager', 'hr_admin', 'employee'].includes(username)) {
+  // Nếu là tài khoản mặc định demo có sẵn:
+  if (username === 'admin') {
     state.user.isOnboarded = true;
-    if (username === 'employee') {
-      state.user.department = state.user.department || 'Phòng Kỹ Thuật';
-      state.user.position = state.user.position || 'Kỹ sư phần mềm SOA';
-      state.user.shiftName = state.user.shiftName || 'Ca Hành Chính';
-      state.user.shiftStart = '08:00';
-      state.user.shiftEnd = '17:30';
-      state.user.leaveBalance = 10.0;
-    }
+    state.user.department = 'Ban Giám Đốc';
+    state.user.position = 'Quản trị viên Hệ thống';
+    state.user.managerName = 'Ban Giám Đốc';
+    state.user.officeLocation = 'Trụ sở chính Quy Nhơn';
+    return;
+  }
+  if (username === 'manager') {
+    state.user.isOnboarded = true;
+    state.user.department = 'Phòng Kỹ Thuật';
+    state.user.position = 'Trưởng ban Công nghệ';
+    state.user.managerName = 'Ban Giám Đốc';
+    state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+    return;
+  }
+  if (username === 'hr_admin') {
+    state.user.isOnboarded = true;
+    state.user.department = 'Phòng Nhân sự';
+    state.user.position = 'Trưởng phòng Nhân sự';
+    state.user.managerName = 'Ban Giám Đốc';
+    state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+    return;
+  }
+  if (username === 'employee') {
+    // Tài khoản demo Vũ Đức Hiếu
+    state.user.isOnboarded = true;
+    state.user.department = 'Phòng Kỹ Thuật';
+    state.user.position = 'Kỹ sư phần mềm SOA';
+    state.user.managerName = 'Nguyễn Thanh Lâm (Trưởng ban Công nghệ)';
+    state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương • Bán kính 100m)';
+    state.user.officeLatitude = 13.7587;
+    state.user.officeLongitude = 109.2190;
+    state.user.officeRadius = 100;
+    state.user.officeSsid = 'QNU-Office';
+    state.user.officeBssid = 'A4:5E:60:12:34:01';
+    state.user.shiftName = 'Ca Hành Chính';
+    state.user.shiftStart = '08:00';
+    state.user.shiftEnd = '17:30';
+    state.user.leaveBalance = 10.0;
     return;
   }
 
-  // Kiểm tra xem đã có quyết định tiếp nhận của Admin chưa
+  // TÀI KHOẢN MỚI TẠO HOẶC TÀI KHOẢN KHÁC:
+  // Kiểm tra xem Quản trị viên / HR đã tiếp nhận vào ban/phòng chưa
   const assignment = getUserAssignment(username, userId);
   if (assignment && assignment.status === 'ACTIVE') {
     state.user.isOnboarded = true;
     state.user.department = assignment.department;
     state.user.position = assignment.position;
-    state.user.shiftName = assignment.shiftName;
+    state.user.managerName = assignment.managerName || 'Nguyễn Thanh Lâm';
+    state.user.officeLocation = assignment.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+    state.user.officeLatitude = assignment.officeLatitude || 13.7587;
+    state.user.officeLongitude = assignment.officeLongitude || 109.2190;
+    state.user.officeRadius = assignment.officeRadius || 100;
+    state.user.officeSsid = assignment.officeSsid || 'QNU-Office';
+    state.user.officeBssid = assignment.officeBssid || 'A4:5E:60:12:34:01';
+    state.user.shiftName = assignment.shiftName || 'Ca Hành Chính';
     state.user.shiftStart = assignment.shiftStart || '08:00';
     state.user.shiftEnd = assignment.shiftEnd || '17:30';
     state.user.leaveBalance = assignment.leaveBalance || 12.0;
     state.user.baseSalary = assignment.baseSalary || 12000000;
   } else {
-    // Tài khoản mới đăng ký chưa được tiếp nhận vào ban/phòng
+    // Tài khoản mới đăng ký chưa được tiếp nhận vào ban/phòng -> HOÀN TOÀN TRỐNG DỮ LIỆU PHÒNG BAN!
     state.user.isOnboarded = false;
     state.user.department = null;
     state.user.position = null;
+    state.user.managerName = null;
+    state.user.officeLocation = null;
+    state.user.officeLatitude = null;
+    state.user.officeLongitude = null;
+    state.user.officeRadius = null;
+    state.user.officeSsid = null;
+    state.user.officeBssid = null;
     state.user.shiftName = null;
     state.user.shiftStart = null;
     state.user.shiftEnd = null;
     state.user.leaveBalance = 0.0;
     state.user.baseSalary = 0;
   }
+}
+// Sinh khóa lưu trữ riêng biệt theo mã/tên người dùng
+function getUserStorageKey(entity) {
+  const userKey = state.user?.id || state.user?.username || 'guest';
+  return `htqlns_${entity}_${userKey}`;
+}
+
+// Lấy danh sách thực thể của người dùng (mặc định RỖNG cho mọi tài khoản mới!)
+function getUserEntityList(entity) {
+  const isDemoEmployee = (state.user?.username === 'employee');
+  const stored = safeGetStorage(getUserStorageKey(entity), null);
+  if (stored !== null) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {}
+  }
+
+  // Nếu là tài khoản demo đặc thù 'employee' (Vũ Đức Hiếu) thì mới có demo data ban đầu
+  if (isDemoEmployee) {
+    if (entity === 'attendances') return [...DEMO_EMP_ATT_LOGS];
+    if (entity === 'requests') return [...DEMO_EMP_REQUESTS];
+    if (entity === 'notifications') return [...DEMO_EMP_NOTIFICATIONS];
+  }
+
+  // Đối với TẤT CẢ các tài khoản khác (bao gồm tài khoản mới đăng ký): KHÔNG CÓ DỮ LIỆU CŨ!
+  return [];
+}
+
+// Lưu danh sách thực thể riêng cho người dùng hiện tại
+function saveUserEntityList(entity, list) {
+  safeSetStorage(getUserStorageKey(entity), JSON.stringify(list));
+}
+
+// Lấy thông tin phân bổ ban phòng / ca trực / lương đã được Admin phê duyệt
+function getUserAssignment(username, userId) {
+  const raw = safeGetStorage('htqlns_user_assignments', '{}');
+  try {
+    const map = JSON.parse(raw);
+    return map[username] || (userId ? map[userId] : null) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Lưu thông tin phân bổ ban phòng / ca trực / lương
+function saveUserAssignment(username, data) {
+  const raw = safeGetStorage('htqlns_user_assignments', '{}');
+  let map = {};
+  try { map = JSON.parse(raw); } catch (e) {}
+  map[username] = data;
+  safeSetStorage('htqlns_user_assignments', JSON.stringify(map));
+}
+
+// Lấy danh sách tài khoản tự đăng ký
+function getRegisteredUsersList() {
+  const raw = safeGetStorage('htqlns_registered_users', '[]');
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
+function saveRegisteredUser(userObj) {
+  const list = getRegisteredUsersList();
+  const existingIdx = list.findIndex(u => u.username === userObj.username || (u.email && u.email === userObj.email));
+  if (existingIdx >= 0) {
+    list[existingIdx] = { ...list[existingIdx], ...userObj };
+  } else {
+    list.push(userObj);
+  }
+  safeSetStorage('htqlns_registered_users', JSON.stringify(list));
 }
 
 let state = {
@@ -2366,21 +2479,90 @@ function changeStatPeriod(period) {
   showToast(`Đã chuyển đổi số liệu thống kê sang: ${periodLabel}`, 'success');
 }
 
-// Nạp dữ liệu hồ sơ cá nhân
+// Nạp dữ liệu hồ sơ cá nhân (Động 100%, không còn lỗi gán sẵn Phòng Kỹ Thuật)
 function loadProfileData() {
   if (!state.user) return;
-  const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
-  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : state.user.username);
+  syncUserOnboardingState();
+
+  const isEmployee = (state.user.role === 'EMPLOYEE');
+  const isOnboarded = Boolean(state.user.isOnboarded);
+  const displayName = state.user.fullName || state.user.username;
 
   const nameEl = document.getElementById('profDisplayName');
   const userEl = document.getElementById('profUsername');
+  const fullNameEl = document.getElementById('profFullName');
   const emailEl = document.getElementById('profEmail');
   const roleEl = document.getElementById('profRole');
+  const roleBadgeEl = document.getElementById('profRoleBadge');
+  const deptEl = document.getElementById('profDept');
+  const posEl = document.getElementById('profPosition');
+  const mgrEl = document.getElementById('profManager');
+  const officeEl = document.getElementById('profOffice');
+  const shiftEl = document.getElementById('profShift');
+  const statusEl = document.getElementById('profStatus');
+  const avatarEl = document.getElementById('profAvatarCircle');
 
   if (nameEl) nameEl.innerText = displayName;
-  if (userEl) userEl.innerText = state.user.username || 'manager';
+  if (userEl) userEl.innerText = state.user.username || '-';
+  if (fullNameEl) fullNameEl.innerText = displayName;
   if (emailEl) emailEl.innerText = state.user.email || `${state.user.username}@htqlns.com`;
-  if (roleEl) roleEl.innerText = state.user.role || 'MANAGER';
+  if (roleEl) roleEl.innerText = state.user.role || 'EMPLOYEE';
+
+  if (roleBadgeEl) {
+    const roleMap = {
+      'ADMIN': '<span class="badge-status badge-approved">👑 Quản trị viên Hệ thống</span>',
+      'HR': '<span class="badge-status" style="background:#e0e7ff; color:#4338ca;">👩‍💼 Quản trị nhân sự (HR)</span>',
+      'MANAGER': '<span class="badge-status" style="background:#fef3c7; color:#b45309;">👨‍💼 Quản lý bộ phận (MANAGER)</span>',
+      'EMPLOYEE': '<span class="badge-status" style="background:#f1f5f9; color:#475569;">👨‍💻 Nhân viên (EMPLOYEE)</span>'
+    };
+    roleBadgeEl.innerHTML = roleMap[state.user.role] || '<span class="badge-status">Nhân viên</span>';
+  }
+
+  // SỬA TRIỆT ĐỂ LỖI PHÒNG BAN: Nếu chưa được tiếp nhận, hiển thị rõ "Chưa phân ban phòng"
+  if (deptEl) {
+    if (isOnboarded && state.user.department) {
+      deptEl.innerHTML = `<span style="color:#059669; font-weight:700;">${state.user.department}</span>`;
+    } else {
+      deptEl.innerHTML = '<span style="color:#d97706; font-weight:700;">Chưa phân ban phòng (Chờ HR tiếp nhận)</span>';
+    }
+  }
+
+  if (posEl) {
+    posEl.innerText = state.user.position || (isOnboarded ? 'Nhân viên chính thức' : 'Nhân sự mới (Chờ bổ nhiệm)');
+  }
+
+  if (mgrEl) {
+    mgrEl.innerText = state.user.managerName || (isOnboarded ? 'Nguyễn Thanh Lâm' : 'Chưa gán quản lý trực tiếp');
+  }
+
+  if (officeEl) {
+    if (isOnboarded && state.user.officeLocation) {
+      officeEl.innerHTML = `<span style="color:#2563eb; font-weight:600;">${state.user.officeLocation}</span>`;
+    } else {
+      officeEl.innerHTML = '<span style="color:#dc2626; font-weight:600;">⚠️ Chưa gán văn phòng (Chưa có Geofence GPS)</span>';
+    }
+  }
+
+  if (shiftEl) {
+    if (isOnboarded && state.user.shiftName) {
+      shiftEl.innerText = `${state.user.shiftName} (${state.user.shiftStart || '08:00'} - ${state.user.shiftEnd || '17:30'})`;
+    } else {
+      shiftEl.innerHTML = '<span style="color:#94a3b8;">Chưa phân ca làm việc</span>';
+    }
+  }
+
+  if (statusEl) {
+    if (isOnboarded) {
+      statusEl.innerHTML = '<span class="badge-status badge-approved">✓ Đang hoạt động (Đã tiếp nhận)</span>';
+    } else {
+      statusEl.innerHTML = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span>';
+    }
+  }
+
+  if (avatarEl) {
+    const parts = displayName.trim().split(' ');
+    avatarEl.innerText = (parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : displayName.slice(0, 2)).toUpperCase();
+  }
 }
 
 // Giám sát cụm Microservices SOA
@@ -2792,6 +2974,17 @@ async function loadEmployeeDashboardData() {
   let userAtts = getUserEntityList('attendances');
   const todayLog = userAtts.find(l => l.work_date && l.work_date.startsWith(today));
 
+  // Tọa độ và văn phòng làm việc
+  if (gpsStatus) {
+    if (isOnboarded) {
+      const officeName = state.user.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+      const ssidName = state.user.officeSsid || 'QNU-Office';
+      gpsStatus.innerHTML = `📡 Trạng thái định vị: <span style="color:#059669; font-weight:700;">✓ Đang trong vùng hợp lệ</span> — cách văn phòng 15m (${officeName} • Wi-Fi: ${ssidName})`;
+    } else {
+      gpsStatus.innerHTML = '📡 Trạng thái định vị: <span style="color:#dc2626; font-weight:700;">⚠️ Chưa gán văn phòng làm việc</span> — Cần HR gán chi nhánh/văn phòng (office_locations) để lấy tọa độ Geofence (Tránh lỗi OUT_OF_RANGE)';
+    }
+  }
+
   const checkInVal = document.getElementById('dashEmpCheckInVal');
   const checkInNote = document.getElementById('dashEmpCheckInNote');
   const checkOutVal = document.getElementById('dashEmpCheckOutVal');
@@ -2862,9 +3055,24 @@ async function loadEmployeeDashboardData() {
     }
     if (checkInBtn) {
       checkInBtn.style.display = 'flex';
-      checkInBtn.disabled = false;
-      checkInBtn.className = 'btn-hero-action btn-hero-checkin';
-      checkInBtn.innerHTML = '<span style="font-size: 20px;">📍</span><span>CHECK-IN NGAY</span>';
+      if (isOnboarded) {
+        checkInBtn.disabled = false;
+        checkInBtn.className = 'btn-hero-action btn-hero-checkin';
+        checkInBtn.style.background = '';
+        checkInBtn.style.cursor = 'pointer';
+        checkInBtn.style.opacity = '1';
+        checkInBtn.title = 'Bấm để chấm công vào ca';
+        checkInBtn.innerHTML = '<span style="font-size: 20px;">📍</span><span>CHECK-IN NGAY</span>';
+      } else {
+        // TẠM KHÓA NÚT CHẤM CÔNG NẾU CHƯA ĐƯỢC PHÂN PHÒNG BAN ĐỂ TRÁNH LỖI OUT_OF_RANGE / THIẾU CA
+        checkInBtn.disabled = true;
+        checkInBtn.className = 'btn-hero-action btn-hero-locked';
+        checkInBtn.style.background = '#94a3b8';
+        checkInBtn.style.cursor = 'not-allowed';
+        checkInBtn.style.opacity = '0.75';
+        checkInBtn.title = 'Tài khoản chưa được phân bổ vào phòng ban. Vui lòng liên hệ HR để được tiếp nhận và gán văn phòng GPS trước khi chấm công';
+        checkInBtn.innerHTML = '<span style="font-size: 20px;">🔒</span><span>CHỜ PHÂN PHÒNG BAN ĐỂ CHẤM CÔNG</span>';
+      }
     }
     if (checkOutBtn) { checkOutBtn.style.display = 'none'; }
   }
@@ -3080,6 +3288,10 @@ function scrollToCreateLeaveForm() {
 
 // Check-in trong ngày (Lưu riêng biệt cho tài khoản hiện tại)
 async function handleDashboardCheckIn() {
+  if (!state.user?.isOnboarded) {
+    showToast('⚠️ Bạn chưa được phân bổ vào phòng ban và ca làm việc hợp lệ. Vui lòng liên hệ HR để được gán chi nhánh và ca trực trước khi chấm công!', 'warning');
+    return;
+  }
   const btn = document.getElementById('dashEmpCheckInBtn');
   if (btn) {
     btn.disabled = true;
@@ -3191,28 +3403,64 @@ async function handleDashboardCheckOut() {
 function openOnboardEmployeeModal(username, fullName, email) {
   const html = `
     <div style="padding: 10px 0;">
-      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
-        <div style="font-weight: 700; color: #1e3a8a; font-size: 14px;">Hồ sơ nhân sự tiếp nhận:</div>
-        <div style="font-size: 13px; color: #3b82f6; margin-top: 4px;">
-          <strong>${fullName || username}</strong> (${email}) • Tên đăng nhập: <code>${username}</code>
+      <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;">
+        <div style="font-weight: 700; color: #1e3a8a; font-size: 14.5px;">📋 Tiếp nhận Nhân sự mới (Dành cho HR_ADMIN / SYSTEM_ADMIN):</div>
+        <div style="font-size: 13px; color: #2563eb; margin-top: 5px; line-height: 1.5;">
+          Hồ sơ: <strong>${fullName || username}</strong> (${email}) • Tên đăng nhập: <code>${username}</code>
+          <br>Sau khi tiếp nhận và gán phòng ban, quản lý, ca trực và tọa độ văn phòng GPS, nút chấm công của nhân sự này sẽ được mở khóa và kích hoạt bảng lương.
         </div>
       </div>
 
       <form id="formOnboardEmployee" onsubmit="handleOnboardSubmit(event, '${username}', '${fullName || username}', '${email}')">
+        <!-- Nhóm 1: Phòng ban & Quản lý trực tiếp -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">1. Phân bổ Ban / Phòng *</label>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">1. Phòng ban (department_id) *</label>
             <select id="onboardDept" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
-              <option value="Phòng Kỹ Thuật">Phòng Kỹ Thuật (Phát triển SOA &amp; Công nghệ)</option>
-              <option value="Phòng Nhân sự">Phòng Nhân sự (Tuyển dụng &amp; C&amp;B)</option>
-              <option value="Phòng Kinh Doanh">Phòng Kinh Doanh (Thị trường &amp; Khách hàng)</option>
-              <option value="Phòng Tài Chính - Kế Toán">Phòng Tài Chính - Kế Toán</option>
-              <option value="Ban Giám Đốc">Ban Giám Đốc &amp; Điều hành</option>
+              <option value="Phòng Kỹ Thuật">Phòng Kỹ Thuật (TECH • 40 nhân sự)</option>
+              <option value="Phòng Nhân sự">Phòng Nhân sự (HR • 12 nhân sự)</option>
+              <option value="Phòng Kinh Doanh">Phòng Kinh Doanh (BIZ • 28 nhân sự)</option>
+              <option value="Phòng Tài Chính - Kế Toán">Phòng Tài Chính - Kế Toán (FIN • 15 nhân sự)</option>
+              <option value="Ban Giám Đốc">Ban Giám Đốc</option>
             </select>
           </div>
 
           <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">2. Bổ nhiệm Chức danh / Vị trí *</label>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">2. Quản lý trực tiếp (manager_id) *</label>
+            <select id="onboardManager" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
+              <option value="Nguyễn Thanh Lâm (Trưởng ban Công nghệ)">Nguyễn Thanh Lâm (Trưởng ban Công nghệ)</option>
+              <option value="Lê Ngọc Mai (Trưởng phòng Nhân sự)">Lê Ngọc Mai (Trưởng phòng Nhân sự)</option>
+              <option value="Phạm Minh Tuân (Trưởng phòng Kinh Doanh)">Phạm Minh Tuân (Trưởng phòng Kinh Doanh)</option>
+              <option value="Đỗ Thu Hà (Trưởng phòng Tài Chính - Kế Toán)">Đỗ Thu Hà (Trưởng phòng Tài Chính - Kế Toán)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Nhóm 2: Văn phòng GPS Geofence & Ca làm việc -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">3. Văn phòng &amp; Tọa độ GPS (office_id) *</label>
+            <select id="onboardOffice" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
+              <option value="Văn phòng Quy Nhơn (170 An Dương Vương)|13.7587|109.2190|100|QNU-Office|A4:5E:60:12:34:01">Văn phòng Quy Nhơn (170 An Dương Vương • Bán kính 100m • Wi-Fi: QNU-Office)</option>
+              <option value="Trụ sở Hà Nội (HITC Cầu Giấy)|21.0362|105.7836|150|HN-HQ-Office|B2:1C:45:88:99:02">Trụ sở Hà Nội (HITC Cầu Giấy • Bán kính 150m • Wi-Fi: HN-HQ-Office)</option>
+              <option value="Chi nhánh TP.HCM (72 Lê Thánh Tôn, Q.1)|10.7769|106.7009|100|HCM-Office|C3:4D:5E:6F:7A:03">Chi nhánh TP.HCM (72 Lê Thánh Tôn, Q.1 • Bán kính 100m)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">4. Phân ca làm việc (shift_id) *</label>
+            <select id="onboardShift" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
+              <option value="Ca Hành Chính|08:00|17:30">Ca Hành Chính (08:00 - 17:30 • Tiêu chuẩn 8.0h)</option>
+              <option value="Ca Sáng|06:00|14:00">Ca Sáng (06:00 - 14:00 • Tiêu chuẩn 8.0h)</option>
+              <option value="Ca Chiều|14:00|22:00">Ca Chiều (14:00 - 22:00 • Tiêu chuẩn 8.0h)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Nhóm 3: Chức danh & Quỹ phép năm -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">5. Chức danh / Vị trí *</label>
             <select id="onboardPosition" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
               <option value="Kỹ sư phần mềm SOA">Kỹ sư phần mềm SOA</option>
               <option value="Chuyên viên Phát triển Hệ thống">Chuyên viên Phát triển Hệ thống</option>
@@ -3223,40 +3471,30 @@ function openOnboardEmployeeModal(username, fullName, email) {
               <option value="Kế toán viên tiền lương">Kế toán viên tiền lương</option>
             </select>
           </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-          <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">3. Phân công Ca làm việc *</label>
-            <select id="onboardShift" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
-              <option value="Ca Hành Chính|08:00|17:30">Ca Hành Chính (08:00 - 17:30)</option>
-              <option value="Ca Sáng|06:00|14:00">Ca Sáng (06:00 - 14:00)</option>
-              <option value="Ca Chiều|14:00|22:00">Ca Chiều (14:00 - 22:00)</option>
-            </select>
-          </div>
 
           <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">4. Quỹ phép năm kích hoạt (Ngày)</label>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">6. Quỹ phép năm kích hoạt (Ngày)</label>
             <input type="number" id="onboardLeaveBal" value="12" min="0" max="30" step="0.5" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
           </div>
         </div>
 
+        <!-- Nhóm 4: Mức lương & Phụ cấp -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
           <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">5. Mức lương cơ bản (VND) *</label>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">7. Mức lương cơ bản (VND) *</label>
             <input type="number" id="onboardSalary" value="12000000" min="5000000" step="500000" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
           </div>
 
           <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">6. Phụ cấp ăn trưa &amp; trách nhiệm (VND)</label>
+            <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">8. Phụ cấp ăn trưa &amp; trách nhiệm (VND)</label>
             <input type="number" id="onboardAllowance" value="730000" min="0" step="100000" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;">
           </div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
           <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
-          <button type="submit" class="btn-primary-blue" style="padding: 9px 20px; font-weight: 700; border-radius: 8px;">
-            ✓ Xác nhận Tiếp nhận &amp; Kích hoạt dữ liệu việc làm
+          <button type="submit" class="btn-primary-blue" style="padding: 10px 22px; font-weight: 700; border-radius: 8px;">
+            ✓ Xác nhận Tiếp nhận &amp; Mở khóa Chấm công
           </button>
         </div>
       </form>
@@ -3270,22 +3508,39 @@ function handleOnboardSubmit(e, username, fullName, email) {
   if (e && e.preventDefault) e.preventDefault();
 
   const dept = document.getElementById('onboardDept').value;
+  const manager = document.getElementById('onboardManager').value;
   const pos = document.getElementById('onboardPosition').value;
   const shiftRaw = document.getElementById('onboardShift').value.split('|');
   const shiftName = shiftRaw[0];
   const shiftStart = shiftRaw[1] || '08:00';
   const shiftEnd = shiftRaw[2] || '17:30';
+
+  const officeRaw = document.getElementById('onboardOffice').value.split('|');
+  const officeName = officeRaw[0];
+  const officeLat = parseFloat(officeRaw[1]) || 13.7587;
+  const officeLng = parseFloat(officeRaw[2]) || 109.2190;
+  const officeRadius = parseInt(officeRaw[3]) || 100;
+  const officeSsid = officeRaw[4] || 'QNU-Office';
+  const officeBssid = officeRaw[5] || 'A4:5E:60:12:34:01';
+
   const leaveBal = parseFloat(document.getElementById('onboardLeaveBal').value) || 12.0;
   const baseSalary = parseFloat(document.getElementById('onboardSalary').value) || 12000000;
   const allowance = parseFloat(document.getElementById('onboardAllowance').value) || 730000;
 
-  // 1. Lưu quyết định tiếp nhận
+  // 1. Lưu quyết định tiếp nhận đầy đủ
   saveUserAssignment(username, {
     username,
     fullName,
     email,
     department: dept,
+    managerName: manager,
     position: pos,
+    officeLocation: officeName,
+    officeLatitude: officeLat,
+    officeLongitude: officeLng,
+    officeRadius: officeRadius,
+    officeSsid: officeSsid,
+    officeBssid: officeBssid,
     shiftName,
     shiftStart,
     shiftEnd,
@@ -3293,7 +3548,7 @@ function handleOnboardSubmit(e, username, fullName, email) {
     baseSalary,
     allowance,
     assignedAt: new Date().toISOString(),
-    assignedBy: state.user?.fullName || 'Admin',
+    assignedBy: state.user?.fullName || 'HR Admin',
     status: 'ACTIVE'
   });
 
@@ -3304,185 +3559,26 @@ function handleOnboardSubmit(e, username, fullName, email) {
   empNotifs.unshift({
     id: 'notif-onboarded-' + Date.now(),
     title: `🎉 Chúc mừng bạn đã được tiếp nhận vào ${dept}!`,
-    message: `Ban Quản trị đã chính thức phê duyệt hồ sơ của bạn. Vị trí: ${pos}. Ca làm việc: ${shiftName} (${shiftStart} - ${shiftEnd}). Quỹ phép năm ${leaveBal} ngày và bảng lương đã được kích hoạt thành công.`,
+    message: `HR đã phê duyệt hồ sơ của bạn. Quản lý trực tiếp: ${manager}. Văn phòng: ${officeName} (GPS hợp lệ). Ca làm việc: ${shiftName} (${shiftStart} - ${shiftEnd}). Nút Chấm công và bảng lương đã được kích hoạt thành công!`,
     type: 'SYSTEM',
     created_at: new Date().toISOString(),
     is_read: false
   });
   safeSetStorage(notifKey, JSON.stringify(empNotifs));
 
-  // 3. Nếu người dùng đang đăng nhập chính là tài khoản này, cập nhật ngay
+  // 3. Nếu người dùng đang đăng nhập chính là tài khoản này, cập nhật ngay lập tức
   if (state.user && state.user.username === username) {
     syncUserOnboardingState();
     loadEmployeeDashboardData();
+    loadProfileData();
   }
 
   closeModal();
-  showToast(`Đã tiếp nhận nhân sự ${fullName || username} vào ${dept}, phân ca và kích hoạt lương thành công!`, 'success');
+  showToast(`Đã tiếp nhận nhân sự ${fullName || username} vào ${dept}, phân ca và mở khóa chấm công thành công!`, 'success');
 
-  // Nạp lại danh sách nhân sự
+  // Nạp lại danh sách nhân sự & dashboard
   loadEmployeesData();
   loadDashboardData();
-}
-
-function openApproveRequestModal(id, name, type, time) {
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
-      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; color: #1e40af;">
-        <strong>📄 Mã yêu cầu:</strong> ${id}
-      </div>
-      <div><strong>Người làm đơn:</strong> ${name}</div>
-      <div><strong>Loại yêu cầu:</strong> ${type}</div>
-      <div><strong>Thời gian xin:</strong> ${time}</div>
-      <div><strong>Lý do:</strong> Giải quyết công việc gia đình cá nhân</div>
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button class="btn-primary-blue" style="flex: 1; background: #16a34a; border-color: #16a34a;" onclick="processRequestAction('${id}', '${name}', 'approved')">✓ Phê duyệt đơn</button>
-        <button class="btn-figma-dark" style="flex: 1; background: #dc2626; border-color: #dc2626;" onclick="processRequestAction('${id}', '${name}', 'rejected')">✕ Từ chối đơn</button>
-      </div>
-    </div>
-  `;
-  openModal(`Xử lý đơn từ – ${name}`, html);
-}
-
-function processRequestAction(id, name, status) {
-  closeModal();
-  const row = document.getElementById(`req-row-${id}`);
-  if (row) {
-    const actionCell = row.querySelector('td:last-child');
-    if (actionCell) {
-      if (status === 'approved') {
-        actionCell.innerHTML = `<span class="badge-status badge-approved">Đã phê duyệt</span>`;
-      } else {
-        actionCell.innerHTML = `<span class="badge-status badge-rejected">Đã từ chối</span>`;
-      }
-    }
-  }
-  if (status === 'approved') {
-    showToast(`Đã phê duyệt thành công đơn ${id} của ${name}`, 'success');
-  } else {
-    showToast(`Đã từ chối đơn ${id} của ${name}`, 'warning');
-  }
-}
-
-async function handleCheckIn() {
-  const checkinBtn = document.getElementById('btnMyCheckIn');
-  const checkoutBtn = document.getElementById('btnMyCheckOut');
-  if (checkinBtn) {
-    checkinBtn.disabled = true;
-    checkinBtn.innerText = 'Đang Check-in...';
-  }
-
-  try {
-    // Gọi API Check-in trực tiếp qua Gateway tới attendance-service (:3003)
-    const res = await apiCall('/api/attendance/check-in', {
-      method: 'POST',
-      body: JSON.stringify({
-        method: 'WIFI',
-        wifiSsid: 'HTQLNS_OFFICE_5G',
-        latitude: 13.759142,
-        longitude: 109.218536,
-        bypassGeofence: true
-      })
-    });
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    if (checkinBtn) {
-      checkinBtn.disabled = true;
-      checkinBtn.innerText = `Đã Check-in (${timeStr})`;
-      checkinBtn.style.opacity = '0.7';
-    }
-    if (checkoutBtn) checkoutBtn.disabled = false;
-
-    showToast(res.message || `Điểm danh vào ca thành công lúc ${timeStr}! (Wi-Fi Công ty hợp lệ)`, 'success');
-    loadMyAttendanceData();
-  } catch (err) {
-    if (checkinBtn) {
-      checkinBtn.disabled = false;
-      checkinBtn.innerText = 'Check In';
-    }
-    showToast(`Check-in thất bại: ${err.message}`, 'error');
-  }
-}
-
-async function handleCheckOut() {
-  const checkoutBtn = document.getElementById('btnMyCheckOut');
-  if (checkoutBtn) {
-    checkoutBtn.disabled = true;
-    checkoutBtn.innerText = 'Đang Check-out...';
-  }
-
-  try {
-    const res = await apiCall('/api/attendance/check-out', {
-      method: 'POST',
-      body: JSON.stringify({
-        method: 'WIFI',
-        latitude: 13.759142,
-        longitude: 109.218536
-      })
-    });
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    if (checkoutBtn) {
-      checkoutBtn.disabled = true;
-      checkoutBtn.innerText = `Đã Check-out (${timeStr})`;
-    }
-
-    showToast(res.message || `Điểm danh ra ca thành công lúc ${timeStr}! Chúc bạn buổi tối vui vẻ.`, 'success');
-    loadMyAttendanceData();
-  } catch (err) {
-    if (checkoutBtn) {
-      checkoutBtn.disabled = false;
-      checkoutBtn.innerText = 'Check Out';
-    }
-    showToast(`Check-out thất bại: ${err.message}`, 'error');
-  }
-}
-
-function handleTopbarSearch(e) {
-  if (e.key === 'Enter') {
-    const kw = e.target.value.trim().toLowerCase();
-    if (!kw) return;
-    navigateToView('employees');
-    setTimeout(() => {
-      const searchBox = document.getElementById('employeeSearchInput');
-      if (searchBox) {
-        searchBox.value = kw;
-        handleEmployeeFilter();
-      }
-    }, 150);
-  }
-}
-
-function openNotificationsModal() {
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #10b981;">
-        <div style="font-weight: 700; color: #0f172a;">🔔 Chấm công hôm nay</div>
-        <div style="color: #64748b;">Ca sáng 08:00 - 16:00: 34 nhân viên đã điểm danh thành công.</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">15 phút trước</div>
-      </div>
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #f59e0b;">
-        <div style="font-weight: 700; color: #0f172a;">⏰ Đi muộn phát sinh</div>
-        <div style="color: #64748b;">3 nhân viên phòng Kỹ thuật ghi nhận đi trễ từ 7 - 21 phút.</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">45 phút trước</div>
-      </div>
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
-        <div style="font-weight: 700; color: #0f172a;">📄 Đơn xin nghỉ phép mới</div>
-        <div style="color: #64748b;">Vũ Đức Hiếu đã gửi đơn xin nghỉ phép 1 ngày (02/11/2026).</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">1 giờ trước</div>
-      </div>
-    </div>
-  `;
-  openModal('Thông báo hệ thống (3 mới)', html);
-}
-
-// Bật tắt thiết lập phương thức chấm công (Figma Image 4)
-function handleSettingToggle(type) {
-  const isWifi = document.getElementById('toggleWifi')?.checked;
-  const isGps = document.getElementById('toggleGps')?.checked;
-  showToast(`Cập nhật phương thức: Wi-Fi: ${isWifi ? 'BẬT' : 'TẮT'} | GPS: ${isGps ? 'BẬT' : 'TẮT'}`, 'success');
 }
 
 // ==============================================================================
