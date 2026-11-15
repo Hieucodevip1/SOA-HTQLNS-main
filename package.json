@@ -24,7 +24,8 @@
     "start:payroll": "node services/payroll-service/index.js",
     "start:notification": "node services/notification-service/index.js",
     "start:analytics": "node services/analytics-service/index.js",
-    "test:security": "node --test tests/security-regression.test.js"
+    "test:security": "node --test tests/security-regression.test.js",
+    "db:init": "node scripts/init-db.js"
   },
   "engines": {
     "node": ">=18"
