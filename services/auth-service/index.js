@@ -226,7 +226,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
-    let finalEmpId = emp_id || null;
+    // Only an ADMIN may link a newly registered account to an existing employee.
+    let finalEmpId = req.user?.role === 'ADMIN' ? (emp_id || null) : null;
     let finalFullName = `${first_name || ''} ${last_name || ''}`.trim() || username;
     const isBiometric = Boolean(biometric_enabled);
 
@@ -236,6 +237,9 @@ app.post('/api/auth/register', async (req, res) => {
         try {
           const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1');
           if (empRows.length > 0) {
+            if (req.user?.role !== 'ADMIN') {
+              return forbidden(res, 'Hồ sơ nhân sự với email này đã tồn tại; liên hệ quản trị viên để liên kết tài khoản');
+            }
             finalEmpId = empRows[0].id;
             finalFullName = empRows[0].full_name;
           } else {
