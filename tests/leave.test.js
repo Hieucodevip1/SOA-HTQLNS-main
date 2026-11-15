@@ -10,6 +10,7 @@ const { fork } = require('child_process');
 const path = require('path');
 const jwt = require('../shared/jwt');
 const env = require('../shared/env');
+const db = require('../shared/db');
 
 describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
   let leaveProcess = null;
@@ -49,10 +50,20 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
+
+    // Đảm bảo tính idempotent: Khôi phục số dư phép mẫu cho tài khoản test
+    try {
+      const pool = db.getPool(process.env.LEAVE_DB_NAME || 'htqlns_leave');
+      await pool.query('UPDATE leave_balances SET used_days = 2.0, pending_days = 0.0 WHERE emp_id = ?', ['e0000001-0000-0000-0000-000000000004']);
+      await pool.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024'");
+    } catch {}
   });
 
-  after(() => {
+  after(async () => {
     if (leaveProcess) leaveProcess.kill();
+    try {
+      await db.closeAllPools();
+    } catch {}
   });
 
   // 1. Health check

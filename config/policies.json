@@ -355,7 +355,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["PUT", "DELETE"],
+          "methods": ["PATCH", "PUT", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR", "MANAGER"]
         }
@@ -503,7 +503,7 @@
       "service": "shift-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        { "methods": ["PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
     {

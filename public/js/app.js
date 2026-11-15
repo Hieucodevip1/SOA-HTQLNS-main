@@ -466,6 +466,16 @@ function applyRoleBasedUI() {
     if (val4) val4.innerText = '07';
     if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
   }
+
+  // 7. Quyền hạn thao tác phân ca & ca làm việc
+  const btnShiftOpenAssign = document.getElementById('btnShiftOpenAssign');
+  const btnShiftOpenCreateShift = document.getElementById('btnShiftOpenCreateShift');
+  if (btnShiftOpenAssign) {
+    btnShiftOpenAssign.style.display = (role !== 'EMPLOYEE') ? 'inline-flex' : 'none';
+  }
+  if (btnShiftOpenCreateShift) {
+    btnShiftOpenCreateShift.style.display = (role === 'ADMIN' || role === 'HR') ? 'inline-flex' : 'none';
+  }
 }
 
 function navigateToView(viewName) {
@@ -522,6 +532,7 @@ function navigateToView(viewName) {
   if (viewName === 'stats') loadStatsData();
   if (viewName === 'soa-monitor') loadSoaServicesStatus();
   if (viewName === 'profile') loadProfileData();
+  if (viewName === 'shifts') loadShiftsData();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2172,3 +2183,650 @@ window.addEventListener('DOMContentLoaded', () => {
     showScreenView('login');
   }
 });
+
+// ==============================================================================
+// 12. PHÂN HỆ QUẢN LÝ CA LÀM VIỆC, PHÂN CA & TĂNG CA OT (SCR_SHIFT_01, SCR_OT_01, SCR_OT_02, SCR_ADM_03)
+// ==============================================================================
+
+let currentShiftSubTab = 'assignments';
+let cachedShiftsList = [];
+let cachedOtRequests = [];
+
+function switchShiftTab(tabName) {
+  currentShiftSubTab = tabName;
+  const tabBtnAssignments = document.getElementById('tabBtnAssignments');
+  const tabBtnOt = document.getElementById('tabBtnOt');
+  const tabBtnShifts = document.getElementById('tabBtnShifts');
+  const contentAssignments = document.getElementById('tabContentAssignments');
+  const contentOt = document.getElementById('tabContentOt');
+  const contentShifts = document.getElementById('tabContentShifts');
+
+  // Reset tab button styles
+  [tabBtnAssignments, tabBtnOt, tabBtnShifts].forEach(btn => {
+    if (btn) {
+      btn.style.background = '#f8fafc';
+      btn.style.color = '#64748b';
+      btn.style.borderTop = 'none';
+      btn.style.fontWeight = '600';
+    }
+  });
+
+  if (contentAssignments) contentAssignments.style.display = 'none';
+  if (contentOt) contentOt.style.display = 'none';
+  if (contentShifts) contentShifts.style.display = 'none';
+
+  if (tabName === 'assignments') {
+    if (tabBtnAssignments) {
+      tabBtnAssignments.style.background = '#ffffff';
+      tabBtnAssignments.style.color = 'var(--color-primary)';
+      tabBtnAssignments.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnAssignments.style.fontWeight = '700';
+    }
+    if (contentAssignments) contentAssignments.style.display = 'block';
+    loadShiftAssignments();
+  } else if (tabName === 'ot') {
+    if (tabBtnOt) {
+      tabBtnOt.style.background = '#ffffff';
+      tabBtnOt.style.color = 'var(--color-primary)';
+      tabBtnOt.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnOt.style.fontWeight = '700';
+    }
+    if (contentOt) contentOt.style.display = 'block';
+    loadOtRequests();
+  } else if (tabName === 'shifts') {
+    if (tabBtnShifts) {
+      tabBtnShifts.style.background = '#ffffff';
+      tabBtnShifts.style.color = 'var(--color-primary)';
+      tabBtnShifts.style.borderTop = '3px solid var(--color-primary)';
+      tabBtnShifts.style.fontWeight = '700';
+    }
+    if (contentShifts) contentShifts.style.display = 'block';
+    loadShiftsCatalog();
+  }
+}
+
+async function loadShiftsData() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const firstDay = new Date(year, month, 1).toISOString().slice(0, 10);
+  const lastDay = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+
+  const fromDateInput = document.getElementById('filterShiftFromDate');
+  const toDateInput = document.getElementById('filterShiftToDate');
+  if (fromDateInput && !fromDateInput.value) fromDateInput.value = firstDay;
+  if (toDateInput && !toDateInput.value) toDateInput.value = lastDay;
+
+  await Promise.allSettled([
+    loadShiftsCatalog(),
+    loadShiftAssignments(),
+    loadOtRequests()
+  ]);
+}
+
+// 1. Quản lý danh mục ca làm việc (SCR_ADM_03)
+async function loadShiftsCatalog() {
+  const tbody = document.getElementById('tableBodyShiftsList');
+  if (!tbody) return;
+
+  try {
+    const res = await apiCall('/api/v1/shifts');
+    cachedShiftsList = res?.data || [];
+
+    const kpiActive = document.getElementById('kpiShiftActiveCount');
+    if (kpiActive) {
+      kpiActive.innerText = cachedShiftsList.filter(s => s.status === 'ACTIVE').length;
+    }
+
+    if (!cachedShiftsList.length) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có ca làm việc nào trong hệ thống</td></tr>`;
+      return;
+    }
+
+    const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
+    tbody.innerHTML = cachedShiftsList.map(s => `
+      <tr>
+        <td><strong>${s.code}</strong></td>
+        <td><span style="font-weight: 600; color: #0f172a;">${s.name}</span></td>
+        <td>${s.start_time.slice(0, 5)}</td>
+        <td>${s.end_time.slice(0, 5)}</td>
+        <td>${s.break_minutes || 0} phút</td>
+        <td>+${s.grace_late_minutes || 0} phút</td>
+        <td><strong>${Number(s.working_hours).toFixed(1)}h</strong></td>
+        <td>
+          <span class="badge-status ${s.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">
+            ${s.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
+          </span>
+        </td>
+        <td style="text-align: center;">
+          ${isAdminOrHr ? `
+            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openCreateShiftModal(${JSON.stringify(s)})'>Sửa</button>
+          ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Lỗi nạp danh mục ca:', err);
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+// 2. Lịch phân ca nhân viên (SCR_SHIFT_01)
+async function loadShiftAssignments() {
+  const tbody = document.getElementById('tableBodyShiftAssignments');
+  if (!tbody) return;
+
+  const fromDate = document.getElementById('filterShiftFromDate')?.value || '';
+  const toDate = document.getElementById('filterShiftToDate')?.value || '';
+  let url = '/api/v1/shift-assignments';
+  const params = [];
+  if (fromDate) params.push(`fromDate=${fromDate}`);
+  if (toDate) params.push(`toDate=${toDate}`);
+  if (params.length) url += `?${params.join('&')}`;
+
+  try {
+    const res = await apiCall(url);
+    const assignments = res?.data || [];
+
+    // Cập nhật KPI phân ca hôm nay
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayCount = assignments.filter(a => {
+      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      return wDate === todayStr;
+    }).length;
+    const kpiToday = document.getElementById('kpiShiftTodayAssignments');
+    if (kpiToday) kpiToday.innerText = todayCount;
+
+    if (!assignments.length) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Không có ca làm việc nào được phân trong khoảng thời gian này</td></tr>`;
+      return;
+    }
+
+    const canManage = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
+    tbody.innerHTML = assignments.map(a => {
+      const wDate = a.work_date ? formatLeaveDate(a.work_date) : '';
+      return `
+        <tr>
+          <td><strong>${wDate}</strong></td>
+          <td>${a.emp_code || a.emp_id}</td>
+          <td><span style="font-weight: 600; color: #0f172a;">${a.emp_name || 'Nhân viên'}</span></td>
+          <td>${a.department_name || 'Phòng Kỹ Thuật'}</td>
+          <td><span class="badge-status badge-pending" style="font-weight: 600;">${a.shift_code}</span></td>
+          <td>${a.start_time ? a.start_time.slice(0, 5) : ''} - ${a.end_time ? a.end_time.slice(0, 5) : ''}</td>
+          <td>${a.working_hours ? Number(a.working_hours).toFixed(1) + 'h' : '8.0h'}</td>
+          <td style="font-size: 11.5px; color: #64748b;">${a.note || '—'}</td>
+          <td>
+            <span class="badge-status ${a.status === 'SCHEDULED' ? 'badge-approved' : 'badge-rejected'}">
+              ${a.status === 'SCHEDULED' ? 'Đã xếp ca' : (a.status === 'SWAPPED' ? 'Đã đổi ca' : 'Đã hủy')}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            ${(canManage && a.status === 'SCHEDULED') ? `
+              <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Hủy</button>
+            ` : `<span style="font-size: 11px; color: #94a3b8;">—</span>`}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Lỗi tải lịch phân ca:', err);
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+// 3. Đơn đăng ký tăng ca OT (SCR_OT_01, SCR_OT_02)
+async function loadOtRequests() {
+  const tbody = document.getElementById('tableBodyOtRequests');
+  if (!tbody) return;
+
+  try {
+    const res = await apiCall('/api/v1/ot-requests');
+    cachedOtRequests = res?.data || [];
+
+    // Cập nhật KPI
+    const pendingList = cachedOtRequests.filter(o => o.status === 'PENDING');
+    const kpiPending = document.getElementById('kpiOtPendingCount');
+    if (kpiPending) kpiPending.innerText = pendingList.length;
+
+    // Tổng giờ OT đã duyệt
+    const totalApprovedHours = cachedOtRequests
+      .filter(o => o.status === 'APPROVED')
+      .reduce((sum, o) => sum + Number(o.total_hours || 0), 0);
+    const kpiHours = document.getElementById('kpiOtTotalHours');
+    if (kpiHours) kpiHours.innerText = `${totalApprovedHours.toFixed(1)}h`;
+
+    filterOtTable();
+  } catch (err) {
+    console.error('Lỗi tải đơn tăng ca:', err);
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+function filterOtTable() {
+  const tbody = document.getElementById('tableBodyOtRequests');
+  if (!tbody) return;
+
+  const statusFilter = document.getElementById('filterOtStatus')?.value || 'ALL';
+  const list = cachedOtRequests.filter(o => {
+    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+    return true;
+  });
+
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Không có đơn tăng ca nào phù hợp bộ lọc</td></tr>`;
+    return;
+  }
+
+  const canApprove = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
+  tbody.innerHTML = list.map(o => {
+    const createdDate = o.created_at ? formatLeaveDateTime(o.created_at) : '';
+    const workDate = o.work_date ? formatLeaveDate(o.work_date) : '';
+    const startTime = o.start_time ? o.start_time.slice(0, 5) : '';
+    const endTime = o.end_time ? o.end_time.slice(0, 5) : '';
+    const typeLabel = o.ot_type === 'WEEKDAY' ? 'Ngày thường (x1.5)' : (o.ot_type === 'WEEKEND' ? 'Cuối tuần (x2.0)' : 'Lễ / Tết (x3.0)');
+
+    let statusBadge = '';
+    if (o.status === 'PENDING') statusBadge = '<span class="badge-status badge-pending">Đang chờ duyệt</span>';
+    else if (o.status === 'APPROVED') statusBadge = '<span class="badge-status badge-approved">Đã duyệt</span>';
+    else if (o.status === 'REJECTED') statusBadge = '<span class="badge-status badge-rejected">Đã từ chối</span>';
+
+    return `
+      <tr>
+        <td style="font-size: 11.5px; color: #64748b;">${createdDate}</td>
+        <td>
+          <div style="font-weight: 700; color: #0f172a;">${o.emp_name || 'Nhân viên'}</div>
+          <div style="font-size: 11px; color: #64748b;">${o.emp_code || o.emp_id}</div>
+        </td>
+        <td>${o.department_name || 'Phòng Kỹ Thuật'}</td>
+        <td><strong>${workDate}</strong></td>
+        <td>${startTime} - ${endTime}</td>
+        <td><strong style="color: #2563eb;">${Number(o.total_hours).toFixed(1)} giờ</strong></td>
+        <td><span class="badge-status" style="background: #f1f5f9; color: #334155;">${typeLabel}</span></td>
+        <td style="font-size: 12px; max-width: 200px; color: #475569;">${o.reason || '—'}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align: center;">
+          ${(canApprove && o.status === 'PENDING') ? `
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button class="btn-primary-blue" style="padding: 4px 10px; font-size: 11.5px; background: #10b981; border-color: #10b981;" onclick="handleOtDecision('${o.id}', 'APPROVED')">✓ Duyệt</button>
+              <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px; color: #ef4444; border-color: #fecaca;" onclick="handleOtDecision('${o.id}', 'REJECTED')">✕ Từ chối</button>
+            </div>
+          ` : `<span style="font-size: 11px; color: #94a3b8;">${o.status === 'APPROVED' ? 'Đã duyệt bởi ' + (o.approver_name || 'Quản lý') : 'Hoàn tất'}</span>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 4. Quyết định duyệt / từ chối đơn tăng ca
+async function handleOtDecision(requestId, decision) {
+  const isApprove = decision === 'APPROVED';
+  let rejectReason = null;
+  if (!isApprove) {
+    rejectReason = prompt('Nhập lý do từ chối đơn tăng ca:');
+    if (rejectReason === null) return;
+  }
+
+  try {
+    const res = await apiCall(`/api/v1/ot-requests/${requestId}/decision`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        decision,
+        rejectReason
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Xử lý đơn thất bại');
+    }
+
+    showToast(isApprove ? 'Đã phê duyệt đơn tăng ca thành công' : 'Đã từ chối đơn tăng ca', isApprove ? 'success' : 'warning');
+    await loadOtRequests();
+  } catch (err) {
+    console.error('Lỗi quyết định đơn OT:', err);
+    showToast(err.message || 'Xử lý thất bại, vui lòng thử lại', 'error');
+  }
+}
+
+// 5. Popup đăng ký tăng ca OT
+function openCreateOtModal() {
+  const today = new Date().toISOString().slice(0, 10);
+  const html = `
+    <form id="formModalCreateOt" onsubmit="handleCreateOtSubmit(event)">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Ngày tăng ca *</label>
+          <input type="date" id="otModalWorkDate" class="topbar-search-input" value="${today}" required>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Loại làm thêm *</label>
+          <select id="otModalType" class="topbar-search-input">
+            <option value="WEEKDAY">Ngày làm việc thường (x1.5)</option>
+            <option value="WEEKEND">Ngày nghỉ cuối tuần (x2.0)</option>
+            <option value="HOLIDAY">Ngày nghỉ lễ / Tết (x3.0)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Từ giờ *</label>
+          <input type="time" id="otModalStartTime" class="topbar-search-input" value="18:00" required onchange="calcOtModalHours()">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Đến giờ *</label>
+          <input type="time" id="otModalEndTime" class="topbar-search-input" value="20:30" required onchange="calcOtModalHours()">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Tổng giờ OT</label>
+          <input type="number" id="otModalTotalHours" class="topbar-search-input" style="background: #f8fafc; font-weight: 700;" value="2.5" step="0.5" readonly>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Lý do tăng ca & Nội dung công việc *</label>
+        <textarea id="otModalReason" class="topbar-search-input" style="height: 70px; resize: vertical;" placeholder="Ví dụ: Triển khai phát hành tính năng phiên bản mới, kiểm thử tích hợp..." required></textarea>
+      </div>
+
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px; font-size: 11.5px; color: #1e40af; margin-bottom: 16px;">
+        ℹ️ Đơn đăng ký tăng ca sẽ được gửi tới Quản lý xét duyệt và tính toán cộng dồn vào bảng lương tháng.
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+        <button type="submit" id="btnSubmitOtModal" class="btn-primary-blue">Gửi đơn tăng ca</button>
+      </div>
+    </form>
+  `;
+  openModal('Đăng ký tăng ca làm thêm (OT)', html);
+}
+
+function calcOtModalHours() {
+  const start = document.getElementById('otModalStartTime')?.value;
+  const end = document.getElementById('otModalEndTime')?.value;
+  const totalInput = document.getElementById('otModalTotalHours');
+  if (!start || !end || !totalInput) return;
+
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60;
+  const hours = Math.round((diff / 60) * 10) / 10;
+  totalInput.value = hours > 0 ? hours : 0.5;
+}
+
+async function handleCreateOtSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const workDate = document.getElementById('otModalWorkDate').value;
+  const otType = document.getElementById('otModalType').value;
+  const startTime = document.getElementById('otModalStartTime').value + ':00';
+  const endTime = document.getElementById('otModalEndTime').value + ':00';
+  const totalHours = Number(document.getElementById('otModalTotalHours').value);
+  const reason = document.getElementById('otModalReason').value.trim();
+  const btn = document.getElementById('btnSubmitOtModal');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Đang gửi...';
+  }
+
+  try {
+    const res = await apiCall('/api/v1/ot-requests', {
+      method: 'POST',
+      body: JSON.stringify({
+        workDate,
+        startTime,
+        endTime,
+        totalHours,
+        otType,
+        reason
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Đăng ký tăng ca thất bại');
+    }
+
+    showToast('Gửi đơn đăng ký tăng ca thành công! Chờ quản lý phê duyệt.', 'success');
+    closeModal();
+    await loadOtRequests();
+  } catch (err) {
+    console.error('Lỗi tạo đơn OT:', err);
+    showToast(err.message || 'Gửi đơn thất bại', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Gửi đơn tăng ca';
+    }
+  }
+}
+
+// 6. Popup phân ca nhân viên (SCR_SHIFT_01)
+async function openAssignShiftModal() {
+  let employeeOptions = '';
+  try {
+    const empRes = await apiCall('/api/organization/employees');
+    const employees = empRes?.data || [];
+    employeeOptions = employees.map(e => `
+      <option value="${e.id}">${e.code} - ${e.full_name} (${e.department_name || 'Phòng ban'})</option>
+    `).join('');
+  } catch {
+    employeeOptions = '<option value="e0000001-0000-0000-0000-000000000004">NV-001 - Vũ Đức Hiếu</option>';
+  }
+
+  let shiftOptions = cachedShiftsList.filter(s => s.status === 'ACTIVE').map(s => `
+    <option value="${s.id}">${s.code} - ${s.name} (${s.start_time.slice(0, 5)} - ${s.end_time.slice(0, 5)})</option>
+  `).join('');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const html = `
+    <form id="formModalAssignShift" onsubmit="handleAssignShiftSubmit(event)">
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn nhân viên *</label>
+        <select id="assignModalEmpId" class="topbar-search-input" required>
+          ${employeeOptions}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn ca làm việc *</label>
+        <select id="assignModalShiftId" class="topbar-search-input" required>
+          ${shiftOptions}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Ngày làm việc *</label>
+        <input type="date" id="assignModalWorkDate" class="topbar-search-input" value="${today}" required>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Ghi chú phân ca</label>
+        <input type="text" id="assignModalNote" class="topbar-search-input" placeholder="Ví dụ: Phân ca dự án trực hệ thống tuần 47">
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+        <button type="submit" id="btnSubmitAssignShift" class="btn-primary-blue">Xác nhận phân ca</button>
+      </div>
+    </form>
+  `;
+  openModal('Phân ca làm việc cho nhân viên', html);
+}
+
+async function handleAssignShiftSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const empId = document.getElementById('assignModalEmpId').value;
+  const shiftId = document.getElementById('assignModalShiftId').value;
+  const workDate = document.getElementById('assignModalWorkDate').value;
+  const note = document.getElementById('assignModalNote').value.trim();
+  const btn = document.getElementById('btnSubmitAssignShift');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Đang lưu...';
+  }
+
+  try {
+    const res = await apiCall('/api/v1/shift-assignments', {
+      method: 'POST',
+      body: JSON.stringify({
+        empIds: [empId],
+        shiftId,
+        workDates: [workDate],
+        note
+      })
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Phân ca thất bại');
+    }
+
+    showToast('Phân ca làm việc thành công!', 'success');
+    closeModal();
+    await loadShiftAssignments();
+  } catch (err) {
+    console.error('Lỗi phân ca:', err);
+    showToast(err.message || 'Phân ca thất bại', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Xác nhận phân ca';
+    }
+  }
+}
+
+// 7. Hủy phân ca
+async function handleCancelShiftAssignment(assignmentId) {
+  if (!confirm('Bạn có chắc chắn muốn hủy phân ca này?')) return;
+
+  try {
+    const res = await apiCall(`/api/v1/shift-assignments/${assignmentId}`, {
+      method: 'DELETE'
+    });
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Hủy phân ca thất bại');
+    }
+
+    showToast('Đã hủy phân ca thành công', 'success');
+    await loadShiftAssignments();
+  } catch (err) {
+    console.error('Lỗi hủy phân ca:', err);
+    showToast(err.message || 'Lỗi hủy phân ca', 'error');
+  }
+}
+
+// 8. Popup thêm / sửa ca làm việc (SCR_ADM_03)
+function openCreateShiftModal(shift = null) {
+  const isEdit = Boolean(shift && shift.id);
+  const html = `
+    <form id="formModalShiftDef" onsubmit="handleShiftDefSubmit(event, '${shift?.id || ''}')">
+      <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Mã ca *</label>
+          <input type="text" id="shiftDefCode" class="topbar-search-input" value="${shift?.code || ''}" placeholder="vd: CA-TOI" ${isEdit ? 'readonly style="background: #f8fafc;"' : 'required'}>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Tên ca làm việc *</label>
+          <input type="text" id="shiftDefName" class="topbar-search-input" value="${shift?.name || ''}" placeholder="vd: Ca Tối (22:00 - 06:00)" required>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ bắt đầu *</label>
+          <input type="time" id="shiftDefStartTime" class="topbar-search-input" value="${shift?.start_time ? shift.start_time.slice(0, 5) : '08:00'}" required>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ kết thúc *</label>
+          <input type="time" id="shiftDefEndTime" class="topbar-search-input" value="${shift?.end_time ? shift.end_time.slice(0, 5) : '17:30'}" required>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Nghỉ giữa ca (phút)</label>
+          <input type="number" id="shiftDefBreak" class="topbar-search-input" value="${shift?.break_minutes ?? 60}" min="0">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Dung sai trễ (phút)</label>
+          <input type="number" id="shiftDefGrace" class="topbar-search-input" value="${shift?.grace_late_minutes ?? 15}" min="0">
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ công chuẩn</label>
+          <input type="number" id="shiftDefHours" class="topbar-search-input" value="${shift?.working_hours ? Number(shift.working_hours) : 8.0}" step="0.5" min="1">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+        <button type="submit" id="btnSubmitShiftDef" class="btn-primary-blue">${isEdit ? 'Lưu thay đổi' : 'Thêm ca mới'}</button>
+      </div>
+    </form>
+  `;
+  openModal(isEdit ? 'Chỉnh sửa ca làm việc' : 'Thêm ca làm việc mới', html);
+}
+
+async function handleShiftDefSubmit(e, shiftId) {
+  if (e && e.preventDefault) e.preventDefault();
+  const code = document.getElementById('shiftDefCode')?.value.trim();
+  const name = document.getElementById('shiftDefName')?.value.trim();
+  const startTime = document.getElementById('shiftDefStartTime')?.value + ':00';
+  const endTime = document.getElementById('shiftDefEndTime')?.value + ':00';
+  const breakMinutes = Number(document.getElementById('shiftDefBreak')?.value || 0);
+  const graceLateMinutes = Number(document.getElementById('shiftDefGrace')?.value || 0);
+  const workingHours = Number(document.getElementById('shiftDefHours')?.value || 8.0);
+  const btn = document.getElementById('btnSubmitShiftDef');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Đang lưu...';
+  }
+
+  try {
+    let res;
+    if (shiftId) {
+      res = await apiCall(`/api/v1/shifts/${shiftId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name,
+          startTime,
+          endTime,
+          breakMinutes,
+          graceLateMinutes,
+          workingHours
+        })
+      });
+    } else {
+      res = await apiCall('/api/v1/shifts', {
+        method: 'POST',
+        body: JSON.stringify({
+          code,
+          name,
+          startTime,
+          endTime,
+          breakMinutes,
+          graceLateMinutes,
+          workingHours
+        })
+      });
+    }
+
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Lưu ca làm việc thất bại');
+    }
+
+    showToast(shiftId ? 'Cập nhật ca làm việc thành công' : 'Thêm ca làm việc mới thành công', 'success');
+    closeModal();
+    await loadShiftsCatalog();
+  } catch (err) {
+    console.error('Lỗi lưu ca làm việc:', err);
+    showToast(err.message || 'Lưu thất bại', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = shiftId ? 'Lưu thay đổi' : 'Thêm ca mới';
+    }
+  }
+}
+

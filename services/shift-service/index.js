@@ -16,6 +16,19 @@ const DB_NAME = process.env.SHIFT_DB_NAME || 'htqlns_shift';
 
 const pool = db.getPool(DB_NAME);
 
+// Ánh xạ linh hoạt emp_id từ JWT payload của người dùng
+const getEmpIdFromUser = (user) => {
+  if (!user) return null;
+  if (user.emp_id) return user.emp_id;
+  if (user.empId) return user.empId;
+  const username = user.username || '';
+  if (username === 'admin') return 'e0000001-0000-0000-0000-000000000001';
+  if (username === 'hr_admin' || username === 'hr') return 'e0000001-0000-0000-0000-000000000002';
+  if (username === 'manager') return 'e0000001-0000-0000-0000-000000000003';
+  if (username === 'employee') return 'e0000001-0000-0000-0000-000000000004';
+  return user.userId || user.id || null;
+};
+
 const app = createServiceApp(SERVICE_NAME, {
   port: PORT,
   checkHealth: async () => {
@@ -42,6 +55,19 @@ app.get(['/api/v1/shifts', '/api/shifts', '/api/shift'], requireAuth(), async (r
 
     const [rows] = await pool.query(sql, params);
     res.json({ success: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Lấy chi tiết một ca làm việc
+app.get(['/api/v1/shifts/:id', '/api/shifts/:id', '/api/shift/:id'], requireAuth(), async (req, res, next) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM shifts WHERE id = ?', [req.params.id]);
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy ca làm việc' });
+    }
+    res.json({ success: true, data: rows[0] });
   } catch (err) {
     next(err);
   }
@@ -120,6 +146,22 @@ app.put(['/api/v1/shifts/:id', '/api/shifts/:id', '/api/shift/:id'], requireAuth
   }
 });
 
+// Xóa hoặc vô hiệu hóa ca làm việc (ADMIN, HR)
+app.delete(['/api/v1/shifts/:id', '/api/shifts/:id', '/api/shift/:id'], requireAuth(['ADMIN', 'HR']), async (req, res, next) => {
+  try {
+    const [existing] = await pool.query('SELECT * FROM shifts WHERE id = ?', [req.params.id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy ca làm việc' });
+    }
+
+    // Đánh dấu INACTIVE thay vì xóa vật lý để bảo toàn lịch sử chấm công
+    await pool.query('UPDATE shifts SET status = "INACTIVE" WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Đã ngưng sử dụng ca làm việc thành công' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ==============================================================================
 // 2. PHÂN CA & LỊCH TRỰC NHÂN VIÊN (SCR_SHIFT_01)
 // ==============================================================================
@@ -128,7 +170,8 @@ app.put(['/api/v1/shifts/:id', '/api/shifts/:id', '/api/shift/:id'], requireAuth
 app.get(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/assignments'], requireAuth(), async (req, res, next) => {
   try {
     const { empId, fromDate, toDate } = req.query;
-    const targetEmpId = req.user.role === 'EMPLOYEE' ? req.user.empId : empId;
+    const currentEmpId = getEmpIdFromUser(req.user);
+    const targetEmpId = req.user.role === 'EMPLOYEE' ? currentEmpId : empId;
 
     const conditions = [];
     const params = [];
@@ -149,9 +192,14 @@ app.get(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/ass
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.query(
       `SELECT sa.*, s.code AS shift_code, s.name AS shift_name,
-              s.start_time, s.end_time, s.grace_late_minutes, s.working_hours
+              s.start_time, s.end_time, s.grace_late_minutes, s.working_hours,
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, sa.emp_id) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
        FROM shift_assignments sa
        JOIN shifts s ON sa.shift_id = s.id
+       LEFT JOIN htqlns_organization.employees e ON sa.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
        ${whereClause}
        ORDER BY sa.work_date DESC`,
       params
@@ -179,6 +227,7 @@ app.post(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/as
       return res.status(404).json({ success: false, error: 'Ca làm việc không tồn tại hoặc đã ngưng hoạt động' });
     }
 
+    const assignerId = getEmpIdFromUser(req.user);
     let affected = 0;
     for (const empId of empIds) {
       for (const workDate of workDates) {
@@ -187,7 +236,7 @@ app.post(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/as
           `INSERT INTO shift_assignments (id, emp_id, shift_id, work_date, note, assigned_by, status)
            VALUES (?, ?, ?, ?, ?, ?, 'SCHEDULED')
            ON DUPLICATE KEY UPDATE shift_id = VALUES(shift_id), note = VALUES(note), assigned_by = VALUES(assigned_by), status = 'SCHEDULED'`,
-          [id, empId, shiftId, workDate, note, req.user.empId || req.user.userId]
+          [id, empId, shiftId, workDate, note, assignerId]
         );
         affected++;
       }
@@ -202,6 +251,21 @@ app.post(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/as
   }
 });
 
+// Hủy phân ca (ADMIN, HR, MANAGER)
+app.delete(['/api/v1/shift-assignments/:id', '/api/shifts/assignments/:id', '/api/shift/assignments/:id'], requireAuth(['ADMIN', 'HR', 'MANAGER']), async (req, res, next) => {
+  try {
+    const [existing] = await pool.query('SELECT * FROM shift_assignments WHERE id = ?', [req.params.id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy lịch phân ca' });
+    }
+
+    await pool.query('UPDATE shift_assignments SET status = "CANCELLED" WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Đã hủy phân ca thành công' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ==============================================================================
 // 3. ĐĂNG KÝ & DUYỆT TĂNG CA OT (SCR_OT_01, SCR_OT_02, SCR_REQ_01)
 // ==============================================================================
@@ -209,26 +273,47 @@ app.post(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/as
 // Danh sách đơn tăng ca
 app.get(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, next) => {
   try {
-    const { status, empId } = req.query;
+    const { status, empId, fromDate, toDate } = req.query;
+    const currentEmpId = getEmpIdFromUser(req.user);
     const conditions = [];
     const params = [];
 
     if (req.user.role === 'EMPLOYEE') {
-      conditions.push('emp_id = ?');
-      params.push(req.user.empId);
+      conditions.push('ot.emp_id = ?');
+      params.push(currentEmpId);
     } else if (empId) {
-      conditions.push('emp_id = ?');
+      conditions.push('ot.emp_id = ?');
       params.push(empId);
     }
 
     if (status) {
-      conditions.push('status = ?');
+      conditions.push('ot.status = ?');
       params.push(status);
+    }
+
+    if (fromDate) {
+      conditions.push('ot.work_date >= ?');
+      params.push(fromDate);
+    }
+
+    if (toDate) {
+      conditions.push('ot.work_date <= ?');
+      params.push(toDate);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.query(
-      `SELECT * FROM ot_requests ${whereClause} ORDER BY created_at DESC`,
+      `SELECT ot.*,
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, ot.emp_id) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name,
+              COALESCE(m.full_name, '') AS approver_name
+       FROM ot_requests ot
+       LEFT JOIN htqlns_organization.employees e ON ot.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       LEFT JOIN htqlns_organization.employees m ON ot.approver_id = m.id
+       ${whereClause}
+       ORDER BY ot.created_at DESC`,
       params
     );
 
@@ -238,12 +323,45 @@ app.get(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, next
   }
 });
 
+// Chi tiết đơn tăng ca
+app.get(['/api/v1/ot-requests/:id', '/api/ot/:id'], requireAuth(), async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT ot.*,
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, ot.emp_id) AS emp_code,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name,
+              COALESCE(m.full_name, '') AS approver_name
+       FROM ot_requests ot
+       LEFT JOIN htqlns_organization.employees e ON ot.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       LEFT JOIN htqlns_organization.employees m ON ot.approver_id = m.id
+       WHERE ot.id = ?`,
+      [req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy đơn đăng ký tăng ca' });
+    }
+
+    const currentEmpId = getEmpIdFromUser(req.user);
+    if (req.user.role === 'EMPLOYEE' && rows[0].emp_id !== currentEmpId) {
+      return res.status(403).json({ success: false, error: 'Bạn không có quyền truy cập đơn của nhân viên khác' });
+    }
+
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Tạo đơn đăng ký OT
 app.post(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, next) => {
   try {
+    const currentEmpId = getEmpIdFromUser(req.user);
     const empId = req.body.empId && ['ADMIN', 'HR'].includes(req.user.role)
       ? req.body.empId
-      : req.user.empId;
+      : currentEmpId;
 
     const { workDate, startTime, endTime, totalHours, otType = 'WEEKDAY', reason } = req.body;
 
@@ -277,10 +395,16 @@ app.post(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, nex
   }
 });
 
-// Phê duyệt hoặc Từ chối đơn OT (ADMIN, HR, MANAGER)
-app.patch('/api/v1/ot-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAGER']), async (req, res, next) => {
+// Xử lý phê duyệt / từ chối đơn tăng ca (ADMIN, HR, MANAGER)
+const handleOtDecision = async (req, res, next) => {
   try {
-    const { decision, rejectReason = null } = req.body; // 'APPROVED' | 'REJECTED'
+    let { decision, rejectReason = null } = req.body || {};
+    // Fallback cho URL dạng /approve hoặc /reject
+    if (!decision) {
+      if (req.path.includes('/approve')) decision = 'APPROVED';
+      else if (req.path.includes('/reject')) decision = 'REJECTED';
+    }
+
     if (!['APPROVED', 'REJECTED'].includes(decision)) {
       return res.status(400).json({ success: false, error: 'decision phải là APPROVED hoặc REJECTED' });
     }
@@ -293,7 +417,7 @@ app.patch('/api/v1/ot-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAG
       return res.status(400).json({ success: false, error: 'Đơn đã được xử lý trước đó' });
     }
 
-    const approverId = req.user.empId || req.user.userId;
+    const approverId = getEmpIdFromUser(req.user);
     await pool.query(
       `UPDATE ot_requests
        SET status = ?, approver_id = ?, approved_at = NOW(), reject_reason = ?
@@ -319,7 +443,18 @@ app.patch('/api/v1/ot-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAG
   } catch (err) {
     next(err);
   }
-});
+};
+
+const otDecisionPaths = [
+  '/api/v1/ot-requests/:id/decision',
+  '/api/v1/ot-requests/:id/approve',
+  '/api/v1/ot-requests/:id/reject',
+  '/api/ot/:id/decision',
+  '/api/ot/:id/approve',
+  '/api/ot/:id/reject'
+];
+app.patch(otDecisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleOtDecision);
+app.put(otDecisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleOtDecision);
 
 // ==============================================================================
 // 4. INTERNAL API CHO CÁC MICROSERVICE KHÁC (attendance-service, payroll-service)

@@ -1468,6 +1468,9 @@ input:checked + .slider:before {
         <a class="figma-nav-item" id="nav-requests" onclick="navigateToView('requests')" style="cursor: pointer;">
           <span class="figma-nav-icon">📝</span> Đơn từ
         </a>
+        <a class="figma-nav-item" id="nav-shifts" onclick="navigateToView('shifts')" style="cursor: pointer;">
+          <span class="figma-nav-icon">⏰</span> Phân ca &amp; Tăng ca (OT)
+        </a>
         <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')" style="cursor: pointer;">
           <span class="figma-nav-icon">⚙️</span> Thiết lập chấm công
         </a>
@@ -2099,6 +2102,185 @@ input:checked + .slider:before {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+
+        <!-- ====================================================================
+             VIEW: PHÂN CA & QUẢN LÝ TĂNG CA (OT) (SCR_SHIFT_01, SCR_OT_01, SCR_OT_02, SCR_ADM_03)
+             ==================================================================== -->
+        <section id="view-shifts" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Trang chủ / Phân ca &amp; Tăng ca (OT)</div>
+          <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h1 class="page-heading-title">Phân ca &amp; Quản lý Tăng ca (OT)</h1>
+              <div class="page-heading-desc">Quản lý ca làm việc, phân bổ ca nhân sự và quy trình đăng ký, xét duyệt tăng ca trực tuyến.</div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="btn-primary-blue" id="btnShiftOpenCreateOt" onclick="openCreateOtModal()">⚡ Đăng ký tăng ca (OT)</button>
+              <button class="btn-secondary-outline" id="btnShiftOpenAssign" onclick="openAssignShiftModal()" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span>📅</span> Phân ca nhân viên
+              </button>
+              <button class="btn-secondary-outline" id="btnShiftOpenCreateShift" onclick="openCreateShiftModal()" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span>➕</span> Thêm ca mới
+              </button>
+              <button class="btn-secondary-outline" onclick="loadShiftsData()">↻ Làm mới</button>
+            </div>
+          </div>
+
+          <!-- THỐNG KÊ NHANH KPI CA & OT -->
+          <div class="metrics-row-4" style="margin-bottom: 24px;">
+            <div class="figma-metric-card" onclick="switchShiftTab('shifts')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Ca làm việc</span>
+                <span>⏱️</span>
+              </div>
+              <div class="metric-value-huge metric-value-blue" id="kpiShiftActiveCount">3</div>
+              <div class="metric-footer-note">Đang kích hoạt • Nhấp xem chi tiết →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchShiftTab('assignments')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Lịch phân ca hôm nay</span>
+                <span>👥</span>
+              </div>
+              <div class="metric-value-huge metric-value-green" id="kpiShiftTodayAssignments">4</div>
+              <div class="metric-footer-note">Lượt nhân sự được xếp ca →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchShiftTab('ot')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Đơn OT chờ duyệt</span>
+                <span>⚡</span>
+              </div>
+              <div class="metric-value-huge metric-value-orange" id="kpiOtPendingCount">0</div>
+              <div class="metric-footer-note">Cần cấp quản lý xử lý →</div>
+            </div>
+
+            <div class="figma-metric-card" onclick="switchShiftTab('ot')" style="cursor: pointer;">
+              <div class="metric-header">
+                <span>Tổng giờ OT tháng</span>
+                <span>📈</span>
+              </div>
+              <div class="metric-value-huge metric-value-purple" id="kpiOtTotalHours">0.0h</div>
+              <div class="metric-footer-note">Đã duyệt trong tháng 11/2026 →</div>
+            </div>
+          </div>
+
+          <!-- TAB SWITCHER: LỊCH PHÂN CA / ĐƠN TĂNG CA OT / DANH MỤC CA -->
+          <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 20px;">
+            <button type="button" id="tabBtnAssignments" class="btn-secondary-outline" onclick="switchShiftTab('assignments')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700; background: #ffffff; color: var(--color-primary); border-top: 3px solid var(--color-primary);">
+              📅 Lịch phân ca nhân viên
+            </button>
+            <button type="button" id="tabBtnOt" class="btn-secondary-outline" onclick="switchShiftTab('ot')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
+              ⚡ Quản lý đơn tăng ca (OT)
+            </button>
+            <button type="button" id="tabBtnShifts" class="btn-secondary-outline" onclick="switchShiftTab('shifts')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
+              ⚙️ Danh mục ca làm việc
+            </button>
+          </div>
+
+          <!-- TAB 1: LỊCH PHÂN CA (SCR_SHIFT_01) -->
+          <div id="tabContentAssignments" class="figma-white-card" style="margin-bottom: 24px;">
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div class="card-title-text">Bảng phân công ca làm việc</div>
+                <div style="font-size: 12px; color: #64748b;">Lịch trực và xếp ca nhân sự thực tế phục vụ kiểm soát chấm công</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="date" id="filterShiftFromDate" class="topbar-search-input" style="padding: 6px 10px; width: 140px;" onchange="loadShiftAssignments()">
+                <span style="font-size: 12px; color: #64748b;">đến</span>
+                <input type="date" id="filterShiftToDate" class="topbar-search-input" style="padding: 6px 10px; width: 140px;" onchange="loadShiftAssignments()">
+                <button class="btn-secondary-outline" style="padding: 6px 14px; font-size: 12px;" onclick="loadShiftAssignments()">Lọc</button>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tableShiftAssignments">
+              <thead>
+                <tr>
+                  <th>Ngày làm việc</th>
+                  <th>Mã NV</th>
+                  <th>Họ và tên</th>
+                  <th>Phòng ban</th>
+                  <th>Ca làm việc</th>
+                  <th>Khung giờ</th>
+                  <th>Số giờ chuẩn</th>
+                  <th>Ghi chú</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyShiftAssignments">
+                <!-- Nạp động qua API GET /api/v1/shift-assignments -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TAB 2: ĐƠN TĂNG CA OT (SCR_OT_01, SCR_OT_02) -->
+          <div id="tabContentOt" class="figma-white-card" style="display: none; margin-bottom: 24px;">
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div class="card-title-text">Danh sách đơn đăng ký tăng ca (OT)</div>
+                <div style="font-size: 12px; color: #64748b;">Theo dõi giờ làm thêm, hệ số lương và quy trình xét duyệt của Quản lý / Quản trị viên</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="filterOtStatus" class="figma-filter-pill" onchange="filterOtTable()">
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="PENDING" selected>Đang chờ duyệt (Cần xử lý)</option>
+                  <option value="APPROVED">Đã phê duyệt</option>
+                  <option value="REJECTED">Đã từ chối</option>
+                </select>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tableOtRequests">
+              <thead>
+                <tr>
+                  <th>Ngày tạo</th>
+                  <th>Nhân viên</th>
+                  <th>Phòng ban</th>
+                  <th>Ngày tăng ca</th>
+                  <th>Khung giờ OT</th>
+                  <th>Tổng giờ OT</th>
+                  <th>Loại OT</th>
+                  <th>Lý do</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Hành động / Phê duyệt</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyOtRequests">
+                <!-- Nạp động qua API GET /api/v1/ot-requests -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TAB 3: DANH MỤC CA LÀM VIỆC (SCR_ADM_03) -->
+          <div id="tabContentShifts" class="figma-white-card" style="display: none; margin-bottom: 24px;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Danh mục ca làm việc chuẩn</div>
+                <div style="font-size: 12px; color: #64748b;">Cấu hình khung giờ bắt đầu, kết thúc, thời gian nghỉ và dung sai đi muộn</div>
+              </div>
+            </div>
+
+            <table class="figma-table" id="tableShiftsList">
+              <thead>
+                <tr>
+                  <th>Mã ca</th>
+                  <th>Tên ca làm việc</th>
+                  <th>Bắt đầu</th>
+                  <th>Kết thúc</th>
+                  <th>Nghỉ giữa ca</th>
+                  <th>Dung sai đi trễ</th>
+                  <th>Giờ công chuẩn</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyShiftsList">
+                <!-- Nạp động qua API GET /api/v1/shifts -->
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -3006,6 +3188,7 @@ input:checked + .slider:before {
     <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">📄 4. Chi tiết đơn từ (Hiếu)</button>
     <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ 5. Thiết lập Wi-Fi / GPS</button>
     <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">👥 6. Danh sách Nhân viên</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-shifts" onclick="showScreenView('shifts')">⏰ 7. Phân ca &amp; Tăng ca OT</button>
     <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">✕</button>
   </div>
 
