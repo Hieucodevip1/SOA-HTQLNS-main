@@ -541,6 +541,73 @@ function openRequestDetail(requestId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function openCreateLeaveModal() {
+  const html = `
+    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
+      <div>
+        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Loại nghỉ phép:</label>
+        <select id="newLeaveType" class="figma-pill-input" style="width: 100%;">
+          <option value="lt000001-0000-0000-0000-000000000001">Nghỉ phép năm (AL - Có lương)</option>
+          <option value="lt000001-0000-0000-0000-000000000002">Nghỉ ốm hưởng BHXH (SL)</option>
+          <option value="lt000001-0000-0000-0000-000000000003">Nghỉ không hưởng lương (UL)</option>
+          <option value="lt000001-0000-0000-0000-000000000004">Nghỉ việc riêng (PL - Hiếu/Hỉ)</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label style="font-weight: 600; display: block; margin-bottom: 4px;">Từ ngày:</label>
+          <input type="date" id="newLeaveStartDate" class="figma-pill-input" value="2026-11-20" style="width: 100%;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-weight: 600; display: block; margin-bottom: 4px;">Đến ngày:</label>
+          <input type="date" id="newLeaveEndDate" class="figma-pill-input" value="2026-11-20" style="width: 100%;">
+        </div>
+      </div>
+      <div>
+        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Số ngày xin nghỉ:</label>
+        <input type="number" id="newLeaveDays" class="figma-pill-input" value="1.0" step="0.5" min="0.5" max="30" style="width: 100%;">
+      </div>
+      <div>
+        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Lý do xin nghỉ:</label>
+        <textarea id="newLeaveReason" class="figma-pill-input" style="width: 100%; height: 75px; border-radius: 10px;" placeholder="Ghi rõ lý do và phân công bàn giao công việc..."></textarea>
+      </div>
+      <button class="btn-primary-blue" style="margin-top: 10px;" onclick="submitCreateLeaveRequest()">Gửi đơn xin nghỉ phép</button>
+    </div>
+  `;
+  openModal('Tạo đơn xin nghỉ phép mới (SCR_LEAVE_01)', html);
+}
+
+async function submitCreateLeaveRequest() {
+  const leaveTypeId = document.getElementById('newLeaveType')?.value;
+  const startDate = document.getElementById('newLeaveStartDate')?.value;
+  const endDate = document.getElementById('newLeaveEndDate')?.value;
+  const totalDays = Number(document.getElementById('newLeaveDays')?.value || 1);
+  const reason = document.getElementById('newLeaveReason')?.value.trim();
+
+  if (!startDate || !endDate || !reason) {
+    return showToast('Vui lòng điền đầy đủ ngày nghỉ và lý do', 'warning');
+  }
+
+  try {
+    const res = await apiCall('/api/leave', {
+      method: 'POST',
+      body: JSON.stringify({
+        leaveTypeId,
+        startDate,
+        endDate,
+        totalDays,
+        session: 'FULL_DAY',
+        reason
+      })
+    });
+    showToast(res.message || 'Đã gửi đơn xin nghỉ phép thành công! Đang chờ Quản lý duyệt.', 'success');
+    closeModal();
+    openRequestDetail('NP-2026-024');
+  } catch (err) {
+    showToast(`Lỗi gửi đơn: ${err.message}`, 'error');
+  }
+}
+
 // ==============================================================================
 // 7. NẠP DỮ LIỆU CÁC DỊCH VỤ & GIAO DIỆN
 // ==============================================================================

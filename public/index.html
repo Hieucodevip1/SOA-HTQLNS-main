@@ -1736,19 +1736,19 @@ input:checked + .slider:before {
                 <a class="link-action-blue" style="font-size: 13px;" onclick="navigateToView('dashboard')">← Quay lại danh sách đơn</a>
               </div>
             </div>
-            <div style="font-size: 13px; color: #64748b; font-weight: 600;">Mã đơn: NP-2026-021</div>
+            <div style="font-size: 13px; color: #64748b; font-weight: 600;" id="reqDetailHeaderCode">Mã đơn: NP-2026-024</div>
           </div>
 
           <div class="request-detail-layout">
-            <!-- CỘT TRÁI (2/3): THÔNG TIN ĐƠN & LÝ DO TỪ CHỐI -->
+            <!-- CỘT TRÁI (2/3): THÔNG TIN ĐƠN & LÝ DO -->
             <div>
               <div class="figma-white-card" style="margin-bottom: 20px;">
                 <div class="card-title-flex">
                   <div>
                     <div style="font-size: 18px; font-weight: 700; color: #1e293b;">Đơn xin nghỉ phép</div>
-                    <div style="font-size: 12px; color: #64748b;">NP-2026-021 • Gửi ngày 28/10/2026 • 10:05</div>
+                    <div style="font-size: 12px; color: #64748b;">NP-2026-024 • Gửi ngày 30/10/2026 • 08:15</div>
                   </div>
-                  <span class="badge-status badge-rejected">• Bị từ chối</span>
+                  <span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>
                 </div>
 
                 <div class="detail-info-grid">
@@ -1770,11 +1770,11 @@ input:checked + .slider:before {
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Từ ngày</span>
-                    <span class="info-val">30/10/2026 • 08:00</span>
+                    <span class="info-val">02/11/2026 • 08:00</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Đến ngày</span>
-                    <span class="info-val">30/10/2026 • 16:00</span>
+                    <span class="info-val">02/11/2026 • 16:00</span>
                   </div>
                   <div class="info-field-group">
                     <span class="info-label">Thời lượng</span>
@@ -1787,38 +1787,34 @@ input:checked + .slider:before {
               <div class="figma-white-card" style="margin-bottom: 20px;">
                 <div class="card-title-text" style="margin-bottom: 10px;">Lý do và tài liệu đính kèm</div>
                 <p style="font-size: 13px; color: #334155; line-height: 1.6;">
-                  Tôi xin nghỉ phép để giải quyết việc cá nhân. Tôi dự kiến hoàn tất các hạng mục còn lại vào đầu tuần sau.
+                  Tôi xin nghỉ phép để giải quyết công việc gia đình. Các hạng mục đang thực hiện đã được bàn giao cho Huỳnh Gia Kiệt trước ngày nghỉ.
                 </p>
 
                 <div class="file-attach-box">
                   <div class="file-info-left">
                     <span style="font-size: 20px;">📄</span>
                     <div>
-                      <div style="font-weight: 600;">Ke-hoach-cong-viec.pdf</div>
+                      <div style="font-weight: 600;">Bien-ban-ban-giao.pdf</div>
                       <div style="font-size: 11px; color: #94a3b8;">PDF • 245 KB • Đính kèm khi gửi đơn</div>
                     </div>
                   </div>
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Bắt đầu tải xuống Ke-hoach-cong-viec.pdf', 'success')">Tải xuống ↓</a>
+                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Bắt đầu tải xuống file Bien-ban-ban-giao.pdf', 'success')">Tải xuống ↓</a>
                 </div>
 
-                <!-- Alert Đỏ từ chối -->
-                <div class="rejection-alert-box">
-                  <div class="rejection-title">
-                    <span>⚠️</span> Lý do từ chối từ quản lý
-                  </div>
-                  <div class="rejection-content">
-                    Ngày 30/10 cần đủ nhân sự để bàn giao phiên bản. Kế hoạch chưa có người thay thế phụ trách kiểm thử. Vui lòng chọn ngày khác và bổ sung phương án bàn giao.
-                  </div>
-                  <div class="rejection-author">
-                    Nguyễn Thanh Lâm • 28/10/2026 • 15:40
+                <!-- Alert Vàng Đang chờ phê duyệt (SCR_REQ_02 Figma) -->
+                <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 14px 18px; margin-top: 16px; display: flex; gap: 12px; align-items: flex-start;">
+                  <span style="font-size: 18px; color: #ca8a04;">ⓘ</span>
+                  <div>
+                    <strong style="color: #854d0e; font-size: 13.5px;">Đang chờ Nguyễn Thanh Lâm phê duyệt</strong>
+                    <div style="font-size: 12.5px; color: #a16207; margin-top: 2px;">Đơn đã được gửi đến quản lý trực tiếp. Bạn sẽ nhận được thông báo khi có kết quả.</div>
                   </div>
                 </div>
               </div>
 
               <!-- Buttons hành động -->
               <div style="display: flex; gap: 12px;">
-                <button class="btn-secondary-outline" onclick="navigateToView('dashboard')">Về danh sách đơn</button>
-                <button class="btn-primary-blue" onclick="showToast('Mở biểu mẫu chỉnh sửa đơn NP-2026-021', 'success')">Chỉnh sửa và gửi lại</button>
+                <button class="btn-secondary-outline" style="background: #ffffff; border: 1px solid #cbd5e1; color: #334155; padding: 9px 20px; border-radius: 10px; font-weight: 600; cursor: pointer;" onclick="navigateToView('dashboard')">Về danh sách đơn</button>
+                <button class="btn-primary-blue" style="padding: 9px 20px; font-weight: 600;" onclick="openCreateLeaveModal()">+ Tạo đơn xin nghỉ phép</button>
               </div>
             </div>
 
@@ -1834,19 +1830,19 @@ input:checked + .slider:before {
                     <div class="step-icon-circle step-icon-blue">✔</div>
                     <div class="step-content">
                       <div class="step-title">Đã gửi đơn</div>
-                      <div class="step-time">28/10/2026 • 10:05</div>
+                      <div class="step-time">30/10/2026 • 08:15</div>
                       <div class="step-desc">Vũ Đức Hiếu đã gửi đơn xin nghỉ phép. Hệ thống chuyển đơn đến quản lý trực tiếp.</div>
                     </div>
                   </div>
 
                   <!-- Bước 2 -->
                   <div class="timeline-step">
-                    <div class="step-icon-circle step-icon-red">●</div>
+                    <div class="step-icon-circle" style="background: #fef3c7; color: #d97706; border: 1px solid #fde68a;">●</div>
                     <div class="step-content">
-                      <div class="step-title" style="color: #c53030;">Bị từ chối</div>
-                      <div class="step-time">28/10/2026 • 15:40</div>
+                      <div class="step-title" style="color: #d97706; font-weight: 700;">Đang chờ phê duyệt</div>
+                      <div class="step-time"><span style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Bước hiện tại</span></div>
                       <div class="step-desc">
-                        Nguyễn Thanh Lâm đã từ chối: "Ngày 30/10 cần đủ nhân sự để bàn giao phiên bản..."
+                        Nguyễn Thanh Lâm • Quản lý Phòng Kỹ Thuật. Chưa có phản hồi từ người duyệt.
                       </div>
                     </div>
                   </div>
@@ -1857,10 +1853,10 @@ input:checked + .slider:before {
               <div class="figma-white-card">
                 <div class="card-title-text" style="font-size: 13px;">Thông tin hỗ trợ</div>
                 <p style="font-size: 12px; color: #64748b; margin-top: 6px; line-height: 1.5;">
-                  Đơn bị từ chối không trừ phép năm. Bạn có thể chỉnh sửa nội dung và gửi lại để quản lý xem xét.
+                  Đơn đang chờ xử lý, chưa được tính là nghỉ phép. Liên hệ quản lý nếu cần xử lý gấp.
                 </p>
                 <div style="margin-top: 10px;">
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Liên hệ bộ phận nhân sự: hr@htqlns.com', 'warning')">Liên hệ phòng Nhân sự →</a>
+                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Liên hệ bộ phận nhân sự: hr@htqlns.com - Ext: 101', 'info')">Liên hệ phòng Nhân sự →</a>
                 </div>
               </div>
             </div>

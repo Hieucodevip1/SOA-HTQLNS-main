@@ -5,10 +5,11 @@
   "main": "scripts/run-all.js",
   "scripts": {
     "start": "node scripts/run-all.js",
-    "test": "node --test tests/infra.test.js tests/auth-org.test.js tests/attendance.test.js",
+    "test": "node --test tests/infra.test.js tests/auth-org.test.js tests/attendance.test.js tests/leave.test.js",
     "test:infra": "node --test tests/infra.test.js",
     "test:auth-org": "node --test tests/auth-org.test.js",
     "test:attendance": "node --test tests/attendance.test.js",
+    "test:leave": "node --test tests/leave.test.js",
     "start:gateway": "node gateway/server.js",
     "start:registry": "node registry/server.js",
     "start:event-bus": "node event-bus/server.js",
