@@ -163,46 +163,111 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
   }
 });
 
+// Server-side leave-day calculation: weekdays, with optional half-day session.
+function calculateLeaveDays(startDate, endDate, session) {
+  const validDate = (value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const date = new Date(`${value}T00:00:00Z`);
+    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
+  };
+  const start = validDate(startDate);
+  const end = validDate(endDate);
+  if (!start || !end || start > end || start.getUTCFullYear() !== end.getUTCFullYear()) return null;
+  if (!['FULL_DAY', 'MORNING', 'AFTERNOON'].includes(session)) return null;
+  if (session !== 'FULL_DAY' && startDate !== endDate) return null;
+
+  let days = 0;
+  for (let date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    if (![0, 6].includes(date.getUTCDay())) days += 1;
+  }
+  if (session !== 'FULL_DAY') days = days === 1 ? 0.5 : 0;
+  return days > 0 && days <= 366 ? days : null;
+}
+
 // 4. Tạo đơn xin nghỉ phép (SCR_LEAVE_01)
 app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
+  let connection;
   try {
     const empId = getEmpIdFromUser(req.user);
-    const { leaveTypeId, startDate, endDate, totalDays, session = 'FULL_DAY', reason, attachmentUrl = null } = req.body;
-
-    if (!empId || !leaveTypeId || !startDate || !endDate || !totalDays || !reason) {
-      return res.status(400).json({ success: false, error: 'Thiếu thông tin bắt buộc' });
+    const { leaveTypeId, startDate, endDate, session = 'FULL_DAY', reason, attachmentUrl = null } = req.body;
+    const totalDays = calculateLeaveDays(startDate, endDate, session);
+    if (!empId || !leaveTypeId || !totalDays || typeof reason !== 'string' || !reason.trim()) {
+      return res.status(400).json({ success: false, error: 'Thông tin nghỉ phép không hợp lệ' });
+    }
+    if (req.body.totalDays != null && Math.abs(Number(req.body.totalDays) - totalDays) > 0.001) {
+      return res.status(400).json({ success: false, error: 'Số ngày phép gửi lên không khớp ngày làm việc được tính trên server' });
     }
 
-    const year = new Date(startDate).getFullYear();
-    const [balances] = await pool.query(
-      'SELECT * FROM leave_balances WHERE emp_id = ? AND leave_type_id = ? AND year = ?',
-      [empId, leaveTypeId, year]
-    );
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-    if (balances.length) {
+    const [types] = await connection.query('SELECT * FROM leave_types WHERE id = ? AND status = "ACTIVE"', [leaveTypeId]);
+    if (!types.length) {
+      const err = new Error('Loại nghỉ phép không tồn tại hoặc đã ngừng sử dụng');
+      err.status = 400;
+      throw err;
+    }
+    if (types[0].require_attachment && !attachmentUrl) {
+      const err = new Error('Loại nghỉ phép này yêu cầu giấy tờ minh chứng');
+      err.status = 400;
+      throw err;
+    }
+
+    const [overlaps] = await connection.query(
+      `SELECT id FROM leave_requests WHERE emp_id = ? AND status IN ('PENDING','APPROVED')
+       AND start_date <= ? AND end_date >= ? LIMIT 1 FOR UPDATE`,
+      [empId, endDate, startDate]
+    );
+    if (overlaps.length) {
+      const err = new Error('Khoảng thời gian đã có đơn nghỉ đang chờ duyệt hoặc đã duyệt');
+      err.status = 409;
+      throw err;
+    }
+
+    const year = Number(startDate.slice(0, 4));
+    const quota = Number(types[0].max_days_per_year);
+    if (quota > 0) {
+      await connection.query(
+        `INSERT IGNORE INTO leave_balances
+         (id, emp_id, leave_type_id, year, total_days, used_days, pending_days)
+         VALUES (?, ?, ?, ?, ?, 0, 0)`,
+        [crypto.randomUUID(), empId, leaveTypeId, year, quota]
+      );
+      const [balances] = await connection.query(
+        'SELECT * FROM leave_balances WHERE emp_id = ? AND leave_type_id = ? AND year = ? FOR UPDATE',
+        [empId, leaveTypeId, year]
+      );
       const bal = balances[0];
       const remaining = Number(bal.total_days) - Number(bal.used_days) - Number(bal.pending_days);
-      if (Number(totalDays) > remaining) {
-        return res.status(400).json({
-          success: false,
-          error: `Số ngày phép còn lại không đủ (còn ${remaining} ngày, xin nghỉ ${totalDays} ngày)`
-        });
+      if (totalDays > remaining) {
+        const err = new Error(`Số ngày phép còn lại không đủ (còn ${remaining} ngày)`);
+        err.status = 400;
+        throw err;
       }
-      await pool.query('UPDATE leave_balances SET pending_days = pending_days + ? WHERE id = ?', [totalDays, bal.id]);
+      await connection.query('UPDATE leave_balances SET pending_days = pending_days + ? WHERE id = ?', [totalDays, bal.id]);
     }
 
     const id = crypto.randomUUID();
-    await pool.query(
+    await connection.query(
       `INSERT INTO leave_requests (id, emp_id, leave_type_id, start_date, end_date, total_days, session, reason, attachment_url, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
       [id, empId, leaveTypeId, startDate, endDate, totalDays, session, reason.trim(), attachmentUrl]
     );
+    await connection.commit();
+    connection.release();
+    connection = null;
 
     const [created] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
     events.publish('LEAVE_REQUEST_CREATED', { requestId: id, empId, startDate, endDate, totalDays }).catch(() => {});
-
     res.status(201).json({ success: true, message: 'Gửi đơn xin nghỉ phép thành công', data: created[0] });
   } catch (err) {
+    if (connection) {
+      await connection.rollback().catch(() => {});
+      connection.release();
+    }
+    if (err.status === 400 || err.status === 409) {
+      return res.status(err.status).json({ success: false, error: err.message });
+    }
     next(err);
   }
 });
