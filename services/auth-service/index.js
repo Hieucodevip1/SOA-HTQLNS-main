@@ -117,7 +117,7 @@ async function findUserByLogin(login) {
 
 // Helper bổ sung thông tin hồ sơ nhân sự cho user
 async function enrichUserProfile(user, useDb) {
-  let fullName = user.username;
+  let fullName = user.full_name || user.fullName || user.username;
   let empCode = null;
   let deptName = null;
 
@@ -272,6 +272,7 @@ app.post('/api/auth/register', async (req, res) => {
         emp_id: finalEmpId,
         username,
         email,
+        full_name: finalFullName,
         password_hash: passwordHash,
         role: assignedRole,
         biometric_enabled: isBiometric,

@@ -1740,6 +1740,22 @@ input:checked + .slider:before {
 
           <!-- ==================== KHU VỰC DASHBOARD CHO ADMIN / MANAGER ==================== -->
           <div id="dashAdminOverviewSection">
+
+            <!-- Alert Thông Báo Nhân Sự Mới Chờ Tiếp Nhận (Dành cho Quản lý / Admin) -->
+            <div id="dashAdminPendingAlert" style="display: none; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 16px 20px; margin-bottom: 22px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <span style="font-size: 24px;">🔔</span>
+                  <div>
+                    <div style="font-size: 14.5px; font-weight: 700; color: #1e40af;" id="dashAdminPendingAlertTitle">Có nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!</div>
+                    <div style="font-size: 12.5px; color: #3b82f6; margin-top: 2px;" id="dashAdminPendingAlertSub">Vui lòng phân bổ phòng ban, xếp ca trực và cấu hình mức lương để kích hoạt dữ liệu việc làm.</div>
+                  </div>
+                </div>
+                <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px; border-radius: 8px;" onclick="navigateToView('employees')">
+                  ⚡ Xem &amp; Tiếp nhận nhân sự →
+                </button>
+              </div>
+            </div>
             <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
             <div class="filter-pill-bar">
               <div class="pill-dropdown-group">
@@ -1958,6 +1974,26 @@ input:checked + .slider:before {
           <!-- ==================== KHU VỰC DASHBOARD CHO NHÂN VIÊN (EMPLOYEE) ==================== -->
           <div id="dashEmployeeOverviewSection" style="display: none;">
 
+            <!-- Banner Thông Báo Hồ Sơ Chờ Tiếp Nhận Vào Ban/Phòng -->
+            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+              <div style="display: flex; gap: 16px; align-items: flex-start;">
+                <div style="font-size: 32px; line-height: 1;">⏳</div>
+                <div style="flex: 1;">
+                  <div style="font-size: 15.5px; font-weight: 700; color: #92400e;">
+                    Tài khoản mới đăng ký — Đang chờ Ban Quản trị tiếp nhận vào ban/phòng
+                  </div>
+                  <div style="font-size: 13px; color: #b45309; margin-top: 6px; line-height: 1.55;">
+                    Chào mừng bạn đến với hệ thống HTQLNS! Tài khoản của bạn đã được khởi tạo thành công trên hệ thống. 
+                    <br>Hiện tại bạn đang ở trạng thái <strong>Chờ tiếp nhận</strong>. Quản trị viên (Admin) hoặc Phòng Nhân sự (HR) sẽ sớm phân bổ bạn vào phòng ban phù hợp, xếp lịch ca làm việc và kích hoạt bảng lương. Khi đó toàn bộ dữ liệu việc làm và quyền chấm công sẽ chính thức kích hoạt.
+                  </div>
+                  <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 700; font-size: 11.5px; padding: 4px 10px;">🟡 Chờ tiếp nhận ban/phòng</span>
+                    <span style="font-size: 12px; color: #78350f;">• Mọi thao tác công việc sẽ được ghi nhận độc lập theo mã nhân sự của bạn</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- ===== KHU VỰC 1: HERO CARD — Thao tác nhanh & Chấm công trong ngày (SCR_ATT_01 + SCR_SHIFT_01) ===== -->
             <div class="emp-hero-card">
               <div class="emp-hero-top">
@@ -2010,15 +2046,15 @@ input:checked + .slider:before {
               <div class="emp-quick-actions-bar">
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-leave" onclick="scrollToCreateLeaveForm()">
                   <span style="font-size: 16px;">🏖️</span>
-                  <span>Xin nghỉ phép (SCR_LEAVE_01)</span>
+                  <span>Xin nghỉ phép</span>
                 </button>
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-ot" onclick="openCreateOtModal()">
                   <span style="font-size: 16px;">⚡</span>
-                  <span>Đăng ký OT (SCR_OT_01)</span>
+                  <span>Đăng ký OT</span>
                 </button>
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-adj" onclick="openSubmitAdjustmentModal('', '', '')">
                   <span style="font-size: 16px;">📝</span>
-                  <span>Giải trình công (SCR_ATT_03)</span>
+                  <span>Giải trình công</span>
                 </button>
               </div>
             </div>
@@ -3689,7 +3725,7 @@ input:checked + .slider:before {
               </form>
 
               <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
-                <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Xác thực Sinh trắc học (Figma Image 5)</div>
+                <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Xác thực Sinh trắc học</div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 13px; color: #475569;">Bật FaceID / Vân tay khi đăng nhập</span>
                   <input type="checkbox" checked onchange="showToast('Đã lưu cấu hình sinh trắc học!', 'success')" style="transform: scale(1.3); cursor: pointer;">
