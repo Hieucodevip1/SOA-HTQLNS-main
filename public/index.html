@@ -1397,14 +1397,17 @@ input:checked + .slider:before {
         <a class="figma-nav-item" id="nav-employees" onclick="navigateToView('employees')" style="cursor: pointer;">
           <span class="figma-nav-icon">📋</span> Nhân viên
         </a>
+        <a class="figma-nav-item" id="nav-departments" onclick="navigateToView('departments')" style="cursor: pointer;">
+          <span class="figma-nav-icon">🏢</span> Cơ cấu phòng ban
+        </a>
         <a class="figma-nav-item" id="nav-attendance-history" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
           <span class="figma-nav-icon">📄</span> Lịch sử chấm công NV
         </a>
         <a class="figma-nav-item" id="nav-my-attendance" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
           <span class="figma-nav-icon">👤</span> Lịch sử chấm công
         </a>
-        <a class="figma-nav-item" id="nav-departments" onclick="navigateToView('departments')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📊</span> Quản lý phân quyền
+        <a class="figma-nav-item" id="nav-rbac" onclick="navigateToView('rbac')" style="cursor: pointer;">
+          <span class="figma-nav-icon">🔐</span> Quản lý phân quyền
         </a>
         <a class="figma-nav-item" id="nav-stats" onclick="navigateToView('stats')" style="cursor: pointer;">
           <span class="figma-nav-icon">📈</span> Thống kê
@@ -2173,6 +2176,140 @@ input:checked + .slider:before {
 
 
         <!-- ====================================================================
+             VIEW 5B: QUẢN LÝ PHÂN QUYỀN (RBAC - CHỈ DÀNH CHO ADMIN)
+             ==================================================================== -->
+        <section id="view-rbac" class="figma-view-section" style="display: none;">
+          <div class="breadcrumb-trail">Hệ thống / Quản lý Phân quyền (RBAC)</div>
+          <div class="page-main-header">
+            <h1 class="page-heading-title">Quản lý Phân quyền Tài khoản (RBAC)</h1>
+            <div class="page-heading-desc">Chỉ Quản trị viên (ADMIN) mới có quyền chỉ định vai trò và kiểm soát phạm vi truy cập hệ thống.</div>
+          </div>
+
+          <!-- Alert giải thích các vai trò trong hệ thống -->
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;">
+            <div style="font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
+              <span>🛡️</span> Ma trận Phân định Trách nhiệm & Quyền hạn (Role-Based Access Control)
+            </div>
+            <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6;">
+              <div>• <strong>ADMIN (Quản trị viên):</strong> Toàn quyền kiểm soát hệ thống, phân quyền vai trò tài khoản, cấu hình ca làm việc, giám sát hạ tầng SOA.</div>
+              <div>• <strong>HR (Phòng Nhân sự):</strong> Quản lý hồ sơ nhân sự, cơ cấu phòng ban, chấm công và chế độ nghỉ phép toàn công ty.</div>
+              <div>• <strong>MANAGER (Quản lý bộ phận - Thầy Lâm):</strong> Quản lý nhân sự và duyệt đơn từ thuộc phòng ban quản lý, theo dõi thống kê chuyên cần.</div>
+              <div>• <strong>EMPLOYEE (Nhân viên):</strong> Tự chấm công cá nhân, theo dõi lịch sử và tạo đơn nghỉ phép của mình. <em>Tuyệt đối không có quyền phân quyền hay can thiệp dữ liệu người khác.</em></div>
+            </div>
+          </div>
+
+          <!-- Bảng phân quyền người dùng -->
+          <div class="figma-white-card" style="margin-bottom: 24px;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Danh sách Tài khoản & Phân quyền Vai trò</div>
+                <div style="font-size: 12px; color: #64748b;">Chọn vai trò tương ứng và nhấn Lưu quyền để cập nhật trực tiếp vào Auth Service.</div>
+              </div>
+              <button class="btn-primary-blue" onclick="loadRbacUsersData()">🔄 Làm mới danh sách</button>
+            </div>
+
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Tên tài khoản</th>
+                  <th>Email liên kết</th>
+                  <th>Mã nhân sự</th>
+                  <th>Vai trò hiện tại</th>
+                  <th>Phân quyền mới</th>
+                  <th>Trạng thái</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="rbacUsersTableBody">
+                <!-- Nạp qua loadRbacUsersData() -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Bảng chi tiết ma trận quyền -->
+          <div class="figma-white-card">
+            <div class="card-title-text" style="margin-bottom: 12px;">Ma trận Phân quyền Chức năng (Feature Permission Matrix)</div>
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Chức năng hệ thống</th>
+                  <th style="text-align: center;">ADMIN</th>
+                  <th style="text-align: center;">HR</th>
+                  <th style="text-align: center;">MANAGER</th>
+                  <th style="text-align: center;">EMPLOYEE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Điểm danh & Chấm công cá nhân (GPS/WiFi)</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                </tr>
+                <tr>
+                  <td>Tạo đơn nghỉ phép, giải trình đi muộn cá nhân</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                </tr>
+                <tr>
+                  <td>Xem bảng chấm công toàn bộ nhân sự</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ (Đội nhóm)</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                </tr>
+                <tr>
+                  <td>Phê duyệt đơn từ (Nghỉ phép, Bổ sung công, OT)</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                </tr>
+                <tr>
+                  <td>Quản lý hồ sơ nhân viên & Cơ cấu phòng ban</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                </tr>
+                <tr>
+                  <td>Thiết lập phương thức chấm công (Wi-Fi, GPS)</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không</td>
+                </tr>
+                <tr>
+                  <td>Báo cáo thống kê chuyên cần toàn cơ quan</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Có</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ (Chỉ xem cá nhân)</td>
+                </tr>
+                <tr style="background: #fef2f2;">
+                  <td><strong>Quản lý Phân quyền Tài khoản (RBAC)</strong></td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Toàn quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                </tr>
+                <tr style="background: #fef2f2;">
+                  <td><strong>Giám sát Cụm Dịch vụ Hạ tầng SOA</strong></td>
+                  <td style="text-align: center; color: #16a34a; font-weight: 700;">✓ Toàn quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                  <td style="text-align: center; color: #dc2626; font-weight: 700;">✕ Không có quyền</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <!-- ====================================================================
              VIEW 6: GIÁM SÁT HẠ TẦNG SOA (REGISTRY, EVENT BUS, GATEWAY)
              ==================================================================== -->
         <section id="view-soa-monitor" class="figma-view-section" style="display: none;">
@@ -2335,38 +2472,88 @@ input:checked + .slider:before {
              ==================================================================== -->
         <section id="view-stats" class="figma-view-section" style="display: none;">
           <div class="breadcrumb-trail">Báo cáo / Thống kê chuyên cần & Ngày công</div>
-          <div class="page-main-header">
-            <h1 class="page-heading-title">Báo cáo & Thống kê Chấm công</h1>
-            <div class="page-heading-desc">Tổng hợp số liệu chuyên cần, tỷ lệ đi làm và phân tích đơn từ theo chu kỳ.</div>
+          <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <h1 class="page-heading-title">Báo cáo & Thống kê Chấm công</h1>
+              <div class="page-heading-desc">Tổng hợp số liệu chuyên cần, tỷ lệ đi làm và phân tích rủi ro vi phạm theo chu kỳ.</div>
+            </div>
+
+            <!-- Bộ lọc kỳ thống kê -->
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('2026-10')" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">📅 Tháng 10/2026 (Hiện tại)</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('2026-09')" style="cursor: pointer;">📅 Tháng 09/2026</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('2026-Q3')" style="cursor: pointer;">📅 Quý III/2026</button>
+            </div>
           </div>
 
+          <!-- CARD THỐNG KÊ CÁ NHÂN (DÀNH CHO EMPLOYEE) -->
+          <div class="figma-white-card" id="statEmployeePersonalCard" style="display: none; margin-bottom: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text" style="color: #065f46;">📊 Kết quả Chuyên cần Cá nhân Tháng 10/2026 của bạn</div>
+                <div style="font-size: 12px; color: #047857;">Tóm tắt ngày công, ngày phép và giờ làm việc ghi nhận trên hệ thống</div>
+              </div>
+              <span class="badge-status badge-approved" style="font-size: 13px; font-weight: 700;">Hạng A+ (Xuất sắc)</span>
+            </div>
+            <div class="metrics-row-4" style="margin-top: 14px;">
+              <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
+                <div style="font-size: 12px; color: #64748b;">Số ngày công thực tế</div>
+                <div style="font-size: 22px; font-weight: 700; color: #059669;">22 / 22 ngày</div>
+                <div style="font-size: 11px; color: #059669;">Đạt 100% công chuẩn</div>
+              </div>
+              <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
+                <div style="font-size: 12px; color: #64748b;">Số lần đi muộn</div>
+                <div style="font-size: 22px; font-weight: 700; color: #059669;">0 lần</div>
+                <div style="font-size: 11px; color: #059669;">Chấp hành tốt giờ giấc</div>
+              </div>
+              <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
+                <div style="font-size: 12px; color: #64748b;">Quỹ phép năm còn lại</div>
+                <div style="font-size: 22px; font-weight: 700; color: #2563eb;">10 / 12 ngày</div>
+                <div style="font-size: 11px; color: #64748b;">Đã dùng 2 ngày</div>
+              </div>
+              <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
+                <div style="font-size: 12px; color: #64748b;">Giờ tăng ca (OT) tích lũy</div>
+                <div style="font-size: 22px; font-weight: 700; color: #d97706;">4.5 giờ</div>
+                <div style="font-size: 11px; color: #64748b;">Trong hạn mức quy định</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 THẺ CHỈ SỐ KPI TOÀN CƠ QUAN -->
           <div class="metrics-row-4" style="margin-bottom: 20px;">
             <div class="figma-metric-card">
               <div class="metric-header"><span>Tỷ lệ đi làm đúng giờ</span><span>🎯</span></div>
-              <div class="metric-value-huge metric-value-green">87.5%</div>
-              <div class="metric-footer-note">Tăng 2.1% so với tháng trước</div>
+              <div class="metric-value-huge metric-value-green" id="statMetricOnTime">88.5%</div>
+              <div class="metric-footer-note" id="statMetricOnTimeSub">Tăng 2.1% so với tháng trước</div>
             </div>
             <div class="figma-metric-card">
               <div class="metric-header"><span>Tỷ lệ đi muộn</span><span>⚠️</span></div>
-              <div class="metric-value-huge metric-value-orange">7.5%</div>
-              <div class="metric-footer-note">Trung bình trễ 11.2 phút/lần</div>
+              <div class="metric-value-huge metric-value-orange" id="statMetricLate">6.8%</div>
+              <div class="metric-footer-note" id="statMetricLateSub">Bình quân trễ 12.5 phút/lần</div>
             </div>
             <div class="figma-metric-card">
               <div class="metric-header"><span>Tỷ lệ nghỉ phép</span><span>🏖️</span></div>
-              <div class="metric-value-huge metric-value-blue">5.0%</div>
-              <div class="metric-footer-note">100% đơn được duyệt đúng quy định</div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricLeave">4.7%</div>
+              <div class="metric-footer-note" id="statMetricLeaveSub">100% đơn được duyệt đúng quy định</div>
             </div>
             <div class="figma-metric-card">
               <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏱️</span></div>
-              <div class="metric-value-huge metric-value-blue">6,420 h</div>
-              <div class="metric-footer-note">95 nhân sự toàn công ty</div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricHours">6,580 h</div>
+              <div class="metric-footer-note" id="statMetricHoursSub">95 nhân sự toàn công ty</div>
             </div>
           </div>
 
+          <!-- BẢNG TỔNG HỢP THEO PHÒNG BAN -->
           <div class="figma-white-card">
             <div class="card-title-flex">
-              <div class="card-title-text">Bảng tổng hợp chuyên cần theo từng phòng ban</div>
-              <button class="btn-primary-blue" onclick="showToast('Đang xuất báo cáo thống kê phòng ban...', 'success')">📊 Xuất báo cáo</button>
+              <div>
+                <div class="card-title-text">Bảng tổng hợp chuyên cần theo từng phòng ban</div>
+                <div style="font-size: 12px; color: #64748b;">Số liệu tổng kết công chuẩn, công thực tế và ngày nghỉ của 4 phòng ban</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-primary-blue" onclick="showToast('Đang xuất dữ liệu Excel (.xlsx)...', 'success')">📊 Xuất Excel</button>
+                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="showToast('Đang tải file PDF báo cáo...', 'success')">📄 Tải PDF</button>
+              </div>
             </div>
             <table class="figma-table">
               <thead>
@@ -2380,7 +2567,7 @@ input:checked + .slider:before {
                   <th>Tỷ lệ chuyên cần</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="statDeptTableBody">
                 <tr>
                   <td><strong>Phòng Kỹ Thuật</strong></td>
                   <td>40</td>
@@ -2416,6 +2603,61 @@ input:checked + .slider:before {
                   <td><span style="color: #10b981; font-weight: 600;">0 lượt</span></td>
                   <td>3 ngày</td>
                   <td><span class="badge-status badge-approved">98.9%</span></td>
+                </tr>
+              </tbody>
+              <tfoot style="background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1;">
+                <tr>
+                  <td>TỔNG TOÀN CÔNG TY</td>
+                  <td id="statFootEmployees">95</td>
+                  <td id="statFootStandardDays">2,090 công</td>
+                  <td id="statFootActualDays">2,046 công</td>
+                  <td id="statFootLateCount" style="color: #d97706;">15 lượt</td>
+                  <td id="statFootLeaveDays">30 ngày</td>
+                  <td><span class="badge-status badge-approved" id="statFootRate">97.9%</span></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- BẢNG CẢNH BÁO VI PHẠM NGƯỠNG (ANALYTICS SERVICE) -->
+          <div class="figma-white-card" style="margin-top: 24px;">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Cảnh báo Vi phạm Ngưỡng (Analytics Alert Thresholds)</div>
+                <div style="font-size: 12px; color: #64748b;">Giám sát tự động từ Analytics Service (:3008) theo quy định Luật Lao động & Nội quy công ty</div>
+              </div>
+              <span class="badge-status badge-approved">2 ngưỡng kích hoạt</span>
+            </div>
+            <table class="figma-table">
+              <thead>
+                <tr>
+                  <th>Mã ngưỡng</th>
+                  <th>Tên cảnh báo</th>
+                  <th>Chỉ số giám sát</th>
+                  <th>Mức kích hoạt</th>
+                  <th>Mức độ</th>
+                  <th>Số trường hợp vi phạm</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>TH-LATE-3</strong></td>
+                  <td>Cảnh báo đi muộn quá 3 lần/tháng</td>
+                  <td>Số lần check-in trễ</td>
+                  <td>&gt; 3 lần / tháng</td>
+                  <td><span class="badge-status" style="background: #fef3c7; color: #b45309;">WARNING</span></td>
+                  <td><strong>2 nhân sự</strong> (Huỳnh Gia Kiệt, Trần Hoài An)</td>
+                  <td><span class="badge-status" style="background: #fef3c7; color: #b45309;">Cần nhắc nhở</span></td>
+                </tr>
+                <tr>
+                  <td><strong>TH-OT-40</strong></td>
+                  <td>Cảnh báo vượt trần 40 giờ OT/tháng (Bộ luật LĐ)</td>
+                  <td>Tổng số giờ tăng ca</td>
+                  <td>&gt; 40.0 giờ / tháng</td>
+                  <td><span class="badge-status badge-rejected">CRITICAL</span></td>
+                  <td><strong>0 nhân sự</strong> (Tuân thủ trần quy định)</td>
+                  <td><span class="badge-status badge-approved">An toàn</span></td>
                 </tr>
               </tbody>
             </table>

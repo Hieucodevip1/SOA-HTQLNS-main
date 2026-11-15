@@ -333,16 +333,18 @@ function showScreenView(screen) {
   }
 
   updateTopbarUser();
+  applyRoleBasedUI();
   navigateToView(screen);
 }
 
 function updateTopbarUser() {
   if (!state.user) return;
   const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
-  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : state.user.username);
+  const isEmployee = state.user.role === 'EMPLOYEE' || state.user.username === 'employee';
+  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : (isEmployee ? 'Vũ Đức Hiếu' : state.user.username));
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
                       (state.user.role === 'HR' ? 'Phòng Nhân sự' :
-                      (state.user.role === 'MANAGER' ? 'Quản lý | Kỹ thuật' : 'Nhân viên'));
+                      (state.user.role === 'MANAGER' ? 'Quản lý | Kỹ thuật' : 'Nhân viên | Kỹ thuật'));
 
   const nameEl = document.getElementById('topbarUserName');
   const roleEl = document.getElementById('topbarUserRole');
@@ -360,7 +362,122 @@ function updateTopbarUser() {
   }
 }
 
+// Phân quyền giao diện theo vai trò người dùng (RBAC Interface Guard)
+function applyRoleBasedUI() {
+  const role = state.user?.role || 'EMPLOYEE';
+
+  const navRbac = document.getElementById('nav-rbac');
+  const navSoa = document.getElementById('nav-soa-monitor');
+  const navSettings = document.getElementById('nav-settings');
+  const navDepartments = document.getElementById('nav-departments');
+  const navEmpHistory = document.getElementById('nav-attendance-history');
+  const navEmployees = document.getElementById('nav-employees');
+  const pendingRequestsCard = document.getElementById('dashPendingApprovalCard');
+  const personalRequestsCard = document.getElementById('dashEmployeePersonalRequestsCard');
+
+  // 1. Quản lý phân quyền: CHỈ ADMIN được hiển thị và thao tác
+  if (navRbac) navRbac.style.display = (role === 'ADMIN') ? 'flex' : 'none';
+
+  // 2. Giám sát hạ tầng SOA: CHỈ ADMIN được xem
+  if (navSoa) navSoa.style.display = (role === 'ADMIN') ? 'flex' : 'none';
+
+  // 3. Thiết lập chấm công (Wi-Fi, GPS): ADMIN hoặc HR
+  if (navSettings) navSettings.style.display = (role === 'ADMIN' || role === 'HR') ? 'flex' : 'none';
+
+  // 4. Cơ cấu phòng ban: ADMIN hoặc HR
+  if (navDepartments) navDepartments.style.display = (role === 'ADMIN' || role === 'HR') ? 'flex' : 'none';
+
+  // 5. Bảng công NV toàn công ty & Danh sách nhân viên: Ẩn với EMPLOYEE
+  if (navEmpHistory) navEmpHistory.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
+  if (navEmployees) navEmployees.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
+
+  // 6. Điều chỉnh nội dung Dashboard & Thống kê cá nhân:
+  const statEmployeePersonalCard = document.getElementById('statEmployeePersonalCard');
+  if (statEmployeePersonalCard) {
+    statEmployeePersonalCard.style.display = (role === 'EMPLOYEE') ? 'block' : 'none';
+  }
+
+  if (role === 'EMPLOYEE') {
+    // Nhân viên không thể duyệt đơn của đồng nghiệp khác
+    if (pendingRequestsCard) pendingRequestsCard.style.display = 'none';
+    if (personalRequestsCard) personalRequestsCard.style.display = 'block';
+
+    // Đổi thẻ KPI Dashboard thành KPI cá nhân của nhân viên
+    const lbl1 = document.getElementById('dashMetricLbl1');
+    const val1 = document.getElementById('dashMetricVal1');
+    const sub1 = document.getElementById('dashMetricSub1');
+    const lbl2 = document.getElementById('dashMetricLbl2');
+    const val2 = document.getElementById('dashMetricVal2');
+    const sub2 = document.getElementById('dashMetricSub2');
+    const lbl3 = document.getElementById('dashMetricLbl3');
+    const val3 = document.getElementById('dashMetricVal3');
+    const sub3 = document.getElementById('dashMetricSub3');
+    const lbl4 = document.getElementById('dashMetricLbl4');
+    const val4 = document.getElementById('dashMetricVal4');
+    const sub4 = document.getElementById('dashMetricSub4');
+
+    if (lbl1) lbl1.innerText = 'Chấm công tháng';
+    if (val1) val1.innerText = '22 / 22';
+    if (sub1) sub1.innerText = 'Đạt 100% ngày công chuẩn →';
+
+    if (lbl2) lbl2.innerText = 'Quỹ phép còn';
+    if (val2) val2.innerText = '10 / 12';
+    if (sub2) sub2.innerText = 'Đã nghỉ 2 ngày phép năm →';
+
+    if (lbl3) lbl3.innerText = 'Đi muộn tháng';
+    if (val3) val3.innerText = '00';
+    if (sub3) sub3.innerText = 'Chuyên cần tốt, không bị trừ thưởng';
+
+    if (lbl4) lbl4.innerText = 'Đơn đang chờ';
+    if (val4) val4.innerText = '01';
+    if (sub4) sub4.innerText = 'Nghỉ phép năm ngày 02/11/2026 →';
+  } else {
+    if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
+    if (personalRequestsCard) personalRequestsCard.style.display = 'none';
+
+    const lbl1 = document.getElementById('dashMetricLbl1');
+    const val1 = document.getElementById('dashMetricVal1');
+    const sub1 = document.getElementById('dashMetricSub1');
+    const lbl2 = document.getElementById('dashMetricLbl2');
+    const val2 = document.getElementById('dashMetricVal2');
+    const sub2 = document.getElementById('dashMetricSub2');
+    const lbl3 = document.getElementById('dashMetricLbl3');
+    const val3 = document.getElementById('dashMetricVal3');
+    const sub3 = document.getElementById('dashMetricSub3');
+    const lbl4 = document.getElementById('dashMetricLbl4');
+    const val4 = document.getElementById('dashMetricVal4');
+    const sub4 = document.getElementById('dashMetricSub4');
+
+    if (lbl1) lbl1.innerText = 'Đã đi làm';
+    if (val1) val1.innerText = '34 / 40';
+    if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
+
+    if (lbl2) lbl2.innerText = 'Nghỉ phép';
+    if (val2) val2.innerText = '04';
+    if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+
+    if (lbl3) lbl3.innerText = 'Đi muộn';
+    if (val3) val3.innerText = '03';
+    if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
+
+    if (lbl4) lbl4.innerText = 'Đơn chờ duyệt';
+    if (val4) val4.innerText = '07';
+    if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+  }
+}
+
 function navigateToView(viewName) {
+  // Kiểm tra quyền hạn truy cập theo vai trò (RBAC Route Guard)
+  const role = state.user?.role || 'EMPLOYEE';
+  if (role === 'EMPLOYEE' && ['rbac', 'departments', 'settings', 'soa-monitor', 'attendance-history', 'employees'].includes(viewName)) {
+    showToast('Nhân viên không có quyền truy cập chức năng này (Chỉ dành cho Quản lý / Quản trị viên)', 'error');
+    return;
+  }
+  if (role !== 'ADMIN' && ['rbac', 'soa-monitor'].includes(viewName)) {
+    showToast('Chỉ Quản trị viên (ADMIN) mới có quyền truy cập chức năng này', 'error');
+    return;
+  }
+
   state.currentView = viewName;
 
   // Cập nhật tab active trên Sidebar
@@ -394,6 +511,7 @@ function navigateToView(viewName) {
   if (viewName === 'departments') loadDepartmentsData();
   if (viewName === 'attendance-history') loadAttendanceHistoryData();
   if (viewName === 'my-attendance') loadMyAttendanceData();
+  if (viewName === 'rbac') loadRbacUsersData();
   if (viewName === 'stats') loadStatsData();
   if (viewName === 'soa-monitor') loadSoaServicesStatus();
   if (viewName === 'profile') loadProfileData();
@@ -578,9 +696,208 @@ function loadMyAttendanceData() {
   `).join('');
 }
 
-// Nạp dữ liệu thống kê báo cáo
+// ==============================================================================
+// NẠP VÀ QUẢN LÝ PHÂN QUYỀN (RBAC - CHỈ ADMIN)
+// ==============================================================================
+async function loadRbacUsersData() {
+  const tbody = document.getElementById('rbacUsersTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Đang kết nối Auth Service (:3001) để lấy danh sách tài khoản...</td></tr>`;
+
+  let users = [];
+  try {
+    const res = await apiCall('/api/auth/users');
+    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+      users = res.data;
+    }
+  } catch (err) {
+    console.warn('Lỗi lấy danh sách user từ API, sử dụng danh sách tài khoản mặc định:', err.message);
+  }
+
+  // Nếu API chưa có dữ liệu hoặc mock fallback
+  if (!users || users.length === 0) {
+    users = [
+      { id: 'usr_admin', username: 'admin', email: 'admin@htqlns.com', emp_id: 'AD-001', role: 'ADMIN', status: 'ACTIVE' },
+      { id: 'usr_manager', username: 'manager', email: 'lam@htqlns.com', emp_id: 'NV-004', role: 'MANAGER', status: 'ACTIVE' },
+      { id: 'usr_hr', username: 'hr_admin', email: 'hr@htqlns.com', emp_id: 'NV-005', role: 'HR', status: 'ACTIVE' },
+      { id: 'usr_emp1', username: 'employee', email: 'hieu.vd@htqlns.com', emp_id: 'NV-001', role: 'EMPLOYEE', status: 'ACTIVE' },
+      { id: 'usr_emp2', username: 'kiet.hg', email: 'kiet.hg@htqlns.com', emp_id: 'NV-002', role: 'EMPLOYEE', status: 'ACTIVE' },
+      { id: 'usr_emp3', username: 'hao.ng', email: 'hao.ng@htqlns.com', emp_id: 'NV-003', role: 'EMPLOYEE', status: 'ACTIVE' }
+    ];
+  }
+
+  tbody.innerHTML = users.map(u => {
+    let roleBadge = '<span class="badge-status badge-approved">EMPLOYEE</span>';
+    if (u.role === 'ADMIN') roleBadge = '<span class="badge-status badge-rejected">ADMIN</span>';
+    else if (u.role === 'HR') roleBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">HR</span>';
+    else if (u.role === 'MANAGER') roleBadge = '<span class="badge-status" style="background:#fef3c7; color:#d97706;">MANAGER</span>';
+
+    return `
+      <tr>
+        <td><strong>${u.username}</strong></td>
+        <td>${u.email || '-'}</td>
+        <td><code>${u.emp_id || '-'}</code></td>
+        <td>${roleBadge}</td>
+        <td>
+          <select id="role-select-${u.id}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
+            <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
+            <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
+            <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
+            <option value="EMPLOYEE" ${u.role === 'EMPLOYEE' ? 'selected' : ''}>EMPLOYEE (Nhân viên)</option>
+          </select>
+        </td>
+        <td>
+          <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" onclick="handleUpdateUserRole('${u.id}', '${u.username}')">
+            💾 Lưu quyền
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function handleUpdateUserRole(userId, username) {
+  const selectEl = document.getElementById(`role-select-${userId}`);
+  if (!selectEl) return;
+  const newRole = selectEl.value;
+
+  try {
+    const res = await apiCall(`/api/auth/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role: newRole })
+    });
+    showToast(`Đã phân quyền thành công tài khoản "${username}" thành vai trò [${newRole}]!`, 'success');
+    loadRbacUsersData();
+  } catch (err) {
+    showToast(`Lỗi phân quyền: ${err.message}`, 'error');
+  }
+}
+
+// ==============================================================================
+// NẠP VÀ ĐIỀU KHIỂN BÁO CÁO THỐNG KÊ (ANALYTICS & ATTENDANCE)
+// ==============================================================================
 function loadStatsData() {
-  // Đã có sẵn dữ liệu trực quan trên view-stats
+  // Đồng bộ giao diện báo cáo với chu kỳ mặc định Tháng 10/2026
+  changeStatPeriod('2026-10');
+}
+
+function changeStatPeriod(period) {
+  // Đặt lại style các nút chọn chu kỳ
+  ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.className = 'btn-figma-dark';
+      btn.style.background = '#f8fafc';
+      btn.style.color = '#1e293b';
+      btn.style.border = '1px solid #e2e8f0';
+    }
+  });
+
+  let activeBtnId = 'statPeriodBtn1';
+  let periodLabel = 'Tháng 10/2026';
+  let kpiRate = '97.9%';
+  let kpiHours = '16,368 h';
+  let kpiLate = '15';
+  let kpiLeave = '30';
+  let footStandard = '2,090 công';
+  let footActual = '2,046 công';
+  let footLate = '15 lượt';
+  let footLeave = '30 ngày';
+  let footRate = '97.9%';
+
+  let deptsData = [
+    { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 864, late: 5, leave: 11, rate: '98.2%' },
+    { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 602, late: 6, leave: 8, rate: '97.7%' },
+    { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 325, late: 1, leave: 4, rate: '98.5%' },
+    { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 255, late: 3, leave: 7, rate: '96.6%' }
+  ];
+
+  if (period === '2026-09') {
+    activeBtnId = 'statPeriodBtn2';
+    periodLabel = 'Tháng 09/2026';
+    kpiRate = '97.1%';
+    kpiHours = '16,020 h';
+    kpiLate = '22';
+    kpiLeave = '38';
+    footStandard = '2,090 công';
+    footActual = '2,029 công';
+    footLate = '22 lượt';
+    footLeave = '38 ngày';
+    footRate = '97.1%';
+    deptsData = [
+      { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 858, late: 8, leave: 14, rate: '97.5%' },
+      { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 595, late: 9, leave: 12, rate: '96.6%' },
+      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 324, late: 2, leave: 4, rate: '98.2%' },
+      { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 252, late: 3, leave: 8, rate: '95.5%' }
+    ];
+  } else if (period === '2026-Q3') {
+    activeBtnId = 'statPeriodBtn3';
+    periodLabel = 'Quý 3/2026';
+    kpiRate = '96.8%';
+    kpiHours = '48,150 h';
+    kpiLate = '68';
+    kpiLeave = '112';
+    footStandard = '6,270 công';
+    footActual = '6,070 công';
+    footLate = '68 lượt';
+    footLeave = '112 ngày';
+    footRate = '96.8%';
+    deptsData = [
+      { name: 'Phòng Kỹ Thuật', emp: 40, std: 2640, act: 2560, late: 25, leave: 42, rate: '97.0%' },
+      { name: 'Phòng Kinh Doanh', emp: 28, std: 1848, act: 1780, late: 28, leave: 36, rate: '96.3%' },
+      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 990, act: 972, late: 6, leave: 12, rate: '98.2%' },
+      { name: 'Phòng Nhân sự', emp: 12, std: 792, act: 758, late: 9, leave: 22, rate: '95.7%' }
+    ];
+  }
+
+  const activeBtn = document.getElementById(activeBtnId);
+  if (activeBtn) {
+    activeBtn.className = 'btn-primary-blue';
+    activeBtn.style.background = '#2563eb';
+    activeBtn.style.color = '#ffffff';
+    activeBtn.style.border = 'none';
+  }
+
+  // Cập nhật số liệu các thẻ KPI báo cáo
+  const rEl = document.getElementById('statMetricRateVal');
+  const hEl = document.getElementById('statMetricHoursVal');
+  const lEl = document.getElementById('statMetricLateVal');
+  const lvEl = document.getElementById('statMetricLeaveVal');
+  if (rEl) rEl.innerText = kpiRate;
+  if (hEl) hEl.innerText = kpiHours;
+  if (lEl) lEl.innerText = kpiLate;
+  if (lvEl) lvEl.innerText = kpiLeave;
+
+  // Cập nhật bảng chi tiết phòng ban
+  const tbody = document.getElementById('statDeptTableBody');
+  if (tbody) {
+    tbody.innerHTML = deptsData.map(d => `
+      <tr>
+        <td><strong>${d.name}</strong></td>
+        <td>${d.emp}</td>
+        <td>${d.std.toLocaleString('vi-VN')} công</td>
+        <td><strong>${d.act.toLocaleString('vi-VN')} công</strong></td>
+        <td><span class="badge-status" style="background: ${d.late > 5 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.late} lượt</span></td>
+        <td>${d.leave} ngày</td>
+        <td><span class="badge-status badge-approved">${d.rate}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  // Cập nhật footer tổng kết bảng
+  const fStd = document.getElementById('statFootStandardDays');
+  const fAct = document.getElementById('statFootActualDays');
+  const fLate = document.getElementById('statFootLateCount');
+  const fLeave = document.getElementById('statFootLeaveDays');
+  const fRate = document.getElementById('statFootRate');
+  if (fStd) fStd.innerText = footStandard;
+  if (fAct) fAct.innerText = footActual;
+  if (fLate) fLate.innerText = footLate;
+  if (fLeave) fLeave.innerText = footLeave;
+  if (fRate) fRate.innerText = footRate;
+
+  showToast(`Đã chuyển đổi số liệu thống kê sang: ${periodLabel}`, 'success');
 }
 
 // Nạp dữ liệu hồ sơ cá nhân
@@ -711,7 +1028,115 @@ function selectDeptFilter(name, count) {
   const el = document.getElementById('currentDeptPillText');
   if (el) el.innerText = `🏢 ${name} • ${count} người`;
   closeModal();
-  showToast(`Đã chọn: ${name} (${count} nhân sự)`, 'success');
+
+  // Cập nhật các chỉ số KPI Dashboard theo phòng ban đã chọn
+  const role = state.user?.role || 'EMPLOYEE';
+  if (role !== 'EMPLOYEE') {
+    const val1 = document.getElementById('dashMetricVal1');
+    const sub1 = document.getElementById('dashMetricSub1');
+    const val2 = document.getElementById('dashMetricVal2');
+    const sub2 = document.getElementById('dashMetricSub2');
+    const val3 = document.getElementById('dashMetricVal3');
+    const sub3 = document.getElementById('dashMetricSub3');
+    const val4 = document.getElementById('dashMetricVal4');
+    const sub4 = document.getElementById('dashMetricSub4');
+
+    const donutNum = document.getElementById('donutCenterNumber');
+    const legOntime = document.getElementById('donutLegendOntime');
+    const legLate = document.getElementById('donutLegendLate');
+    const legLeave = document.getElementById('donutLegendLeave');
+    const legAbsent = document.getElementById('donutLegendAbsent');
+    const donutFoot = document.getElementById('donutSummaryFoot');
+
+    if (count === 95) {
+      // Toàn cơ quan (95 người)
+      if (val1) val1.innerText = '82 / 95';
+      if (sub1) sub1.innerText = '86.3% nhân sự • Gồm 6 người đi muộn';
+      if (val2) val2.innerText = '08';
+      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+      if (val3) val3.innerText = '06';
+      if (sub3) sub3.innerText = 'Là một phần trong 82 người đi làm';
+      if (val4) val4.innerText = '12';
+      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+
+      if (donutNum) donutNum.innerText = '95';
+      if (legOntime) legOntime.innerText = '76';
+      if (legLate) legLate.innerText = '06';
+      if (legLeave) legLeave.innerText = '08';
+      if (legAbsent) legAbsent.innerText = '05';
+      if (donutFoot) donutFoot.innerText = '76 đúng giờ + 6 đi muộn + 8 nghỉ phép + 5 chưa chấm công = 95 nhân viên';
+    } else if (count === 28) {
+      // Phòng Kinh Doanh (28 người)
+      if (val1) val1.innerText = '24 / 28';
+      if (sub1) sub1.innerText = '85.7% nhân sự • Gồm 2 người đi muộn';
+      if (val2) val2.innerText = '02';
+      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+      if (val3) val3.innerText = '02';
+      if (sub3) sub3.innerText = 'Là một phần trong 24 người đi làm';
+      if (val4) val4.innerText = '03';
+      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+
+      if (donutNum) donutNum.innerText = '28';
+      if (legOntime) legOntime.innerText = '22';
+      if (legLate) legLate.innerText = '02';
+      if (legLeave) legLeave.innerText = '02';
+      if (legAbsent) legAbsent.innerText = '02';
+      if (donutFoot) donutFoot.innerText = '22 đúng giờ + 2 đi muộn + 2 nghỉ phép + 2 chưa chấm công = 28 nhân viên';
+    } else if (count === 15) {
+      // Phòng Tài Chính (15 người)
+      if (val1) val1.innerText = '14 / 15';
+      if (sub1) sub1.innerText = '93.3% nhân sự • Đúng giờ';
+      if (val2) val2.innerText = '01';
+      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+      if (val3) val3.innerText = '00';
+      if (sub3) sub3.innerText = 'Không có nhân sự đi muộn';
+      if (val4) val4.innerText = '01';
+      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+
+      if (donutNum) donutNum.innerText = '15';
+      if (legOntime) legOntime.innerText = '14';
+      if (legLate) legLate.innerText = '00';
+      if (legLeave) legLeave.innerText = '01';
+      if (legAbsent) legAbsent.innerText = '00';
+      if (donutFoot) donutFoot.innerText = '14 đúng giờ + 0 đi muộn + 1 nghỉ phép + 0 chưa chấm công = 15 nhân viên';
+    } else if (count === 12) {
+      // Phòng Nhân Sự (12 người)
+      if (val1) val1.innerText = '10 / 12';
+      if (sub1) sub1.innerText = '83.3% nhân sự • Gồm 1 người đi muộn';
+      if (val2) val2.innerText = '01';
+      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+      if (val3) val3.innerText = '01';
+      if (sub3) sub3.innerText = 'Là một phần trong 10 người đi làm';
+      if (val4) val4.innerText = '01';
+      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+
+      if (donutNum) donutNum.innerText = '12';
+      if (legOntime) legOntime.innerText = '09';
+      if (legLate) legLate.innerText = '01';
+      if (legLeave) legLeave.innerText = '01';
+      if (legAbsent) legAbsent.innerText = '01';
+      if (donutFoot) donutFoot.innerText = '9 đúng giờ + 1 đi muộn + 1 nghỉ phép + 1 chưa chấm công = 12 nhân viên';
+    } else {
+      // Mặc định: Phòng Kỹ Thuật (40 người)
+      if (val1) val1.innerText = '34 / 40';
+      if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
+      if (val2) val2.innerText = '04';
+      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
+      if (val3) val3.innerText = '03';
+      if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
+      if (val4) val4.innerText = '07';
+      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+
+      if (donutNum) donutNum.innerText = '40';
+      if (legOntime) legOntime.innerText = '31';
+      if (legLate) legLate.innerText = '03';
+      if (legLeave) legLeave.innerText = '04';
+      if (legAbsent) legAbsent.innerText = '02';
+      if (donutFoot) donutFoot.innerText = '31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên';
+    }
+  }
+
+  showToast(`Đã lọc dữ liệu theo: ${name} (${count} nhân sự)`, 'success');
 }
 
 function openLateDetailModal(name, code, lateTime, checkinTime) {
@@ -972,6 +1397,7 @@ function initPortalDashboard() {
   document.getElementById('portalApp').style.display = 'flex';
 
   updateTopbarUser();
+  applyRoleBasedUI();
   navigateToView('dashboard');
 }
 
