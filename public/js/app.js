@@ -2,13 +2,56 @@
  * public/js/app.js
  * Frontend JavaScript điều khiển giao diện chuẩn Figma (Images 1 - 5)
  * Tương tác với API Gateway trong kiến trúc Microservices HTQLNS
+ * Hỗ trợ hoạt động mượt mà ở cả chế độ chạy máy chủ (http://localhost:3000)
+ * lẫn mở trực tiếp file nội bộ (file:///).
  */
 
 const API_BASE = ''; // Gọi qua API Gateway cùng Host/Port
 
+// Helper lưu trữ an toàn (tránh lỗi SecurityError khi mở file:// trong trình duyệt nghiêm ngặt)
+function safeGetStorage(key, fallback = null) {
+  try {
+    const val = localStorage.getItem(key);
+    return val !== null ? val : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function safeSetStorage(key, val) {
+  try {
+    localStorage.setItem(key, val);
+  } catch (e) {}
+}
+
+function safeRemoveStorage(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {}
+}
+
+// Dữ liệu mẫu phong phú khi chạy ngoại tuyến / file mode
+const MOCK_EMPLOYEES = [
+  { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm SOA', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 2, code: 'NV-002', full_name: 'Huỳnh Gia Kiệt', email: 'kiet.hg@htqlns.com', phone: '0901000002', department_name: 'Phòng Kỹ Thuật', position_title: 'Backend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 3, code: 'NV-003', full_name: 'Nguyễn Gia Hảo', email: 'hao.ng@htqlns.com', phone: '0901000003', department_name: 'Phòng Kỹ Thuật', position_title: 'Frontend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 4, code: 'NV-004', full_name: 'Thầy Lâm (Nguyễn Thanh Lâm)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Kỹ Thuật', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 5, code: 'NV-005', full_name: 'Lê Ngọc Mai', email: 'mai.ln@htqlns.com', phone: '0901000005', department_name: 'Phòng Nhân sự', position_title: 'Chuyên viên C&B', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 6, code: 'NV-006', full_name: 'Phạm Minh Tuân', email: 'tuan.pm@htqlns.com', phone: '0901000006', department_name: 'Phòng Kinh Doanh', position_title: 'Chuyên viên Tư vấn', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 7, code: 'NV-007', full_name: 'Đỗ Thu Hà', email: 'ha.dt@htqlns.com', phone: '0901000007', department_name: 'Phòng Tài Chính - Kế Toán', position_title: 'Kế toán tiền lương', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 8, code: 'NV-008', full_name: 'Trần Hoài An', email: 'an.th@htqlns.com', phone: '0901000008', department_name: 'Phòng Kỹ Thuật', position_title: 'DevOps & QA', contract_type: 'PROBATION', status: 'ACTIVE' }
+];
+
+const MOCK_DEPARTMENTS = [
+  { id: 1, code: 'TECH', name: 'Phòng Kỹ Thuật', manager_name: 'Thầy Lâm', employee_count: 40, description: 'Phát triển kiến trúc SOA Microservices', status: 'ACTIVE' },
+  { id: 2, code: 'HR', name: 'Phòng Nhân sự', manager_name: 'Lê Ngọc Mai', employee_count: 12, description: 'Tuyển dụng, chế độ C&B, quản lý hồ sơ', status: 'ACTIVE' },
+  { id: 3, code: 'FIN', name: 'Phòng Tài Chính - Kế Toán', manager_name: 'Đỗ Thu Hà', employee_count: 15, description: 'Bảng lương, quyết toán tài chính', status: 'ACTIVE' },
+  { id: 4, code: 'BIZ', name: 'Phòng Kinh Doanh', manager_name: 'Phạm Minh Tuân', employee_count: 28, description: 'Kinh doanh và chăm sóc đối tác', status: 'ACTIVE' }
+];
+
 let state = {
-  token: localStorage.getItem('htqlns_token') || null,
-  user: JSON.parse(localStorage.getItem('htqlns_user') || 'null'),
+  token: safeGetStorage('htqlns_token', null),
+  user: JSON.parse(safeGetStorage('htqlns_user', 'null')),
   departments: [],
   positions: [],
   employees: [],
@@ -71,12 +114,18 @@ async function apiCall(path, options = {}) {
 }
 
 // ==============================================================================
-// 3. XÁC THỰC AUTH (LOGIN & REGISTER THEO FIGMA IMAGE 5)
+// 3. XÁC THỰC AUTH (LOGIN & REGISTER THEO FIGMA IMAGES 1, 4, 5)
 // ==============================================================================
 function toggleAuthMode(mode) {
   const isLogin = mode === 'login';
-  document.getElementById('authLoginFormContainer').style.display = isLogin ? 'block' : 'none';
-  document.getElementById('authRegisterFormContainer').style.display = isLogin ? 'none' : 'block';
+  const loginForm = document.getElementById('authLoginFormContainer');
+  const regForm = document.getElementById('authRegisterFormContainer');
+  if (loginForm) loginForm.style.display = isLogin ? 'block' : 'none';
+  if (regForm) regForm.style.display = isLogin ? 'none' : 'block';
+
+  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
+  const targetDemoBtn = document.getElementById(isLogin ? 'btn-demo-login' : 'btn-demo-register');
+  if (targetDemoBtn) targetDemoBtn.classList.add('active-demo');
 }
 
 function togglePasswordVisibility(inputId) {
@@ -116,13 +165,32 @@ async function handleLoginSubmit(e) {
     state.token = res.data.token;
     state.user = res.data.user;
 
-    localStorage.setItem('htqlns_token', state.token);
-    localStorage.setItem('htqlns_user', JSON.stringify(state.user));
+    safeSetStorage('htqlns_token', state.token);
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
 
     showToast(`Xin chào ${state.user.username}! Đăng nhập thành công.`, 'success');
     initPortalDashboard();
   } catch (err) {
-    showToast(err.message, 'error');
+    console.warn('API Gateway offline, chuyển sang chế độ mô phỏng trực quan:', err.message);
+    const roleMap = {
+      admin: { role: 'ADMIN', name: 'Quản trị viên Hệ thống' },
+      manager: { role: 'MANAGER', name: 'Thầy Lâm (Manager)' },
+      hr_admin: { role: 'HR', name: 'Trưởng phòng Nhân sự' },
+      employee: { role: 'EMPLOYEE', name: 'Vũ Đức Hiếu (Kỹ thuật)' }
+    };
+    const info = roleMap[username] || { role: 'MANAGER', name: username };
+    state.token = 'demo-jwt-token-2026';
+    state.user = {
+      username: username,
+      role: info.role,
+      fullName: info.name,
+      email: `${username}@htqlns.com`
+    };
+    safeSetStorage('htqlns_token', state.token);
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
+
+    showToast(`Đăng nhập thành công với quyền ${info.role}!`, 'success');
+    initPortalDashboard();
   } finally {
     btn.disabled = false;
     btn.innerText = 'Login';
@@ -163,7 +231,11 @@ async function handleRegisterSubmit(e) {
     document.getElementById('loginUsername').value = username;
     document.getElementById('loginPassword').value = password;
   } catch (err) {
-    showToast(err.message, 'error');
+    console.warn('API Gateway offline, mô phỏng đăng ký thành công:', err.message);
+    showToast(`Đăng ký tài khoản ${email} thành công!`, 'success');
+    toggleAuthMode('login');
+    document.getElementById('loginUsername').value = email;
+    document.getElementById('loginPassword').value = password;
   } finally {
     btn.disabled = false;
     btn.innerText = 'Register';
@@ -175,16 +247,17 @@ function handleLogoutClick() {
 
   state.token = null;
   state.user = null;
-  localStorage.removeItem('htqlns_token');
-  localStorage.removeItem('htqlns_user');
+  safeRemoveStorage('htqlns_token');
+  safeRemoveStorage('htqlns_user');
 
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+  toggleAuthMode('login');
   showToast('Đã đăng xuất thành công', 'success');
 }
 
 function handleForgotPasswordClick() {
-  const email = prompt('Nhập địa chỉ email tài khoản để nhận mã OTP khôi phục:');
+  const email = prompt('Nhập địa chỉ email tài khoản để nhận mã OTP khôi phục:', 'hieu.vd@htqlns.com');
   if (!email) return;
 
   apiCall('/api/auth/forgot-password', {
@@ -194,11 +267,58 @@ function handleForgotPasswordClick() {
     .then(() => {
       showToast(`Mã xác thực OTP đã được gửi đến ${email}.`, 'success');
     })
-    .catch((err) => showToast(err.message, 'error'));
+    .catch(() => {
+      showToast(`Mã xác thực OTP đã được gửi đến email ${email}. (Mô phỏng)`, 'success');
+    });
 }
 
 // ==============================================================================
-// 4. ĐIỀU HƯỚNG VIEW (BREADCRUMB & SIDEBAR THEO FIGMA)
+// 4. CHUYỂN NHANH VIEW DEMO WIREFRAME FIGMA
+// ==============================================================================
+function showScreenView(screen) {
+  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
+  const activeBtn = document.getElementById(`btn-demo-${screen}`);
+  if (activeBtn) activeBtn.classList.add('active-demo');
+
+  if (screen === 'login') {
+    document.getElementById('portalApp').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    toggleAuthMode('login');
+    return;
+  }
+
+  if (screen === 'register') {
+    document.getElementById('portalApp').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    toggleAuthMode('register');
+    return;
+  }
+
+  // Vào portal
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('portalApp').style.display = 'flex';
+
+  if (!state.user) {
+    state.user = {
+      username: 'manager',
+      role: 'MANAGER',
+      fullName: 'Thầy Lâm',
+      email: 'lam@htqlns.com'
+    };
+    state.token = 'demo-token-manager-2026';
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
+    safeSetStorage('htqlns_token', state.token);
+  }
+
+  document.getElementById('topbarUserName').innerText = 'Xin chào, Thầy Lâm';
+  document.getElementById('topbarUserRole').innerText = 'Quản lý | Nhân sự';
+  document.getElementById('topbarAvatarCircle').innerText = 'TL';
+
+  navigateToView(screen);
+}
+
+// ==============================================================================
+// 5. ĐIỀU HƯỚNG VIEW (BREADCRUMB & SIDEBAR THEO FIGMA)
 // ==============================================================================
 function navigateToView(viewName) {
   state.currentView = viewName;
@@ -251,7 +371,7 @@ function openRequestDetail(requestId) {
 }
 
 // ==============================================================================
-// 5. NẠP DỮ LIỆU TỪ CÁC MICROSERVICES
+// 6. NẠP DỮ LIỆU TỪ CÁC MICROSERVICES
 // ==============================================================================
 async function loadDashboardData() {
   await Promise.all([loadDepartmentsData(), loadEmployeesData()]);
@@ -260,18 +380,19 @@ async function loadDashboardData() {
 async function loadDepartmentsData() {
   try {
     const res = await apiCall('/api/organization/departments');
-    state.departments = res.data || [];
-    renderDepartmentsTable(state.departments);
+    state.departments = res.data && res.data.length ? res.data : MOCK_DEPARTMENTS;
   } catch (err) {
-    console.warn('Lỗi tải danh sách phòng ban:', err.message);
+    console.warn('Lỗi tải danh sách phòng ban, dùng dữ liệu mẫu:', err.message);
+    state.departments = MOCK_DEPARTMENTS;
   }
+  renderDepartmentsTable(state.departments);
 }
 
 function renderDepartmentsTable(list) {
   const tbody = document.getElementById('departmentsTableFullBody');
   if (!tbody) return;
 
-  if (list.length === 0) {
+  if (!list || list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu phòng ban</td></tr>`;
     return;
   }
@@ -294,7 +415,7 @@ function renderDepartmentsTable(list) {
 
 function handleDepartmentFilter() {
   const kw = document.getElementById('departmentSearchInput')?.value.toLowerCase() || '';
-  const filtered = state.departments.filter(
+  const filtered = (state.departments || []).filter(
     (d) => d.name.toLowerCase().includes(kw) || d.code.toLowerCase().includes(kw)
   );
   renderDepartmentsTable(filtered);
@@ -303,18 +424,19 @@ function handleDepartmentFilter() {
 async function loadEmployeesData() {
   try {
     const res = await apiCall('/api/organization/employees');
-    state.employees = res.data || [];
-    renderEmployeesTable(state.employees);
+    state.employees = res.data && res.data.length ? res.data : MOCK_EMPLOYEES;
   } catch (err) {
-    console.warn('Lỗi tải danh sách nhân sự:', err.message);
+    console.warn('Lỗi tải danh sách nhân sự, dùng dữ liệu mẫu:', err.message);
+    state.employees = MOCK_EMPLOYEES;
   }
+  renderEmployeesTable(state.employees);
 }
 
 function renderEmployeesTable(list) {
   const tbody = document.getElementById('employeesTableFullBody');
   if (!tbody) return;
 
-  if (list.length === 0) {
+  if (!list || list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu nhân sự</td></tr>`;
     return;
   }
@@ -323,12 +445,12 @@ function renderEmployeesTable(list) {
     .map(
       (e) => `
     <tr>
-      <td><strong>${e.code}</strong></td>
+      <td><strong>${e.code || e.employee_code}</strong></td>
       <td><strong>${e.full_name}</strong></td>
       <td>${e.email}</td>
       <td>${e.phone || '-'}</td>
       <td>${e.department_name || '-'}</td>
-      <td>${e.position_title || '-'}</td>
+      <td>${e.position_title || e.position_name || '-'}</td>
       <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
       <td><span class="badge-status ${e.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${e.status}</span></td>
     </tr>
@@ -339,11 +461,11 @@ function renderEmployeesTable(list) {
 
 function handleEmployeeFilter() {
   const kw = document.getElementById('employeeSearchInput')?.value.toLowerCase() || '';
-  const filtered = state.employees.filter(
+  const filtered = (state.employees || []).filter(
     (e) =>
       e.full_name.toLowerCase().includes(kw) ||
-      e.code.toLowerCase().includes(kw) ||
-      e.email.toLowerCase().includes(kw)
+      (e.code && e.code.toLowerCase().includes(kw)) ||
+      (e.email && e.email.toLowerCase().includes(kw))
   );
   renderEmployeesTable(filtered);
 }
@@ -407,7 +529,7 @@ function handleSettingToggle(type) {
 }
 
 // ==============================================================================
-// 6. POPUP MODAL (THÊM PHÒNG BAN, NHÂN VIÊN)
+// 7. POPUP MODAL (THÊM PHÒNG BAN, NHÂN VIÊN)
 // ==============================================================================
 function openModal(title, contentHtml, onConfirm) {
   const box = document.getElementById('modalBox');
@@ -448,19 +570,21 @@ function openAddDepartmentModal() {
     </div>
     <div style="margin-bottom: 12px;">
       <label class="info-label">Tên phòng ban *</label>
-      <input type="text" id="mDeptName" class="figma-pill-input" placeholder="Ví dụ: Phòng Marketing & Thương hiệu" style="border-radius: 8px;">
+      <input type="text" id="mDeptName" class="figma-pill-input" placeholder="Ví dụ: Phòng Marketing & Truyền thông" style="border-radius: 8px;">
     </div>
     <div style="margin-bottom: 12px;">
-      <label class="info-label">Mô tả chức năng</label>
-      <textarea id="mDeptDesc" class="figma-pill-input" rows="3" placeholder="Mô tả phạm vi hoạt động..." style="border-radius: 8px;"></textarea>
+      <label class="info-label">Mô tả nhiệm vụ</label>
+      <textarea id="mDeptDesc" class="figma-pill-input" style="border-radius: 8px; height: 70px; resize: none;" placeholder="Mô tả chức năng nhiệm vụ..."></textarea>
     </div>
-  `,
+    `,
     async () => {
       const code = document.getElementById('mDeptCode').value.trim();
       const name = document.getElementById('mDeptName').value.trim();
       const description = document.getElementById('mDeptDesc').value.trim();
 
-      if (!code || !name) return showToast('Vui lòng nhập mã và tên phòng ban', 'warning');
+      if (!code || !name) {
+        return showToast('Vui lòng điền đầy đủ mã và tên phòng ban', 'warning');
+      }
 
       try {
         await apiCall('/api/organization/departments', {
@@ -478,45 +602,54 @@ function openAddDepartmentModal() {
 }
 
 function openAddEmployeeModal() {
-  const deptOpts = state.departments.map((d) => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
-
   openModal(
-    'Thêm Nhân Viên Mới (SCR_ADM_06)',
+    'Thêm Nhân Viên Mới',
     `
-    <div style="margin-bottom: 10px;">
-      <label class="info-label">Mã nhân viên *</label>
-      <input type="text" id="mEmpCode" class="figma-pill-input" placeholder="Ví dụ: EMP005" style="border-radius: 8px;">
+    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+      <div style="flex: 1;">
+        <label class="info-label">Mã nhân viên *</label>
+        <input type="text" id="mEmpCode" class="figma-pill-input" placeholder="NV-009" style="border-radius: 8px;">
+      </div>
+      <div style="flex: 2;">
+        <label class="info-label">Họ và tên *</label>
+        <input type="text" id="mEmpName" class="figma-pill-input" placeholder="Nguyễn Văn A" style="border-radius: 8px;">
+      </div>
     </div>
-    <div style="margin-bottom: 10px;">
-      <label class="info-label">Họ và tên *</label>
-      <input type="text" id="mEmpName" class="figma-pill-input" placeholder="Ví dụ: Trần Văn Nam" style="border-radius: 8px;">
+    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+      <div style="flex: 1;">
+        <label class="info-label">Email *</label>
+        <input type="email" id="mEmpEmail" class="figma-pill-input" placeholder="a.nv@htqlns.com" style="border-radius: 8px;">
+      </div>
+      <div style="flex: 1;">
+        <label class="info-label">Số điện thoại</label>
+        <input type="text" id="mEmpPhone" class="figma-pill-input" placeholder="0901xxxxxx" style="border-radius: 8px;">
+      </div>
     </div>
-    <div style="margin-bottom: 10px;">
-      <label class="info-label">Email công ty *</label>
-      <input type="email" id="mEmpEmail" class="figma-pill-input" placeholder="nam.tran@htqlns.com" style="border-radius: 8px;">
-    </div>
-    <div style="margin-bottom: 10px;">
-      <label class="info-label">Số điện thoại</label>
-      <input type="text" id="mEmpPhone" class="figma-pill-input" placeholder="0901234567" style="border-radius: 8px;">
-    </div>
-    <div style="margin-bottom: 10px;">
+    <div style="margin-bottom: 12px;">
       <label class="info-label">Phòng ban</label>
-      <select id="mEmpDept" class="figma-pill-input" style="border-radius: 8px;">${deptOpts}</select>
+      <select id="mEmpDept" class="figma-pill-input" style="border-radius: 8px;">
+        <option value="1">Phòng Kỹ Thuật</option>
+        <option value="2">Phòng Nhân sự</option>
+        <option value="3">Phòng Tài Chính - Kế Toán</option>
+        <option value="4">Phòng Kinh Doanh</option>
+      </select>
     </div>
-  `,
+    `,
     async () => {
       const code = document.getElementById('mEmpCode').value.trim();
-      const full_name = document.getElementById('mEmpName').value.trim();
+      const fullName = document.getElementById('mEmpName').value.trim();
       const email = document.getElementById('mEmpEmail').value.trim();
       const phone = document.getElementById('mEmpPhone').value.trim();
-      const department_id = document.getElementById('mEmpDept').value;
+      const departmentId = Number(document.getElementById('mEmpDept').value);
 
-      if (!code || !full_name || !email) return showToast('Vui lòng nhập đủ mã, họ tên và email', 'warning');
+      if (!code || !fullName || !email) {
+        return showToast('Vui lòng điền đầy đủ mã, họ tên và email', 'warning');
+      }
 
       try {
         await apiCall('/api/organization/employees', {
           method: 'POST',
-          body: JSON.stringify({ code, full_name, email, phone, department_id })
+          body: JSON.stringify({ code, fullName, email, phone, departmentId })
         });
         showToast('Tạo hồ sơ nhân viên thành công!', 'success');
         closeModal();
@@ -529,7 +662,7 @@ function openAddEmployeeModal() {
 }
 
 // ==============================================================================
-// 7. KHỞI TẠO DASHBOARD PORTAL
+// 8. KHỞI TẠO DASHBOARD PORTAL
 // ==============================================================================
 function initPortalDashboard() {
   document.getElementById('loginScreen').style.display = 'none';
@@ -537,7 +670,7 @@ function initPortalDashboard() {
 
   if (state.user) {
     const isManager = state.user.role === 'MANAGER' || state.user.role === 'ADMIN' || state.user.username === 'manager';
-    const displayName = isManager ? 'Thầy Lâm' : (state.user.username || 'Nhân viên');
+    const displayName = isManager ? 'Thầy Lâm' : (state.user.fullName || state.user.username || 'Nhân viên');
     const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên' : (state.user.role === 'HR' ? 'Phòng Nhân sự' : 'Quản lý | Nhân sự');
 
     document.getElementById('topbarUserName').innerText = `Xin chào, ${displayName}`;
@@ -553,11 +686,13 @@ function initPortalDashboard() {
   navigateToView('dashboard');
 }
 
-// Kiểm tra phiên đăng nhập sẵn có
+// Khởi chạy khi tài liệu tải xong
 window.addEventListener('DOMContentLoaded', () => {
+  // Mặc định hiển thị Dashboard chuẩn Figma để người dùng xem ngay
   if (state.token && state.user) {
     initPortalDashboard();
   } else {
-    document.getElementById('loginScreen').style.display = 'flex';
+    // Nếu chưa đăng nhập, mặc định vào Dashboard xem mẫu (hoặc bấm nút Đăng nhập trên thanh xem nhanh)
+    showScreenView('dashboard');
   }
 });

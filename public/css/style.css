@@ -57,24 +57,24 @@ body {
 }
 
 /* ==========================================================================
-   1. MÀN HÌNH ĐĂNG KÝ / ĐĂNG NHẬP (FIGMA IMAGE 5 - SPLIT BLACK / RED)
+   1. MÀN HÌNH ĐĂNG KÝ / ĐĂNG NHẬP (FIGMA IMAGE 1, 4, 5 - SPLIT BLACK / RED)
    ========================================================================== */
 #loginScreen {
   min-height: 100vh;
   display: flex;
-  background: var(--dark-bg);
+  background: #1c1d1f;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .login-side-black {
-  flex: 1.1;
-  background: #181818;
+  flex: 1;
+  background: #1c1d1f;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 60px;
+  padding: 60px 40px;
   position: relative;
 }
 
@@ -87,58 +87,75 @@ body {
 
 .figma-logo-img {
   width: 140px;
+  max-width: 140px;
   height: auto;
   margin-bottom: 24px;
+  display: block;
   filter: drop-shadow(0 8px 16px rgba(222, 75, 75, 0.25));
 }
 
 .login-brand-title {
   color: #ffffff;
   font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 .login-side-red {
-  flex: 0.9;
-  background: #de4b4b;
+  flex: 1;
+  background: #d84349;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   padding: 40px;
   position: relative;
 }
 
-/* Floating Card trung tâm theo Figma Image 5 */
+/* Floating Card trung tâm theo Figma: đè ngang qua vạch chia đen - đỏ */
 .figma-auth-card {
   width: 100%;
   max-width: 440px;
-  background: #f1f3f5;
-  border-radius: var(--radius-xl);
+  background: #f3f4f6;
+  border-radius: 24px;
   padding: 40px 36px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
   position: relative;
+  margin-left: -90px;
+  z-index: 10;
+}
+
+@media (max-width: 960px) {
+  #loginScreen {
+    flex-direction: column;
+  }
+  .login-side-red {
+    justify-content: center;
+  }
+  .figma-auth-card {
+    margin-left: 0;
+  }
 }
 
 /* Điểm ghim tròn đỏ ở góc trên bên trái card */
 .card-pin-indicator {
   position: absolute;
-  top: -16px;
-  left: -16px;
-  width: 38px;
-  height: 38px;
+  top: -14px;
+  left: -14px;
+  width: 36px;
+  height: 36px;
   background: #ffffff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  z-index: 12;
 }
 
 .card-pin-dot {
-  width: 22px;
-  height: 22px;
-  background: #de4b4b;
+  width: 20px;
+  height: 20px;
+  background: #d84349;
   border-radius: 50%;
 }
 
@@ -151,7 +168,7 @@ body {
   font-size: 24px;
   font-weight: 700;
   color: #1e293b;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .auth-card-sub {
@@ -169,8 +186,8 @@ body {
   width: 100%;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: var(--radius-pill);
-  padding: 12px 20px;
+  border-radius: 9999px;
+  padding: 13px 22px;
   font-size: 14px;
   outline: none;
   transition: all 0.2s;
@@ -178,8 +195,8 @@ body {
 }
 
 .figma-pill-input:focus {
-  border-color: #de4b4b;
-  box-shadow: 0 0 0 3px rgba(222, 75, 75, 0.15);
+  border-color: #d84349;
+  box-shadow: 0 0 0 3px rgba(216, 67, 73, 0.15);
 }
 
 .figma-input-wrapper {
@@ -197,12 +214,43 @@ body {
   font-size: 15px;
 }
 
+.auth-options-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.remember-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #475569;
+  font-size: 13px;
+}
+
+.forgot-link {
+  color: #d84349;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+  transition: opacity 0.2s;
+}
+
+.forgot-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
 .btn-figma-dark {
   width: 100%;
-  background: #181818;
+  background: #1c1d1f;
   color: #ffffff;
   border: none;
-  border-radius: var(--radius-pill);
+  border-radius: 9999px;
   padding: 13px 20px;
   font-size: 15px;
   font-weight: 600;
@@ -1114,3 +1162,75 @@ input:checked + .slider:before {
 .toast-success { background: #15803d; }
 .toast-error { background: #b91c1c; }
 .toast-warning { background: #c2410c; }
+
+/* ==============================================================================
+   THANH ĐIỀU HƯỚNG DEMO WIREFRAME FIGMA (1-CLICK XEM TẤT CẢ MÀN HÌNH MẪU)
+   ============================================================================== */
+.demo-screen-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 99999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+}
+
+.demo-screen-label {
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.btn-demo-view {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  padding: 6px 13px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-demo-view:hover {
+  background: #d84349;
+  border-color: #d84349;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn-demo-view.active-demo {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-demo-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 13px;
+  border-radius: 50%;
+  margin-left: 4px;
+}
+
+.btn-demo-close:hover {
+  color: #ffffff;
+}

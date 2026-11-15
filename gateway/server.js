@@ -181,8 +181,10 @@ function serveStaticFile(req, res, pathname) {
 
   const filePath = path.normalize(path.join(PUBLIC_DIR, relativePath));
 
-  // Chống Directory Traversal
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  // Chống Directory Traversal (an toàn trên cả Windows lẫn Linux)
+  const safePublic = path.resolve(PUBLIC_DIR).toLowerCase();
+  const safePath = path.normalize(filePath).toLowerCase();
+  if (!safePath.startsWith(safePublic)) {
     return send(res, 403, { success: false, error: 'Truy cập bị từ chối' });
   }
 
