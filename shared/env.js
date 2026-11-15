@@ -86,4 +86,14 @@ const env = {
   }
 };
 
+if (env.isProduction()) {
+  const missing = ['JWT_SECRET', 'INTERNAL_API_KEY'].filter((key) => !process.env[key]);
+  if (missing.length) {
+    throw new Error(`Production environment is missing required secrets: ${missing.join(', ')}`);
+  }
+  if (process.env.JWT_SECRET === process.env.INTERNAL_API_KEY) {
+    throw new Error('JWT_SECRET and INTERNAL_API_KEY must use separate secret values');
+  }
+}
+
 module.exports = env;
