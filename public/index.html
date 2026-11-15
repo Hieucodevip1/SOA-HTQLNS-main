@@ -1146,59 +1146,6 @@ input:checked + .slider:before {
 .badge-pending { background: #eff6ff; color: #2563eb; }
 .badge-approved { background: #dcfce7; color: #16a34a; }
 
-.btn-approve-sm {
-  background: #16a34a;
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.btn-approve-sm:hover {
-  background: #15803d;
-}
-.btn-reject-sm {
-  background: #ef4444;
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  margin-left: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.btn-reject-sm:hover {
-  background: #dc2626;
-}
-.btn-detail-sm {
-  background: #f1f5f9;
-  color: #1e293b;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: 6px;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-}
-.btn-detail-sm:hover {
-  background: #e2e8f0;
-}
-
 /* Toast */
 #toastBox {
   position: fixed;
@@ -1294,6 +1241,247 @@ input:checked + .slider:before {
 
 .btn-demo-close:hover {
   color: #ffffff;
+}
+
+/* ==============================================================================
+   DASHBOARD NHÂN VIÊN (EMPLOYEE DASHBOARD STYLES - KHU VỰC 1, 2, 3, 4)
+   ============================================================================== */
+.emp-hero-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.emp-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.emp-hero-greeting-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #065f46;
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+
+.emp-hero-submeta {
+  font-size: 13.5px;
+  color: #047857;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.emp-hero-gps-tag {
+  font-size: 12px;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d1fae5;
+  border-radius: 9999px;
+  padding: 5px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.emp-live-clock-box {
+  background: #ffffff;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 10px 18px;
+  text-align: right;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.emp-live-clock-digits {
+  font-size: 24px;
+  font-weight: 800;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #0f172a;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+.emp-clock-date-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Khối Chấm công Hero Row */
+.emp-checkin-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .emp-checkin-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.emp-time-stat-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.emp-time-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.emp-time-stat-val {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.emp-time-stat-note {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+/* Nút Check-in / Check-out lớn */
+.btn-hero-action {
+  width: 100%;
+  height: 100%;
+  min-height: 70px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.btn-hero-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.btn-hero-action:active {
+  transform: translateY(0);
+}
+
+.btn-hero-checkin {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+}
+
+.btn-hero-checkout {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+}
+
+.btn-hero-done {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-hero-done:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Quick Actions 3 nút một chạm */
+.emp-quick-actions-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px dashed #bbf7d0;
+}
+
+@media (max-width: 700px) {
+  .emp-quick-actions-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-emp-quick-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #ffffff;
+}
+
+.btn-emp-quick-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
+.btn-emp-qa-leave {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.btn-emp-qa-leave:hover {
+  background: #dbeafe;
+}
+
+.btn-emp-qa-ot {
+  color: #b45309;
+  border-color: #fcd34d;
+  background: #fef3c7;
+}
+.btn-emp-qa-ot:hover {
+  background: #fde68a;
+}
+
+.btn-emp-qa-adj {
+  color: #be185d;
+  border-color: #f9a8d4;
+  background: #fce7f3;
+}
+.btn-emp-qa-adj:hover {
+  background: #fbcfe8;
 }
 
   </style>
@@ -1769,151 +1957,178 @@ input:checked + .slider:before {
 
           <!-- ==================== KHU VỰC DASHBOARD CHO NHÂN VIÊN (EMPLOYEE) ==================== -->
           <div id="dashEmployeeOverviewSection" style="display: none;">
-            <!-- Card Chấm công hôm nay của nhân viên -->
-            <div class="figma-white-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0;">
-              <div class="card-title-flex" style="align-items: center;">
-                <div>
-                  <div class="card-title-text" style="color: #065f46; font-size: 16px;">⏱️ Điểm danh & Trạng thái Làm việc Hôm nay</div>
-                  <div id="dashEmpTodayDateText" style="font-size: 13px; color: #047857;">Hôm nay: Thứ Hai, 30/10/2026 • Ca hành chính (08:00 - 17:00)</div>
+
+            <!-- ===== KHU VỰC 1: HERO CARD — Thao tác nhanh & Chấm công trong ngày (SCR_ATT_01 + SCR_SHIFT_01) ===== -->
+            <div class="emp-hero-card">
+              <div class="emp-hero-top">
+                <div style="flex: 1; min-width: 280px;">
+                  <div class="emp-hero-greeting-title" id="dashEmpHeroGreeting">👋 Xin chào, Vũ Đức Hiếu!</div>
+                  <div class="emp-hero-submeta" id="dashEmpTodayDateText">📅 Thứ Hai, 15/11/2026 • Ca Hành Chính (08:00 - 17:30) • Kỹ sư phần mềm SOA</div>
+                  <div class="emp-hero-gps-tag" id="dashEmpGpsStatus">
+                    📡 Trạng thái định vị: <span style="color:#059669; font-weight:700;">✓ Đang trong vùng hợp lệ</span> — cách văn phòng 15m (Wi-Fi: QNU-Office)
+                  </div>
                 </div>
-                <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 13px; font-weight: 700;">🟢 Sẵn sàng chấm công</span>
+                <div class="emp-live-clock-box">
+                  <div class="emp-clock-date-label">Đồng hồ thời gian thực</div>
+                  <div class="emp-live-clock-digits" id="dashEmpLiveClock">--:--:--</div>
+                  <div style="margin-top: 4px;">
+                    <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 11.5px; font-weight: 700;">🟢 Sẵn sàng chấm công</span>
+                  </div>
+                </div>
               </div>
 
-              <div class="metrics-row-4" style="margin-top: 16px;">
-                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
-                  <div style="font-size: 12px; color: #64748b;">Giờ vào ca (Check-in)</div>
-                  <div style="font-size: 24px; font-weight: 700; color: #059669;" id="dashEmpCheckInVal">--:--</div>
-                  <div style="font-size: 11px; color: #64748b;" id="dashEmpCheckInNote">Chưa check-in</div>
+              <!-- Đồng hồ & Khối Check-in / Check-out lớn (Thao tác trong 5 giây) -->
+              <div class="emp-checkin-row">
+                <div class="emp-time-stat-box">
+                  <div class="emp-time-stat-label">Giờ vào ca</div>
+                  <div class="emp-time-stat-val" style="color: #059669;" id="dashEmpCheckInVal">--:--:--</div>
+                  <div class="emp-time-stat-note" id="dashEmpCheckInNote">Chưa check-in</div>
                 </div>
-                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
-                  <div style="font-size: 12px; color: #64748b;">Giờ ra ca (Check-out)</div>
-                  <div style="font-size: 24px; font-weight: 700; color: #2563eb;" id="dashEmpCheckOutVal">--:--</div>
-                  <div style="font-size: 11px; color: #64748b;" id="dashEmpCheckOutNote">Chưa check-out</div>
+                <div class="emp-time-stat-box">
+                  <div class="emp-time-stat-label">Giờ ra ca</div>
+                  <div class="emp-time-stat-val" style="color: #2563eb;" id="dashEmpCheckOutVal">--:--:--</div>
+                  <div class="emp-time-stat-note" id="dashEmpCheckOutNote">Chưa check-out</div>
                 </div>
-                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5;">
-                  <div style="font-size: 12px; color: #64748b;">Thời gian làm việc</div>
-                  <div style="font-size: 24px; font-weight: 700; color: #0f172a;" id="dashEmpHoursVal">0.0 h</div>
-                  <div style="font-size: 11px; color: #059669;" id="dashEmpHoursNote">Tiêu chuẩn: 8.0 h</div>
+                <div class="emp-time-stat-box">
+                  <div class="emp-time-stat-label">Thời gian làm việc</div>
+                  <div class="emp-time-stat-val" style="color: #0f172a;" id="dashEmpHoursVal">0.0 h</div>
+                  <div class="emp-time-stat-note" style="color: #059669;" id="dashEmpHoursNote">Tiêu chuẩn: 8.0 h</div>
                 </div>
-                <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #d1fae5; display: flex; flex-direction: column; justify-content: center; gap: 8px;">
-                  <button type="button" class="btn-primary-blue" id="dashEmpCheckInBtn" onclick="handleDashboardCheckIn()" style="width: 100%; padding: 8px 12px; font-size: 13px;">📍 Điểm danh Check-in</button>
-                  <button type="button" class="btn-figma-dark" id="dashEmpCheckOutBtn" onclick="handleDashboardCheckOut()" style="width: 100%; padding: 8px 12px; font-size: 13px; margin: 0; background: #475569;">🚪 Check-out ra ca</button>
+                <div style="display: flex; align-items: center; justify-content: center;">
+                  <button type="button" class="btn-hero-action btn-hero-checkin" id="dashEmpCheckInBtn" onclick="handleDashboardCheckIn()">
+                    <span style="font-size: 20px;">📍</span>
+                    <span>CHECK-IN NGAY</span>
+                  </button>
+                  <button type="button" class="btn-hero-action btn-hero-checkout" id="dashEmpCheckOutBtn" onclick="handleDashboardCheckOut()" style="display: none;">
+                    <span style="font-size: 20px;">🚪</span>
+                    <span>CHECK-OUT (KẾT THÚC CA)</span>
+                  </button>
                 </div>
+              </div>
+
+              <!-- Lối tắt nhanh (Quick Actions — 3 nút bấm một chạm) -->
+              <div class="emp-quick-actions-bar">
+                <button type="button" class="btn-emp-quick-action btn-emp-qa-leave" onclick="scrollToCreateLeaveForm()">
+                  <span style="font-size: 16px;">🏖️</span>
+                  <span>Xin nghỉ phép (SCR_LEAVE_01)</span>
+                </button>
+                <button type="button" class="btn-emp-quick-action btn-emp-qa-ot" onclick="openCreateOtModal()">
+                  <span style="font-size: 16px;">⚡</span>
+                  <span>Đăng ký OT (SCR_OT_01)</span>
+                </button>
+                <button type="button" class="btn-emp-quick-action btn-emp-qa-adj" onclick="openSubmitAdjustmentModal('', '', '')">
+                  <span style="font-size: 16px;">📝</span>
+                  <span>Giải trình công (SCR_ATT_03)</span>
+                </button>
               </div>
             </div>
 
-            <!-- 4 Thẻ KPI cá nhân tháng này -->
-            <div class="metrics-row-4" style="margin-bottom: 20px;">
-              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Nhấp để xem bảng công cá nhân">
+            <!-- ===== KHU VỰC 2: 4 KPI CARDS — Chỉ số cá nhân trong tháng (attendance + leave + payroll) ===== -->
+            <div class="metrics-row-4" style="margin-bottom: 24px;">
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem bảng công chi tiết cá nhân">
                 <div class="metric-header">
-                  <span>Công thực tế tháng này</span>
+                  <span>Ngày công thực tế</span>
                   <span>📅</span>
                 </div>
-                <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">22 / 22</div>
-                <div class="metric-footer-note">Đạt 100% công chuẩn →</div>
+                <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">18 / 22</div>
+                <div class="metric-footer-note" id="dashEmpKpiWorkDaysSub">Tổng 144.0 giờ làm việc tích lũy →</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Nhấp để xem các ngày đi muộn">
-                <div class="metric-header">
-                  <span>Số lần đi muộn</span>
-                  <span>⏰</span>
-                </div>
-                <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">0</div>
-                <div class="metric-footer-note">Chấp hành tốt giờ giấc →</div>
-              </div>
-
-              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem quỹ phép">
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Xem chi tiết quỹ phép năm">
                 <div class="metric-header">
                   <span>Quỹ phép năm còn lại</span>
                   <span>🏖️</span>
                 </div>
-                <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">10 / 12</div>
-                <div class="metric-footer-note">Ngày phép có lương →</div>
+                <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">10.0 ngày</div>
+                <div class="metric-footer-note" id="dashEmpKpiLeaveBalanceSub">Đã dùng 2.0 ngày • Chờ duyệt 1 đơn →</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;" title="Nhấp để xem phiếu lương & tăng ca">
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem chi tiết vi phạm chuyên cần">
                 <div class="metric-header">
-                  <span>Giờ tăng ca (OT)</span>
+                  <span>Tình trạng chuyên cần</span>
+                  <span>⏰</span>
+                </div>
+                <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">01 lần</div>
+                <div class="metric-footer-note" id="dashEmpKpiLateCountSub">Tổng 12 phút đi muộn (Cần lưu ý) →</div>
+              </div>
+
+              <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;" title="Xem phiếu lương và chi tiết tăng ca">
+                <div class="metric-header">
+                  <span>Giờ tăng ca (OT) &amp; Lương</span>
                   <span>⚡</span>
                 </div>
-                <div class="metric-value-huge metric-value-purple" id="dashEmpKpiOtHours">4.5 h</div>
-                <div class="metric-footer-note">Đã được phê duyệt →</div>
+                <div class="metric-value-huge" style="color: #7c3aed;" id="dashEmpKpiOtHours">6.5 giờ</div>
+                <div class="metric-footer-note" id="dashEmpKpiOtHoursSub">2 đơn OT duyệt • Phiếu lương (SCR_PAY_01) →</div>
               </div>
             </div>
 
-            <!-- Lưới 2 cột: Lịch sử chấm công gần đây & Đơn từ của tôi -->
-            <div class="middle-grid-2">
-              <!-- Cột trái: 5 ngày chấm công gần nhất kèm nút giải trình -->
+            <!-- ===== KHU VỰC 3: Lịch làm việc & Đơn từ đang theo dõi (2 cột song song — SCR_SHIFT_01 + SCR_LEAVE_02) ===== -->
+            <div class="middle-grid-2" style="margin-bottom: 24px;">
+              <!-- Cột trái: Lịch ca tuần này (7 ngày tới) (SCR_SHIFT_01) -->
               <div class="figma-white-card">
                 <div class="card-title-flex">
-                  <div class="card-title-text">Lịch sử chấm công gần đây của bạn</div>
-                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('my-attendance')">Xem toàn bộ →</a>
+                  <div>
+                    <div class="card-title-text">📋 Lịch ca tuần này (7 ngày tới)</div>
+                    <div style="font-size: 12px; color: #64748b;">Ca phân công thực tế từ shift-service</div>
+                  </div>
+                  <a class="link-action-blue" style="font-size: 12.5px; cursor: pointer;" onclick="navigateToView('shifts')">Xem chi tiết ca trực →</a>
                 </div>
-                <table class="figma-table">
-                  <thead>
-                    <tr>
-                      <th>Ngày</th>
-                      <th>Vào ca</th>
-                      <th>Ra ca</th>
-                      <th>Trạng thái</th>
-                      <th>Giải trình</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashEmpRecentAttendanceBody">
-                    <!-- Render dynamically -->
-                  </tbody>
-                </table>
+                <div id="dashEmpWeekScheduleBody" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                  <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 13px;">Đang tải lịch ca làm việc...</div>
+                </div>
               </div>
 
-              <!-- Cột phải: Đơn từ gần đây của tôi -->
+              <!-- Cột phải: Đơn từ gần đây & Trạng thái duyệt (SCR_LEAVE_02) -->
               <div class="figma-white-card">
                 <div class="card-title-flex">
-                  <div class="card-title-text">Đơn từ xin nghỉ phép của bạn</div>
-                  <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12px;" onclick="navigateToView('requests')">+ Tạo đơn</button>
+                  <div>
+                    <div class="card-title-text">📄 Đơn từ gần đây của bạn</div>
+                    <div style="font-size: 12px; color: #64748b;">Theo dõi tiến độ phê duyệt từ cấp quản lý</div>
+                  </div>
+                  <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12px; border-radius: 9999px;" onclick="scrollToCreateLeaveForm()">+ Tạo đơn mới</button>
                 </div>
-                <table class="figma-table">
-                  <thead>
-                    <tr>
-                      <th>Mã đơn</th>
-                      <th>Loại nghỉ</th>
-                      <th>Thời gian</th>
-                      <th>Trạng thái</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashEmpRecentRequestsBody">
-                    <!-- Render dynamically -->
-                  </tbody>
-                </table>
+                <div style="overflow-x: auto; margin-top: 10px;">
+                  <table class="figma-table">
+                    <thead>
+                      <tr>
+                        <th>Mã đơn</th>
+                        <th>Loại đơn</th>
+                        <th>Thời gian yêu cầu</th>
+                        <th>Trạng thái duyệt</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashEmpRecentRequestsBody">
+                      <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 16px;">Đang tải danh sách đơn từ...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="margin-top: 12px; text-align: right;">
+                  <a class="link-action-blue" style="font-size: 12.5px; cursor: pointer;" onclick="navigateToView('requests')">Xem toàn bộ lịch sử đơn từ →</a>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- BẢNG ĐƠN TỪ CỦA TÔI (CHO NHÂN VIÊN) -->
-          <div id="dashEmployeePersonalRequestsCard" class="figma-white-card" style="display: none;">
-            <div class="card-title-flex">
-              <div>
-                <div class="card-title-text">Đơn từ gần đây của tôi</div>
-                <div style="font-size: 12px; color: #64748b;">Theo dõi trạng thái xét duyệt đơn xin nghỉ phép của bạn</div>
+            <!-- ===== KHU VỰC 4: Thông báo & Nhắc nhở cá nhân (SCR_NOTIF_01 — notification-service) ===== -->
+            <div class="figma-white-card" style="margin-bottom: 24px;">
+              <div class="card-title-flex">
+                <div>
+                  <div class="card-title-text">🔔 Thông báo &amp; Nhắc nhở cá nhân</div>
+                  <div style="font-size: 12px; color: #64748b;">Cảnh báo chấm công, thông báo duyệt đơn và phiếu lương mới</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="badge-status" style="background: #fef3c7; color: #b45309;" id="dashEmpNotifCountBadge">3 mới</span>
+                  <button type="button" class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="markAllEmployeeNotifsRead()">Đánh dấu đã đọc tất cả</button>
+                </div>
               </div>
-              <button class="btn-primary-blue" style="padding: 7px 16px; font-size: 12px;" onclick="navigateToView('requests')">+ Tạo đơn xin nghỉ phép</button>
+              <div id="dashEmpNotificationsBody" style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+                <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 13px;">Đang tải thông báo cá nhân...</div>
+              </div>
             </div>
 
-            <table class="figma-table">
-              <thead>
-                <tr>
-                  <th>Mã đơn</th>
-                  <th>Loại đơn</th>
-                  <th>Thời gian xin nghỉ</th>
-                  <th>Số ngày</th>
-                  <th>Trạng thái</th>
-                  <th style="text-align: center;">Chi tiết</th>
-                </tr>
-              </thead>
-              <tbody id="dashPersonalRequestsTableBody">
-                <!-- Nạp động qua API GET /api/leave -->
-              </tbody>
-            </table>
           </div>
+
+
+          
         </section>
 
 
@@ -3502,14 +3717,13 @@ input:checked + .slider:before {
        ========================================================================== -->
   <div id="demoScreenBar" class="demo-screen-bar">
     <span class="demo-screen-label">🎯 Xem nhanh giao diện:</span>
-    <button type="button" class="btn-demo-view" id="btn-demo-login" onclick="showScreenView('login')">🔐 1. Đăng nhập (Login)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-register" onclick="showScreenView('register')">📝 2. Đăng ký (Register)</button>
-    <button type="button" class="btn-demo-view active-demo" id="btn-demo-dashboard" onclick="showScreenView('dashboard')">📊 3. Dashboard (Thầy Lâm)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">📄 4. Chi tiết đơn từ (Hiếu)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ 5. Thiết lập Wi-Fi / GPS</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">👥 6. Danh sách Nhân viên</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-shifts" onclick="showScreenView('shifts')">⏰ 7. Phân ca &amp; Tăng ca OT</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-payroll" onclick="showScreenView('payroll')">💰 8. Bảng lương &amp; Phiếu lương</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-login" onclick="showScreenView('login')">🔐 Đăng nhập</button>
+    <button type="button" class="btn-demo-view active-demo" id="btn-demo-dashboard-emp" onclick="showScreenView('employee-dashboard')">👤 Dashboard Nhân viên (Hiếu)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-dashboard-mgr" onclick="showScreenView('manager-dashboard')">📊 Dashboard Quản lý (Thầy Lâm)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">🏖️ Đơn từ &amp; Nghỉ phép</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-shifts" onclick="showScreenView('shifts')">📋 Ca trực &amp; OT</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-payroll" onclick="showScreenView('payroll')">💰 Phiếu lương (Payslip)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ Thiết lập Wi-Fi / GPS</button>
     <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">✕</button>
   </div>
 
