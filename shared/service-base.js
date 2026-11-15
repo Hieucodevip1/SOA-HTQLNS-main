@@ -145,35 +145,17 @@ function requireInternalKey(req, res, next) {
  */
 function requireAuth(allowedRoles = []) {
   return (req, res, next) => {
-    // 1. Giải mã thông tin x-user chuyển tiếp từ API Gateway
-    if (!req.user && req.headers['x-user']) {
-      try {
-        req.user = JSON.parse(Buffer.from(req.headers['x-user'], 'base64').toString('utf8'));
-      } catch {}
+    // Always verify the signed bearer token, even when x-user is present.
+    // Raw x-user can be forged by clients connecting directly to a service.
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Chưa đăng nhập hoặc thiếu Bearer Token', code: 401 });
     }
 
-    // 2. Kiểm tra header Authorization nếu chưa có req.user
-    if (!req.user) {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({
-          success: false,
-          error: 'Chưa đăng nhập hoặc thiếu Bearer Token',
-          code: 401
-        });
-      }
-
-      const token = authHeader.slice(7).trim();
-      try {
-        const payload = jwt.verifyToken(token);
-        req.user = payload;
-      } catch (err) {
-        return res.status(401).json({
-          success: false,
-          error: `Token không hợp lệ: ${err.message}`,
-          code: 401
-        });
-      }
+    try {
+      req.user = jwt.verifyToken(authHeader.slice(7).trim());
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Token không hợp lệ hoặc đã hết hạn', code: 401 });
     }
 
     if (allowedRoles.length > 0) {
