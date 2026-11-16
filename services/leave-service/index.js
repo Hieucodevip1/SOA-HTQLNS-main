@@ -166,6 +166,86 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
   }
 });
 
+// Binary evidence remains private in MySQL; clients upload base64 payloads
+// through the same JWT-authenticated JSON gateway as other service requests.
+const MAX_LEAVE_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+function parseLeaveAttachment(body) {
+  const fail = message => { const e = new Error(message); e.status = 400; throw e; };
+  const { fileName, contentBase64, mediaType } = body || {};
+  if (typeof fileName !== 'string' || !fileName.trim() || fileName.length > 120 ||
+      /[\\/\x00-\x1f\x7f]/.test(fileName) || fileName.startsWith('.')) {
+    fail('Tên tệp không hợp lệ (tối đa 120 ký tự, không có đường dẫn)');
+  }
+  if (typeof contentBase64 !== 'string' || contentBase64.length < 12 ||
+      contentBase64.length > Math.ceil(MAX_LEAVE_ATTACHMENT_BYTES / 3) * 4 + 4 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(contentBase64) || contentBase64.length % 4 !== 0) {
+    fail('Nội dung tệp base64 không hợp lệ hoặc vượt quá 2 MB');
+  }
+  const bytes = Buffer.from(contentBase64, 'base64');
+  if (!bytes.length || bytes.length > MAX_LEAVE_ATTACHMENT_BYTES ||
+      bytes.toString('base64') !== contentBase64) fail('Dung lượng tệp không hợp lệ');
+  let mime;
+  if (bytes.subarray(0, 5).toString() === '%PDF-' && /\.pdf$/i.test(fileName)) mime = 'application/pdf';
+  else if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) &&
+    /\.png$/i.test(fileName)) mime = 'image/png';
+  else if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 &&
+    /\.(jpe?g)$/i.test(fileName)) mime = 'image/jpeg';
+  else fail('Chỉ hỗ trợ PDF, PNG hoặc JPEG khớp với định dạng tệp');
+  if (mediaType && mediaType !== mime) fail('Loại MIME không khớp nội dung tệp');
+  return { bytes, mime, fileName };
+}
+
+app.post('/api/v1/leave-attachments', requireAuth(), async (req, res, next) => {
+  try {
+    const empId = getEmpIdFromUser(req.user);
+    if (!empId) return res.status(400).json({ success: false, error: 'Thiếu hồ sơ nhân sự liên kết' });
+    const { bytes, mime, fileName } = parseLeaveAttachment(req.body);
+    const id = crypto.randomUUID();
+    await pool.query(
+      'INSERT INTO leave_attachments (id, emp_id, file_name, mime_type, size_bytes, content) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, empId, fileName, mime, bytes.length, bytes]
+    );
+    res.status(201).json({
+      success: true, message: 'Tải minh chứng lên thành công',
+      data: { id, fileName, mimeType: mime, sizeBytes: bytes.length,
+        attachmentUrl: '/api/v1/leave-attachments/' + id }
+    });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, error: err.message });
+    next(err);
+  }
+});
+
+app.get('/api/v1/leave-attachments/:id', requireAuth(), async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy tệp' });
+    }
+    const [rows] = await pool.query(
+      'SELECT emp_id, file_name, mime_type, size_bytes, content FROM leave_attachments WHERE id = ?',
+      [req.params.id]
+    );
+    const attachment = rows[0];
+    if (!attachment) return res.status(404).json({ success: false, error: 'Không tìm thấy tệp' });
+    const viewerEmpId = getEmpIdFromUser(req.user);
+    let allowed = attachment.emp_id === viewerEmpId || ['ADMIN','HR'].includes(req.user.role);
+    if (!allowed && req.user.role === 'MANAGER' && viewerEmpId) {
+      const [managed] = await pool.query(
+        'SELECT id FROM htqlns_organization.employees WHERE id = ? AND manager_id = ? LIMIT 1',
+        [attachment.emp_id, viewerEmpId]
+      );
+      allowed = managed.length > 0;
+    }
+    if (!allowed) return res.status(404).json({ success: false, error: 'Không tìm thấy tệp' });
+    const safeName = attachment.file_name.replace(/[^A-Za-z0-9._-]/g, '_');
+    res.setHeader('Content-Type', attachment.mime_type);
+    res.setHeader('Content-Disposition', 'attachment; filename="' + safeName + '"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(Buffer.from(attachment.content));
+  } catch (err) { next(err); }
+});
+
 // Server-side leave-day calculation: weekdays, with optional half-day session.
 function calculateLeaveDays(startDate, endDate, session) {
   const validDate = (value) => {
@@ -193,6 +273,10 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
   try {
     const empId = getEmpIdFromUser(req.user);
     const { leaveTypeId, startDate, endDate, session = 'FULL_DAY', reason, attachmentUrl = null } = req.body;
+    if (attachmentUrl !== null &&
+        (typeof attachmentUrl !== 'string' || !/^\/api\/v1\/leave-attachments\/[0-9a-f-]{36}$/i.test(attachmentUrl))) {
+      return res.status(400).json({ success: false, error: 'Minh chứng phải được tải lên qua API trước khi gửi đơn' });
+    }
     const totalDays = calculateLeaveDays(startDate, endDate, session);
     if (!empId || !leaveTypeId || !totalDays || typeof reason !== 'string' || !reason.trim()) {
       return res.status(400).json({ success: false, error: 'Thông tin nghỉ phép không hợp lệ' });
@@ -214,6 +298,17 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
       const err = new Error('Loại nghỉ phép này yêu cầu giấy tờ minh chứng');
       err.status = 400;
       throw err;
+    }
+    if (attachmentUrl) {
+      const attachmentId = attachmentUrl.split('/').pop();
+      const [evidence] = await connection.query(
+        'SELECT id FROM leave_attachments WHERE id = ? AND emp_id = ?',
+        [attachmentId, empId]
+      );
+      if (!evidence.length) {
+        const err = new Error('Không tìm thấy minh chứng đã tải lên của tài khoản này');
+        err.status = 400; throw err;
+      }
     }
 
     const [overlaps] = await connection.query(
