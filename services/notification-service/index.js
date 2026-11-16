@@ -98,6 +98,56 @@ const notificationHandlers = {
     });
   },
 
+  'LEAVE_REQUEST_CANCELLED': async (event) => {
+    const payload = event.data || {};
+    await createNotification({
+      eventId: event.id,
+      targetRole: 'MANAGER',
+      type: 'LEAVE_STATUS',
+      title: 'Đơn nghỉ phép đã được hủy',
+      content: `Nhân viên ${payload.empId} đã hủy đơn nghỉ phép đang chờ duyệt.`,
+      referenceId: payload.requestId
+    });
+  },
+
+  'SHIFT_SWAP_REQUESTED': async (event) => {
+    const payload = event.data || {};
+    await createNotification({
+      eventId: event.id,
+      targetRole: 'MANAGER',
+      type: 'SYSTEM',
+      title: 'Có yêu cầu đổi ca đang chờ duyệt',
+      content: `Nhân viên ${payload.empId} đã đề nghị đổi ca với ${payload.targetEmpId}.`,
+      referenceId: payload.requestId
+    });
+  },
+
+  'SHIFT_SWAP_APPROVED': async (event) => {
+    const payload = event.data || {};
+    for (const empId of [payload.empId, payload.targetEmpId].filter(Boolean)) {
+      await createNotification({
+        eventId: `${event.id}:${empId}`,
+        empId,
+        type: 'SYSTEM',
+        title: 'Yêu cầu đổi ca đã được phê duyệt',
+        content: 'Lịch làm việc đã được cập nhật sau khi quản lý phê duyệt đổi ca.',
+        referenceId: payload.requestId
+      });
+    }
+  },
+
+  'SHIFT_SWAP_REJECTED': async (event) => {
+    const payload = event.data || {};
+    await createNotification({
+      eventId: event.id,
+      empId: payload.empId,
+      type: 'SYSTEM',
+      title: 'Yêu cầu đổi ca đã bị từ chối',
+      content: 'Quản lý đã từ chối yêu cầu đổi ca. Lịch phân ca của bạn không thay đổi.',
+      referenceId: payload.requestId
+    });
+  },
+
   'PAYSLIP_PUBLISHED': async (event) => {
     const payload = event.data || {};
     await createNotification({
