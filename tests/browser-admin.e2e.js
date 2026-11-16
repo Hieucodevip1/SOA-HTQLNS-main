@@ -110,6 +110,15 @@ async function run() {
       assert.equal(await hr.page.locator('#leaveTypeAdminPanel').isVisible(), true);
     } finally { await hr.context.close(); }
 
+    const manager = await signIn(browser, 'manager');
+    try {
+      assert.equal(await manager.page.locator('#nav-rbac').isVisible(), false);
+      assert.equal(await manager.page.locator('#nav-departments').isVisible(), false);
+      assert.equal(await manager.page.locator('#nav-shifts').isVisible(), true);
+      await manager.page.locator('#nav-requests').click();
+      assert.equal(await manager.page.locator('#leaveTypeAdminPanel').isVisible(), false);
+    } finally { await manager.context.close(); }
+
     const employee = await signIn(browser, 'employee');
     try {
       assert.equal(await employee.page.locator('#nav-rbac').isVisible(), false);
