@@ -647,14 +647,16 @@ function calculateLeaveDays() {
     return;
   }
 
-  const diffTime = Math.abs(d2 - d1);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-  if (diffDays === 1 && (session === 'MORNING' || session === 'AFTERNOON')) {
-    totalInput.value = '0.5';
-  } else {
-    totalInput.value = diffDays.toFixed(1);
+  // Match leave-service: count Monday-Friday and allow a half-day only
+  // when the request covers a single working day.
+  let workingDays = 0;
+  for (let date = new Date(d1); date <= d2; date.setUTCDate(date.getUTCDate() + 1)) {
+    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6) workingDays++;
   }
+  const total = session !== 'FULL_DAY'
+    ? (startVal === endVal && workingDays === 1 ? 0.5 : 0)
+    : workingDays;
+  totalInput.value = total.toFixed(1);
 }
 
 async function loadRequestsData() {
@@ -767,6 +769,8 @@ function renderRequestsTable(list) {
       badgeHtml = `<span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>`;
     } else if (r.status === 'APPROVED') {
       badgeHtml = `<span class="badge-status badge-approved">✓ Đã duyệt</span>`;
+    } else if (r.status === 'CANCELLED') {
+      badgeHtml = `<span class="badge-status badge-rejected">Đã hủy</span>`;
     } else {
       badgeHtml = `<span class="badge-status badge-rejected">✕ Từ chối</span>`;
     }
@@ -781,6 +785,9 @@ function renderRequestsTable(list) {
         <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
       `
       : `
+        ${role === 'EMPLOYEE' && r.status === 'PENDING'
+          ? `<button class="btn-reject-sm" onclick="handleCancelLeave('${r.id}')">Hủy đơn</button>`
+          : ''}
         <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
       `;
 
@@ -868,6 +875,20 @@ async function handleCreateLeaveSubmit(e) {
       btn.disabled = false;
       btn.innerHTML = '<span>Gửi đơn duyệt</span> ➔';
     }
+  }
+}
+
+async function handleCancelLeave(id) {
+  if (!confirm('Bạn có chắc muốn hủy đơn nghỉ phép đang chờ duyệt?')) return;
+  try {
+    await apiCall(`/api/v1/leave-requests/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST'
+    });
+    showToast('Đã hủy đơn nghỉ phép thành công', 'success');
+    await loadRequestsData();
+    await loadDashboardPendingRequests();
+  } catch (err) {
+    showToast(`Không thể hủy đơn: ${err.message}`, 'error');
   }
 }
 
@@ -1139,6 +1160,7 @@ async function loadDashboardPendingRequests() {
           let badgeHtml = '';
           if (r.status === 'PENDING') badgeHtml = `<span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ</span>`;
           else if (r.status === 'APPROVED') badgeHtml = `<span class="badge-status badge-approved">✓ Đã duyệt</span>`;
+          else if (r.status === 'CANCELLED') badgeHtml = `<span class="badge-status badge-rejected">Đã hủy</span>`;
           else badgeHtml = `<span class="badge-status badge-rejected">✕ Từ chối</span>`;
 
           const rangeStr = `${formatLeaveDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? ' → ' + formatLeaveDate(r.end_date) : ''}`;
@@ -1150,6 +1172,7 @@ async function loadDashboardPendingRequests() {
               <td>${r.total_days || 1} ngày</td>
               <td>${badgeHtml}</td>
               <td style="text-align: center;">
+                ${r.status === 'PENDING' ? `<button class="btn-reject-sm" onclick="handleCancelLeave('${r.id}')">Hủy</button>` : ''}
                 <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
               </td>
             </tr>
