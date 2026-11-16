@@ -805,7 +805,7 @@ async function handleCreateLeaveSubmit(e) {
   const endDate = document.getElementById('leaveFormEndDate')?.value;
   const totalDays = parseFloat(document.getElementById('leaveFormTotalDays')?.value) || 1.0;
   const reason = document.getElementById('leaveFormReason')?.value.trim();
-  const attachmentUrl = document.getElementById('leaveFormAttachment')?.value.trim() || null;
+  const attachmentFile = document.getElementById('leaveFormAttachment')?.files?.[0] || null;
   const btn = document.getElementById('btnSubmitLeave');
 
   if (!leaveTypeId || !startDate || !endDate || !reason) {
@@ -818,6 +818,30 @@ async function handleCreateLeaveSubmit(e) {
   }
 
   try {
+    let attachmentUrl = null;
+    if (attachmentFile) {
+      if (attachmentFile.size < 1 || attachmentFile.size > 2 * 1024 * 1024 ||
+          !['application/pdf','image/png','image/jpeg'].includes(attachmentFile.type)) {
+        throw new Error('Minh chứng chỉ nhận PDF, PNG, JPEG từ 1 byte đến 2 MB');
+      }
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Không đọc được tệp minh chứng'));
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.readAsDataURL(attachmentFile);
+      });
+      const upload = await apiCall('/api/v1/leave-attachments', {
+        method: 'POST',
+        body: JSON.stringify({
+          fileName: attachmentFile.name, mediaType: attachmentFile.type,
+          contentBase64: base64
+        })
+      });
+      attachmentUrl = upload?.data?.attachmentUrl;
+      if (!upload?.success || !attachmentUrl) {
+        throw new Error(upload?.error || 'Không thể lưu minh chứng');
+      }
+    }
     const res = await apiCall('/api/leave', {
       method: 'POST',
       body: JSON.stringify({
@@ -836,6 +860,8 @@ async function handleCreateLeaveSubmit(e) {
     // Xóa form lý do
     const reasonInput = document.getElementById('leaveFormReason');
     if (reasonInput) reasonInput.value = '';
+    const fileInput = document.getElementById('leaveFormAttachment');
+    if (fileInput) fileInput.value = '';
 
     await loadRequestsData();
     await loadDashboardPendingRequests();
@@ -910,6 +936,39 @@ async function handleDirectRejectLeave(id) {
   }
 }
 
+let currentLeaveAttachmentUrl = null;
+
+async function downloadLeaveAttachment() {
+  const url = currentLeaveAttachmentUrl;
+  if (!url || !/^\/api\/v1\/leave-attachments\/[a-f0-9-]{36}$/i.test(url)) {
+    return showToast('Không có tệp minh chứng hợp lệ để tải', 'warning');
+  }
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: 'Bearer ' + state.token },
+      credentials: 'same-origin'
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'Không được phép tải tệp (' + response.status + ')');
+    }
+    const type = (response.headers.get('content-type') || '').split(';')[0];
+    if (!['application/pdf','image/png','image/jpeg'].includes(type)) {
+      throw new Error('Định dạng minh chứng không được hỗ trợ');
+    }
+    const extension = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' }[type];
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = 'minh-chung-' + url.split('/').pop() + '.' + extension;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (err) {
+    showToast('Tải minh chứng thất bại: ' + err.message, 'error');
+  }
+}
+
 async function openRequestDetail(requestId) {
   document.querySelectorAll('.figma-view-section').forEach((sec) => {
     sec.style.display = 'none';
@@ -975,7 +1034,13 @@ async function openRequestDetail(requestId) {
   const daysNum = parseFloat(req.total_days || 1);
   if (duration) duration.innerText = `${daysNum.toFixed(0)} ngày • ${(daysNum * 8).toFixed(0)} giờ`;
   if (reason) reason.innerText = req.reason || '-';
-  if (attach) attach.innerText = req.attachment_url || 'Không có tệp đính kèm';
+  const evidenceUrl = /^\/api\/v1\/leave-attachments\/[a-f0-9-]{36}$/i.test(req.attachment_url || '')
+    ? req.attachment_url : null;
+  currentLeaveAttachmentUrl = evidenceUrl;
+  if (attach) attach.innerText = evidenceUrl ? 'Minh chứng được lưu an toàn trên server' :
+    (req.attachment_url ? 'Tệp cũ chưa được chuyển sang kho minh chứng' : 'Không có tệp đính kèm');
+  const downloadButton = document.getElementById('btnDownloadLeaveAttachment');
+  if (downloadButton) downloadButton.style.display = evidenceUrl ? 'inline-flex' : 'none';
 
   const role = state.user?.role || 'EMPLOYEE';
   const isApprover = (role === 'ADMIN' || role === 'HR' || role === 'MANAGER');
