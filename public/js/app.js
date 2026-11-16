@@ -1630,127 +1630,236 @@ async function handleUpdateUserRole(userId, username) {
 // ==============================================================================
 // NẠP VÀ ĐIỀU KHIỂN BÁO CÁO THỐNG KÊ (ANALYTICS & ATTENDANCE)
 // ==============================================================================
-function loadStatsData() {
-  // Đồng bộ giao diện báo cáo với chu kỳ mặc định Tháng 10/2026
-  changeStatPeriod('2026-10');
+// Current-period attendance statistics are sourced from Attendance, Leave,
+// Organization and Analytics Services, never hard-coded example figures.
+let currentStatsRows = [];
+let currentStatsLabel = '';
+
+function statDateLocal(d) {
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+}
+function statWorkingDays(start, end) {
+  let count = 0;
+  for (let day = new Date(start + 'T12:00:00'); day <= new Date(end + 'T12:00:00'); day.setDate(day.getDate() + 1)) {
+    if (![0, 6].includes(day.getDay())) count++;
+  }
+  return count;
+}
+function statLeaveDays(request, start, end) {
+  if (request.status !== 'APPROVED') return 0;
+  const first = statDateLocal(new Date(request.start_date));
+  const last = statDateLocal(new Date(request.end_date));
+  const from = first > start ? first : start;
+  const until = last < end ? last : end;
+  if (from > until || !first || !last) return 0;
+  const working = statWorkingDays(from, until);
+  return request.session !== 'FULL_DAY' && first === last ? working * 0.5 : working;
+}
+function statRange(period) {
+  const now = new Date();
+  let startMonth = now.getMonth();
+  let endMonth = now.getMonth();
+  let year = now.getFullYear();
+  if (period === 'previous') {
+    const prev = new Date(year, startMonth - 1, 1);
+    startMonth = endMonth = prev.getMonth();
+    year = prev.getFullYear();
+  } else if (period === 'quarter') {
+    startMonth = Math.floor(startMonth / 3) * 3;
+    endMonth = startMonth + 2;
+  }
+  return {
+    from: statDateLocal(new Date(year, startMonth, 1)),
+    to: statDateLocal(new Date(year, endMonth + 1, 0)),
+    months: Array.from({ length: endMonth - startMonth + 1 }, (_, i) => ({ month: startMonth + i + 1, year })),
+    label: period === 'quarter' ? `Quý ${Math.floor(startMonth / 3) + 1}/${year}` : `Tháng ${String(startMonth + 1).padStart(2, '0')}/${year}`
+  };
 }
 
-function changeStatPeriod(period) {
-  // Đặt lại style các nút chọn chu kỳ
-  ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3'].forEach(id => {
+function loadStatsData() {
+  const now = new Date();
+  const current = statRange('current');
+  const previous = statRange('previous');
+  const quarter = statRange('quarter');
+  for (const [id, label] of [
+    ['statPeriodBtn1', current.label],
+    ['statPeriodBtn2', previous.label],
+    ['statPeriodBtn3', quarter.label]
+  ]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '📅 ' + label;
+  }
+  const card = document.getElementById('statEmployeePersonalCard');
+  if (card) card.style.display = state.user?.role === 'EMPLOYEE' ? 'block' : 'none';
+  changeStatPeriod('current');
+}
+
+async function changeStatPeriod(period) {
+  const active = period === 'previous' ? 'statPeriodBtn2' : period === 'quarter' ? 'statPeriodBtn3' : 'statPeriodBtn1';
+  for (const id of ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3']) {
     const btn = document.getElementById(id);
     if (btn) {
-      btn.className = 'btn-figma-dark';
-      btn.style.background = '#f8fafc';
-      btn.style.color = '#1e293b';
-      btn.style.border = '1px solid #e2e8f0';
+      btn.style.background = id === active ? '#2563eb' : '#f8fafc';
+      btn.style.color = id === active ? '#fff' : '#475569';
     }
-  });
-
-  let activeBtnId = 'statPeriodBtn1';
-  let periodLabel = 'Tháng 10/2026';
-  let kpiRate = '97.9%';
-  let kpiHours = '16,368 h';
-  let kpiLate = '15';
-  let kpiLeave = '30';
-  let footStandard = '2,090 công';
-  let footActual = '2,046 công';
-  let footLate = '15 lượt';
-  let footLeave = '30 ngày';
-  let footRate = '97.9%';
-
-  let deptsData = [
-    { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 864, late: 5, leave: 11, rate: '98.2%' },
-    { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 602, late: 6, leave: 8, rate: '97.7%' },
-    { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 325, late: 1, leave: 4, rate: '98.5%' },
-    { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 255, late: 3, leave: 7, rate: '96.6%' }
-  ];
-
-  if (period === '2026-09') {
-    activeBtnId = 'statPeriodBtn2';
-    periodLabel = 'Tháng 09/2026';
-    kpiRate = '97.1%';
-    kpiHours = '16,020 h';
-    kpiLate = '22';
-    kpiLeave = '38';
-    footStandard = '2,090 công';
-    footActual = '2,029 công';
-    footLate = '22 lượt';
-    footLeave = '38 ngày';
-    footRate = '97.1%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 858, late: 8, leave: 14, rate: '97.5%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 595, late: 9, leave: 12, rate: '96.6%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 324, late: 2, leave: 4, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 252, late: 3, leave: 8, rate: '95.5%' }
-    ];
-  } else if (period === '2026-Q3') {
-    activeBtnId = 'statPeriodBtn3';
-    periodLabel = 'Quý 3/2026';
-    kpiRate = '96.8%';
-    kpiHours = '48,150 h';
-    kpiLate = '68';
-    kpiLeave = '112';
-    footStandard = '6,270 công';
-    footActual = '6,070 công';
-    footLate = '68 lượt';
-    footLeave = '112 ngày';
-    footRate = '96.8%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 2640, act: 2560, late: 25, leave: 42, rate: '97.0%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 1848, act: 1780, late: 28, leave: 36, rate: '96.3%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 990, act: 972, late: 6, leave: 12, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 792, act: 758, late: 9, leave: 22, rate: '95.7%' }
-    ];
   }
+  const range = statRange(period);
+  currentStatsLabel = range.label;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  const table = document.getElementById('statDeptTableBody');
+  const warnings = document.getElementById('statAlertsBody');
+  if (table) table.innerHTML = '<tr><td colspan="7">Đang tổng hợp số liệu...</td></tr>';
+  if (warnings) warnings.innerHTML = '<tr><td colspan="8">Đang tải cảnh báo...</td></tr>';
 
-  const activeBtn = document.getElementById(activeBtnId);
-  if (activeBtn) {
-    activeBtn.className = 'btn-primary-blue';
-    activeBtn.style.background = '#2563eb';
-    activeBtn.style.color = '#ffffff';
-    activeBtn.style.border = 'none';
+  try {
+    const isStaff = state.user?.role === 'EMPLOYEE';
+    const qs = new URLSearchParams({ fromDate: range.from, toDate: range.to });
+    const [attRes, leaveRes, employeesRes, departmentsRes] = await Promise.all([
+      apiCall('/api/attendance?' + qs),
+      apiCall('/api/leave'),
+      isStaff ? Promise.resolve(null) : apiCall('/api/organization/employees'),
+      isStaff ? Promise.resolve(null) : apiCall('/api/organization/departments')
+    ]);
+    if (!Array.isArray(attRes?.data) || !Array.isArray(leaveRes?.data) ||
+        (!isStaff && (!Array.isArray(employeesRes?.data) || !Array.isArray(departmentsRes?.data)))) {
+      throw new Error('Dữ liệu tổng hợp không đúng cấu trúc');
+    }
+    const attendance = attRes.data.filter(a => a.work_date && statDateLocal(new Date(a.work_date)) >= range.from &&
+      statDateLocal(new Date(a.work_date)) <= range.to);
+    const approvedLeaves = leaveRes.data.filter(r => r.status === 'APPROVED');
+    const headcount = isStaff ? 1 : employeesRes.data.filter(e => e.status === 'ACTIVE').length;
+    const standardDays = statWorkingDays(range.from, range.to);
+    const checked = attendance.filter(a => a.check_in_time);
+    const late = checked.filter(a => Number(a.late_minutes) > 0).length;
+    const hours = attendance.reduce((sum, a) => sum + Number(a.actual_working_hours || 0), 0);
+    const leaveDays = approvedLeaves.reduce((sum, r) => sum + statLeaveDays(r, range.from, range.to), 0);
+    const percent = (n, d) => d > 0 ? (100 * n / d).toFixed(1) + '%' : '—';
+    set('statMetricOnTime', percent(checked.length - late, checked.length));
+    set('statMetricLate', percent(late, checked.length));
+    set('statMetricLeave', percent(leaveDays, standardDays * headcount));
+    set('statMetricHours', hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' h');
+    set('statMetricOnTimeSub', range.label + ' · ' + (checked.length - late) + ' lượt đúng giờ');
+    set('statMetricLateSub', late + ' lượt đi muộn / ' + checked.length + ' lượt chấm công');
+    set('statMetricLeaveSub', leaveDays.toFixed(1) + ' ngày nghỉ đã duyệt');
+    set('statMetricHoursSub', attendance.length + ' bản ghi chấm công');
+    set('statFootEmployees', headcount);
+    set('statFootStandardDays', (standardDays * headcount).toLocaleString('vi-VN') + ' công dự kiến');
+    set('statFootActualDays', checked.length.toLocaleString('vi-VN') + ' lượt');
+    set('statFootLateCount', late + ' lượt');
+    set('statFootLeaveDays', leaveDays.toFixed(1) + ' ngày');
+    set('statFootRate', percent(checked.length, standardDays * headcount));
+
+    let rows;
+    if (isStaff) {
+      rows = [{
+        name: 'Bản thân', emp: 1, standard: standardDays,
+        actual: checked.length, late, leave: leaveDays,
+        rate: percent(checked.length, standardDays)
+      }];
+    } else {
+      const departments = departmentsRes.data;
+      const staff = employeesRes.data.filter(e => e.status === 'ACTIVE');
+      const deptMap = new Map(departments.map(d => [d.id, d.name]));
+      const byEmployee = new Map(staff.map(e => [e.id, e]));
+      const keys = new Set(staff.map(e => e.department_id || 'unassigned'));
+      rows = [...keys].map(key => {
+        const people = staff.filter(e => (e.department_id || 'unassigned') === key);
+        const ids = new Set(people.map(p => p.id));
+        const records = checked.filter(a => ids.has(a.emp_id));
+        const leave = approvedLeaves.filter(r => ids.has(r.emp_id)).reduce((v, r) => v + statLeaveDays(r, range.from, range.to), 0);
+        return {
+          name: deptMap.get(key) || 'Chưa phân phòng ban', emp: people.length,
+          standard: people.length * standardDays, actual: records.length,
+          late: records.filter(a => Number(a.late_minutes) > 0).length,
+          leave, rate: percent(records.length, people.length * standardDays)
+        };
+      });
+    }
+    currentStatsRows = rows;
+    if (table) table.innerHTML = rows.length ? rows.map(d => `<tr>
+      <td><strong>${uiEscape(d.name)}</strong></td>
+      <td>${d.emp}</td><td>${d.standard} công dự kiến</td><td>${d.actual} lượt</td>
+      <td>${d.late} lượt</td><td>${d.leave.toFixed(1)} ngày</td>
+      <td><span class="badge-status badge-approved">${d.rate}</span></td>
+    </tr>`).join('') : '<tr><td colspan="7">Chưa có dữ liệu phòng ban</td></tr>';
+
+    if (isStaff) {
+      if (warnings) warnings.innerHTML = '<tr><td colspan="8">Cảnh báo toàn công ty chỉ dành cho người quản lý.</td></tr>';
+      set('statAlertCount', 'Báo cáo cá nhân');
+      const card = document.getElementById('statEmployeePersonalCard');
+      if (card) {
+        card.querySelector('.card-title-text').textContent = '📊 Kết quả chuyên cần cá nhân ' + range.label;
+        const values = card.querySelectorAll('.metrics-row-4 div[style*="font-size: 22px"]');
+        const valueEls = [...card.querySelectorAll('.metrics-row-4 > div')].map(el => el.querySelector('div:nth-child(2)'));
+        for (const [idx, value] of [
+          [0, checked.length + ' lượt'], [1, late + ' lần'], [2, leaveDays.toFixed(1) + ' ngày nghỉ'],
+          [3, hours.toFixed(1) + ' giờ']
+        ]) if (valueEls[idx]) valueEls[idx].textContent = value;
+      }
+      return;
+    }
+
+    // Analytics validates the cross-service aggregated KPIs and provides OT alerts.
+    const analyticsData = await Promise.all(range.months.map(({ month, year }) =>
+      apiCall('/api/v1/analytics/dashboard?month=' + month + '&year=' + year)
+    ));
+    const alerts = analyticsData.flatMap(x => x?.data?.alerts || []);
+    const thresholdsResponse = ['ADMIN', 'HR'].includes(state.user?.role)
+      ? await apiCall('/api/v1/analytics/thresholds') : null;
+    const thresholds = (thresholdsResponse?.data || []).filter(t => Boolean(Number(t.is_active)));
+    const lateCounts = new Map();
+    for (const item of checked.filter(a => Number(a.late_minutes) > 0)) {
+      lateCounts.set(item.emp_id, (lateCounts.get(item.emp_id) || 0) + 1);
+    }
+    const entries = thresholds.map(t => {
+      const violations = t.metric_type === 'LATE_COUNT_MONTH'
+        ? [...lateCounts.values()].filter(n => n > Number(t.threshold_value)).length
+        : (t.metric_type === 'OT_HOURS_MONTH'
+          ? alerts.filter(a => a.type === 'OT_THRESHOLD_EXCEEDED').length : 0);
+      return `<tr><td>${uiEscape(t.code)}</td><td>${uiEscape(t.name)}</td>
+        <td>${uiEscape(t.metric_type)}</td><td>&gt; ${Number(t.threshold_value)}</td>
+        <td>${uiEscape(t.severity)}</td><td>${violations} trường hợp</td>
+        <td>${violations ? 'Cần kiểm tra' : 'Chưa ghi nhận'}</td><td>—</td></tr>`;
+    });
+    if (!thresholds.length && alerts.length) {
+      entries.push(...alerts.map(a => `<tr><td>OT</td><td>${uiEscape(a.message)}</td><td>OT_HOURS_MONTH</td>
+        <td>Ngưỡng từ Analytics</td><td>WARNING</td><td>1</td><td>Cần kiểm tra</td><td>—</td></tr>`));
+    }
+    set('statAlertCount', alerts.length + ' cảnh báo OT');
+    if (warnings) warnings.innerHTML = entries.join('') || '<tr><td colspan="8">Không có ngưỡng đang hoạt động hoặc cảnh báo.</td></tr>';
+  } catch (err) {
+    currentStatsRows = [];
+    if (table) table.innerHTML = '<tr><td colspan="7" style="color:#dc2626;">Không thể tải báo cáo: ' + uiEscape(err.message) + '</td></tr>';
+    if (warnings) warnings.innerHTML = '<tr><td colspan="8">Không thể tải dữ liệu cảnh báo.</td></tr>';
+    for (const id of ['statMetricOnTime','statMetricLate','statMetricLeave','statMetricHours','statFootStandardDays',
+      'statFootActualDays','statFootLateCount','statFootLeaveDays','statFootRate']) set(id, '—');
+    set('statAlertCount','Không khả dụng');
+    console.error('Analytics UI:', err);
   }
+}
 
-  // Cập nhật số liệu các thẻ KPI báo cáo
-  const rEl = document.getElementById('statMetricRateVal');
-  const hEl = document.getElementById('statMetricHoursVal');
-  const lEl = document.getElementById('statMetricLateVal');
-  const lvEl = document.getElementById('statMetricLeaveVal');
-  if (rEl) rEl.innerText = kpiRate;
-  if (hEl) hEl.innerText = kpiHours;
-  if (lEl) lEl.innerText = kpiLate;
-  if (lvEl) lvEl.innerText = kpiLeave;
-
-  // Cập nhật bảng chi tiết phòng ban
-  const tbody = document.getElementById('statDeptTableBody');
-  if (tbody) {
-    tbody.innerHTML = deptsData.map(d => `
-      <tr>
-        <td><strong>${d.name}</strong></td>
-        <td>${d.emp}</td>
-        <td>${d.std.toLocaleString('vi-VN')} công</td>
-        <td><strong>${d.act.toLocaleString('vi-VN')} công</strong></td>
-        <td><span class="badge-status" style="background: ${d.late > 5 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.late} lượt</span></td>
-        <td>${d.leave} ngày</td>
-        <td><span class="badge-status badge-approved">${d.rate}</span></td>
-      </tr>
-    `).join('');
+function exportStatsCsv() {
+  if (!currentStatsRows.length) {
+    showToast('Chưa có số liệu thực để xuất', 'warning');
+    return;
   }
+  const header = ['Phòng ban','Nhân sự','Công chuẩn dự kiến','Lượt chấm công','Đi muộn','Ngày nghỉ phép','Tỷ lệ'];
+  const lines = [header, ...currentStatsRows.map(r => [r.name, r.emp, r.standard, r.actual, r.late, r.leave, r.rate])];
+  const csv = '\ufeff' + lines.map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'thong-ke-chuyen-can-' + currentStatsLabel.replace(/[^0-9a-z]/gi, '-') + '.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
-  // Cập nhật footer tổng kết bảng
-  const fStd = document.getElementById('statFootStandardDays');
-  const fAct = document.getElementById('statFootActualDays');
-  const fLate = document.getElementById('statFootLateCount');
-  const fLeave = document.getElementById('statFootLeaveDays');
-  const fRate = document.getElementById('statFootRate');
-  if (fStd) fStd.innerText = footStandard;
-  if (fAct) fAct.innerText = footActual;
-  if (fLate) fLate.innerText = footLate;
-  if (fLeave) fLeave.innerText = footLeave;
-  if (fRate) fRate.innerText = footRate;
-
-  showToast(`Đã chuyển đổi số liệu thống kê sang: ${periodLabel}`, 'success');
+function printStatsReport() {
+  if (!currentStatsRows.length) return showToast('Chưa có số liệu báo cáo để in', 'warning');
+  window.print(); // Users can choose "Save as PDF" in their browser.
 }
 
 // Nạp dữ liệu hồ sơ cá nhân
