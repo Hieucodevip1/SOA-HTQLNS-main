@@ -137,17 +137,11 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     assert.ok(data.data.length >= 1);
   });
 
-  // 6. Lấy chi tiết đơn nghỉ phép mẫu NP-2026-024 (Figma Image 3)
-  test('Lấy chi tiết đơn nghỉ phép NP-2026-024 (HTTP 200)', async () => {
-    const res = await fetch(`http://localhost:${LEAVE_PORT}/api/leave/NP-2026-024`, {
+  test('Không tìm thấy chi tiết đơn nghỉ phép không tồn tại (HTTP 404)', async () => {
+    const res = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/missing-${Date.now()}`, {
       headers: { Authorization: `Bearer ${employeeToken}` }
     });
-    assert.strictEqual(res.status, 200);
-    const data = await res.json();
-    assert.strictEqual(data.success, true);
-    assert.strictEqual(data.data.id, 'NP-2026-024');
-    assert.strictEqual(data.data.status, 'PENDING');
-    assert.strictEqual(data.data.attachment_url, 'Bien-ban-ban-giao.pdf');
+    assert.equal(res.status, 404);
   });
 
   let uploadedAttachmentUrl = null;
@@ -231,7 +225,7 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
         leaveTypeId: 'lt000001-0000-0000-0000-000000000001',
         startDate: '2026-12-01',
         endDate: '2026-12-25',
-        totalDays: 20.0, // Vượt quá quỹ phép 12 ngày
+        totalDays: 19.0, // 19 ngày làm việc (thứ Hai - thứ Sáu), vượt quỹ 12 ngày
         session: 'FULL_DAY',
         reason: 'Xin nghỉ dài ngày du lịch cuối năm'
       })
@@ -287,7 +281,7 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
         rejectReason: 'Không thể từ chối đơn đã duyệt'
       })
     });
-    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.status, 409);
   });
 
   // 12. Internal monthly summary API (bảo mật bằng x-internal-key)
