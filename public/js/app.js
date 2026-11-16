@@ -121,7 +121,14 @@ async function apiCall(path, options = {}) {
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      if (res.status === 401 && path !== '/api/auth/login') {
+      // A wrong password on an authenticated credential-change form does not
+      // mean the JWT expired. Clear the session only for protected resource 401s.
+      const credentialCheck = path === '/api/auth/login' ||
+        path === '/api/auth/forgot-password' ||
+        path === '/api/auth/reset-password' ||
+        path === '/api/auth/change-password' ||
+        (path === '/api/auth/me' && String(options.method || 'GET').toUpperCase() === 'PUT');
+      if (res.status === 401 && !credentialCheck) {
         state.token = null;
         state.user = null;
         safeRemoveStorage('htqlns_token');
