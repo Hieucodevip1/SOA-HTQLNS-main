@@ -1426,6 +1426,26 @@ function handleEmployeeFilter() {
   renderEmployeesTable(filtered);
 }
 
+let currentAttendanceExportRows = [];
+
+function exportAttendanceCsv() {
+  if (!currentAttendanceExportRows.length) {
+    showToast('Không có dữ liệu chấm công đã tải để xuất', 'warning');
+    return;
+  }
+  const rows = [
+    ['Mã NV', 'Nhân viên', 'Phòng ban', 'Ngày', 'Giờ vào', 'Giờ ra', 'Số giờ', 'Trạng thái', 'Phút đi muộn'],
+    ...currentAttendanceExportRows.map(r => [r.code, r.name, r.dept, r.date, r.in, r.out, r.hours, r.status, r.late_minutes])
+  ];
+  const csv = '\ufeff' + rows.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'lich-su-cham-cong.csv';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // Nạp lịch sử chấm công toàn bộ nhân viên (từ Attendance Service :3003)
 async function loadAttendanceHistoryData() {
   const tbody = document.getElementById('attendanceHistoryTableBody');
@@ -1491,6 +1511,8 @@ async function loadAttendanceHistoryData() {
   if (filterDate) {
     filtered = filtered.filter(r => r.work_date === filterDate);
   }
+
+  currentAttendanceExportRows = filtered;
 
   if (!filtered.length) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 20px;">Không có bản ghi chấm công nào phù hợp bộ lọc</td></tr>`;
@@ -2345,12 +2367,15 @@ async function handleSubmitAttendanceAdjustment(attendanceId, workDate) {
 
   try {
     const formattedDate = workDate.includes('/') ? workDate.split('/').reverse().join('-') : workDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(formattedDate)) {
+      throw new Error('Ngày giải trình không hợp lệ; hãy chọn một bản ghi chấm công cụ thể');
+    }
     const res = await apiCall('/api/attendance/adjustments', {
       method: 'POST',
       body: JSON.stringify({
         attendanceId: attendanceId || undefined,
-        workDate: formattedDate || '2026-10-30',
-        adjustmentType: 'LATE_EXPLANATION',
+        workDate: formattedDate,
+        adjustmentType: 'OTHER',
         reason
       })
     });
