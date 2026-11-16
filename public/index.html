@@ -2080,6 +2080,24 @@ input:checked + .slider:before {
               </tbody>
             </table>
           </div>
+          <div id="leaveTypeAdminPanel" class="figma-white-card" style="margin-top:22px;display:none">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Danh mục loại nghỉ phép</div>
+                <div style="font-size:12px;color:#64748b">ADMIN / HR — danh mục được lưu tại Leave Service.</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="button" class="btn-secondary-outline" onclick="loadLeaveTypeAdminList()">↻ Làm mới</button>
+                <button type="button" class="btn-primary-blue" onclick="openCreateLeaveTypeModal()">+ Thêm loại phép</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="figma-table">
+                <thead><tr><th>Mã</th><th>Tên</th><th>Hưởng lương</th><th>Giới hạn ngày/năm</th><th>Minh chứng</th><th>Trạng thái</th></tr></thead>
+                <tbody id="leaveTypesAdminTableBody"><tr><td colspan="6">Đang tải danh mục...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
 
@@ -2746,6 +2764,21 @@ input:checked + .slider:before {
                   <tr><th>Mã chức vụ</th><th>Tên chức vụ</th><th>Phòng ban</th><th>Trạng thái</th><th>Khoảng lương tham chiếu</th></tr>
                 </thead>
                 <tbody id="positionsTableBody"><tr><td colspan="5">Đang tải danh mục chức vụ...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="auditLogsPanel" class="figma-white-card" style="margin-top:20px;display:none">
+            <div class="card-title-flex">
+              <div>
+                <div class="card-title-text">Nhật ký thay đổi hệ thống (Audit Log)</div>
+                <div style="font-size:12px;color:#64748b">Chỉ ADMIN — 100 thao tác gần nhất lấy từ Organization Service.</div>
+              </div>
+              <button type="button" class="btn-secondary-outline" onclick="loadOrganizationAuditLogs()">↻ Làm mới</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="figma-table">
+                <thead><tr><th>Thời điểm</th><th>Hành động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Chi tiết</th></tr></thead>
+                <tbody id="auditLogsTableBody"><tr><td colspan="5">Chưa tải nhật ký.</td></tr></tbody>
               </table>
             </div>
           </div>
