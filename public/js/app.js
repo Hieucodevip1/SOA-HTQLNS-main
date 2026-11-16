@@ -830,7 +830,7 @@ async function handleCreateLeaveSubmit(e) {
   const endDate = document.getElementById('leaveFormEndDate')?.value;
   const totalDays = parseFloat(document.getElementById('leaveFormTotalDays')?.value) || 1.0;
   const reason = document.getElementById('leaveFormReason')?.value.trim();
-  const attachmentUrl = document.getElementById('leaveFormAttachment')?.value.trim() || 'Bien-ban-ban-giao.pdf';
+  const attachmentUrl = document.getElementById('leaveFormAttachment')?.value.trim() || null;
   const btn = document.getElementById('btnSubmitLeave');
 
   if (!leaveTypeId || !startDate || !endDate || !reason) {
@@ -2314,23 +2314,13 @@ function openApproveRequestModal(id, name, type, time) {
   openModal(`Xử lý đơn từ – ${name}`, html);
 }
 
-function processRequestAction(id, name, status) {
+// Route dashboard approvals through the real Leave Service instead of mutating a table cell.
+async function processRequestAction(id, name, status) {
   closeModal();
-  const row = document.getElementById(`req-row-${id}`);
-  if (row) {
-    const actionCell = row.querySelector('td:last-child');
-    if (actionCell) {
-      if (status === 'approved') {
-        actionCell.innerHTML = `<span class="badge-status badge-approved">Đã phê duyệt</span>`;
-      } else {
-        actionCell.innerHTML = `<span class="badge-status badge-rejected">Đã từ chối</span>`;
-      }
-    }
-  }
   if (status === 'approved') {
-    showToast(`Đã phê duyệt thành công đơn ${id} của ${name}`, 'success');
-  } else {
-    showToast(`Đã từ chối đơn ${id} của ${name}`, 'warning');
+    await handleDirectApproveLeave(id);
+  } else if (status === 'rejected') {
+    await handleDirectRejectLeave(id);
   }
 }
 
