@@ -2605,228 +2605,66 @@ input:checked + .slider:before {
              VIEW 3: THIẾT LẬP CHẤM CÔNG (FIGMA IMAGE 4)
              ==================================================================== -->
         <section id="view-settings" class="figma-view-section" style="display: none;">
-          <div class="breadcrumb-trail">Thiết lập chấm công / Phương thức chấm công & vị trí</div>
+          <div class="breadcrumb-trail">Thiết lập chấm công / Địa điểm hợp lệ</div>
           <div class="page-main-header">
-            <h1 class="page-heading-title">Phương thức chấm công & vị trí</h1>
-            <div class="page-heading-desc">Quản lý điều kiện xác thực khi nhân viên chấm công vào và chấm công ra.</div>
+            <h1 class="page-heading-title">Thiết lập chấm công GPS / Wi-Fi</h1>
+            <div class="page-heading-desc">Đọc và thêm địa điểm từ Attendance Service. Thay đổi được lưu vào MySQL.</div>
           </div>
-
-          <!-- Banner xanh thông báo quy tắc đang áp dụng -->
           <div class="alert-banner-blue">
-            <span style="font-size: 18px;">ℹ️</span>
+            <span style="font-size:18px;">ℹ️</span>
             <div>
-              <strong>Quy tắc đang áp dụng: Wi-Fi công ty VÀ vị trí GPS hợp lệ.</strong><br>
-              Nhân viên phải kết nối đúng Wi-Fi đã đăng ký và ở trong bán kính 100 m của văn phòng. Nhận diện khuôn mặt đang tắt, không phải điều kiện chấm công.
+              <strong>Quy tắc đang triển khai: chấm công trong vùng GPS được khai báo.</strong>
+              Trình duyệt không xác minh an toàn BSSID, và backend chưa hỗ trợ chỉnh sửa, xoá địa điểm,
+              bật/tắt phương thức hoặc xác thực FaceID thật. Các chức năng chưa có API không được mô phỏng là đã lưu.
             </div>
           </div>
-
-          <!-- 3 THẺ TOGGLE PHƯƠNG THỨC CHẤM CÔNG (FIGMA IMAGE 4) -->
-          <div class="method-toggles-grid">
-            <!-- Thẻ 1: Wi-Fi công ty -->
-            <div class="figma-white-card">
-              <div class="toggle-top-row">
-                <div class="toggle-title">
-                  <span>📶</span> Wi-Fi công ty
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="toggleWifi" checked onchange="handleSettingToggle('wifi')">
-                  <span class="slider"></span>
-                </label>
-              </div>
-              <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 12px;">
-                Kiểm tra mạng nội bộ theo SSID và điểm truy cập BSSID đã đăng ký.
-              </div>
-              <div style="font-size: 11px; color: #16a34a; font-weight: 600;">
-                Có sẵn trong hệ thống • Đã bật
-              </div>
-            </div>
-
-            <!-- Thẻ 2: GPS / Vùng cho phép -->
-            <div class="figma-white-card">
-              <div class="toggle-top-row">
-                <div class="toggle-title">
-                  <span>📍</span> GPS / Vùng cho phép
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="toggleGps" checked onchange="handleSettingToggle('gps')">
-                  <span class="slider"></span>
-                </label>
-              </div>
-              <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 12px;">
-                Xác minh vị trí thiết bị nằm trong vùng chấm công của văn phòng.
-              </div>
-              <div style="font-size: 11px; color: #16a34a; font-weight: 600;">
-                Có sẵn trong hệ thống • Đã bật
-              </div>
-            </div>
-
-            <!-- Thẻ 3: Nhận diện khuôn mặt -->
-            <div class="figma-white-card">
-              <div class="toggle-top-row">
-                <div class="toggle-title">
-                  <span>📷</span> Nhận diện khuôn mặt
-                </div>
-                <span class="badge-status" style="background:#f1f5f9; color:#64748b;">• Đang tắt</span>
-              </div>
-              <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 12px;">
-                Đối chiếu khuôn mặt đã đăng ký. Chưa thu thập dữ liệu khi đang tắt.
-              </div>
-              <div style="font-size: 11px; color: #3b82f6; font-weight: 600; cursor: pointer;" onclick="showToast('Tính năng FaceID đang ở chế độ xem thử', 'warning')">
-                Có sẵn trong hệ thống • Thiết lập và bật →
-              </div>
-            </div>
-          </div>
-
-          <!-- LƯỚI CHI TIẾT THIẾT LẬP (TRÁI: WIFI & VÙNG GPS, PHẢI: ĐIỀU KIỆN & PHẠM VI) -->
           <div class="middle-grid-2">
-            <!-- CỘT TRÁI: WIFI & ĐỊA ĐIỂM -->
-            <div>
-              <!-- Mạng Wi-Fi công ty -->
-              <div class="figma-white-card" style="margin-bottom: 20px;">
-                <div class="card-title-text" style="margin-bottom: 14px;">Mạng Wi-Fi công ty</div>
-
+            <div class="figma-white-card">
+              <div class="card-title-text" style="margin-bottom:14px;">Thêm địa điểm chấm công (ADMIN/HR)</div>
+              <form id="workLocationForm" onsubmit="handleCreateWorkLocation(event)"
+                style="display:flex;flex-direction:column;gap:12px;">
                 <div class="figma-input-row">
-                  <div style="flex: 1;">
-                    <label class="info-label">Tên mạng (SSID)</label>
-                    <input type="text" class="figma-pill-input" value="QNU-Office" style="border-radius: 8px;">
-                  </div>
-                  <div style="flex: 1.2;">
-                    <label class="info-label">Điểm truy cập chính (BSSID)</label>
-                    <input type="text" class="figma-pill-input" value="A4:5E:60:12:34:01" style="border-radius: 8px;">
-                  </div>
+                  <div style="flex:1"><label class="info-label" for="locCode">Mã địa điểm</label>
+                    <input id="locCode" class="figma-pill-input" placeholder="LOC-CN2" maxlength="50" required></div>
+                  <div style="flex:2"><label class="info-label" for="locName">Tên địa điểm</label>
+                    <input id="locName" class="figma-pill-input" placeholder="Văn phòng chi nhánh" maxlength="150" required></div>
                 </div>
-
-                <div style="margin-top: 10px;">
-                  <label class="info-label">Điểm truy cập bổ sung</label>
-                  <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" class="figma-pill-input" value="A4:5E:60:12:34:02" style="border-radius: 8px;">
-                    <a class="link-action-blue" style="font-size: 12px; color: #dc2626;">Xóa</a>
-                  </div>
+                <label class="info-label" for="locAddress">Địa chỉ</label>
+                <input id="locAddress" class="figma-pill-input" placeholder="Địa chỉ văn phòng">
+                <div class="figma-input-row">
+                  <div style="flex:1"><label class="info-label" for="locLat">Vĩ độ</label>
+                    <input id="locLat" type="number" step="any" min="-90" max="90" class="figma-pill-input" placeholder="13.759142" required></div>
+                  <div style="flex:1"><label class="info-label" for="locLng">Kinh độ</label>
+                    <input id="locLng" type="number" step="any" min="-180" max="180" class="figma-pill-input" placeholder="109.218536" required></div>
                 </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-                  <a class="link-action-blue" style="font-size: 13px;" onclick="showToast('Thêm điểm truy cập WiFi BSSID phụ', 'success')">+ Thêm điểm truy cập</a>
-                  <span class="badge-status" style="background:#dcfce7; color:#166534;">• 2 điểm truy cập</span>
+                <label class="info-label" for="locRadius">Bán kính cho phép (mét)</label>
+                <input id="locRadius" type="number" min="10" max="5000" value="100" class="figma-pill-input" required>
+                <div class="figma-input-row">
+                  <div style="flex:1"><label class="info-label" for="locWifi">Tên Wi-Fi (SSID, nếu có)</label>
+                    <input id="locWifi" class="figma-pill-input" maxlength="100" placeholder="HTQLNS_OFFICE_5G"></div>
+                  <div style="flex:1"><label class="info-label" for="locBssid">BSSID (nếu có)</label>
+                    <input id="locBssid" class="figma-pill-input" maxlength="100" placeholder="AA:BB:CC:DD:EE:FF"></div>
                 </div>
-
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 12px; line-height: 1.4;">
-                  SSID phải trùng tên mạng và BSSID thuộc danh sách cho phép. Không xác thực bằng tên Wi-Fi đơn lẻ hoặc mạng khách.
-                </div>
-              </div>
-
-              <!-- Địa điểm & vùng chấm công -->
-              <div class="figma-white-card">
-                <div class="card-title-flex">
-                  <div>
-                    <div class="card-title-text">Địa điểm & vùng chấm công</div>
-                    <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-top: 4px;">Văn phòng Quy Nhơn</div>
-                    <div style="font-size: 11px; color: #64748b;">170 An Dương Vương, Quy Nhơn, Bình Định</div>
-                  </div>
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Chế độ chỉnh sửa bản đồ tọa độ GPS', 'warning')">Đổi vị trí</a>
-                </div>
-
-                <!-- Mô phỏng bản đồ tròn Figma Image 4 -->
-                <div class="map-visual-box">
-                  <div class="map-circle-radius">
-                    <span style="font-size: 20px;">🏢</span>
-                    <span>Văn phòng Quy Nhơn</span>
-                    <span style="font-size: 9px; font-weight: normal; opacity: 0.8;">Bán kính 100 m</span>
-                  </div>
-                </div>
-
-                <div class="figma-input-row" style="margin-top: 12px;">
-                  <div style="flex: 1;">
-                    <label class="info-label">Bán kính cho phép</label>
-                    <input type="text" class="figma-pill-input" value="100 m" style="border-radius: 8px;">
-                  </div>
-                  <div style="flex: 1.5;">
-                    <label class="info-label">Tọa độ (vĩ độ, kinh độ)</label>
-                    <input type="text" class="figma-pill-input" value="13.7587, 109.2190" style="border-radius: 8px;">
-                  </div>
-                </div>
-
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">
-                  Chấp nhận khoảng cách ≤ 100 m từ tâm vòng. Yêu cầu độ chính xác GPS ≤ 50 m; vị trí thiếu chính xác cần thử lại.
-                </div>
-              </div>
+                <button type="submit" id="btnSaveWorkLocation" class="btn-primary-blue">+ Lưu địa điểm vào Attendance Service</button>
+              </form>
             </div>
-
-            <!-- CỘT PHẢI: QUY TẮC KẾT HỢP, PHẠM VI, QUYỀN RIÊNG TƯ -->
-            <div>
-              <!-- Cách kết hợp điều kiện -->
-              <div class="figma-white-card" style="margin-bottom: 20px;">
-                <div class="card-title-text" style="margin-bottom: 12px;">Cách kết hợp điều kiện</div>
-
-                <div style="display: flex; flex-direction: column; gap: 10px;">
-                  <label style="border: 1px solid #bfdbfe; background: #eff6ff; padding: 12px 14px; border-radius: 8px; display: flex; gap: 10px; cursor: pointer;">
-                    <input type="radio" name="ruleLogic" checked style="margin-top: 3px;">
-                    <div>
-                      <div style="font-weight: 700; font-size: 13px; color: #1e40af;">Tất cả điều kiện phải đạt (VÀ)</div>
-                      <div style="font-size: 12px; color: #64748b;">Đúng Wi-Fi và GPS trong vùng cho phép.</div>
-                    </div>
-                  </label>
-
-                  <label style="border: 1px solid var(--border-color); background: #ffffff; padding: 12px 14px; border-radius: 8px; display: flex; gap: 10px; cursor: pointer;">
-                    <input type="radio" name="ruleLogic" style="margin-top: 3px;">
-                    <div>
-                      <div style="font-weight: 700; font-size: 13px; color: #1e293b;">Một trong các điều kiện (HOẶC)</div>
-                      <div style="font-size: 12px; color: #64748b;">Đạt Wi-Fi hoặc GPS. Chưa được chọn.</div>
-                    </div>
-                  </label>
-                </div>
-
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 10px;">
-                  Chỉ kết hợp các phương thức đã bật. Khuôn mặt đang tắt nên không được xét.
-                </div>
+            <div class="figma-white-card">
+              <div class="card-title-flex">
+                <div class="card-title-text">Địa điểm đã đăng ký</div>
+                <button class="btn-secondary-outline" type="button" onclick="loadWorkLocations()">↻ Làm mới</button>
               </div>
-
-              <!-- Phạm vi áp dụng -->
-              <div class="figma-white-card" style="margin-bottom: 20px;">
-                <div class="card-title-text" style="margin-bottom: 8px;">Phạm vi áp dụng</div>
-                <div style="font-size: 12px; color: #64748b;">Đội nhóm / Nhân viên</div>
-                <div style="font-weight: 700; font-size: 13px; color: #1e293b; margin-top: 2px;">Phòng Kỹ Thuật • 40 nhân viên</div>
-
-                <div style="font-size: 12px; color: #64748b; margin-top: 10px;">Loại chấm công</div>
-                <div style="font-weight: 700; font-size: 13px; color: #1e293b; margin-top: 2px;">Cả chấm công vào và chấm công ra</div>
-
-                <div style="margin-top: 12px;">
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Mở điều chỉnh đối tượng áp dụng', 'success')">Điều chỉnh đối tượng áp dụng →</a>
-                </div>
+              <div style="overflow-x:auto;">
+                <table class="figma-table">
+                  <thead><tr><th>Mã</th><th>Địa điểm</th><th>Tọa độ</th><th>Bán kính</th><th>Trạng thái</th></tr></thead>
+                  <tbody id="workLocationsTableBody">
+                    <tr><td colspan="5">Đang tải dữ liệu...</td></tr>
+                  </tbody>
+                </table>
               </div>
-
-              <!-- Quyền truy cập & quyền riêng tư -->
-              <div class="figma-white-card" style="margin-bottom: 20px;">
-                <div class="card-title-text" style="font-size: 13px;">Quyền truy cập & quyền riêng tư</div>
-                <p style="font-size: 12px; color: #64748b; margin-top: 6px; line-height: 1.5;">
-                  Ứng dụng cần quyền vị trí khi chấm công và quyền đọc thông tin Wi-Fi trên thiết bị hỗ trợ. Không theo dõi vị trí liên tục. Khuôn mặt dùng tác vụ offline nếu bật, cần đăng ký mẫu và thông báo mục đích sử dụng trước.
-                </p>
-                <div style="margin-top: 8px;">
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="showToast('Chính sách bảo mật dữ liệu nhân sự', 'success')">Xem chính sách dữ liệu →</a>
-                </div>
-              </div>
-
-              <!-- Ngoại lệ & sự cố -->
-              <div class="figma-white-card">
-                <div class="card-title-text" style="font-size: 13px;">Ngoại lệ & sự cố</div>
-                <p style="font-size: 12px; color: #64748b; margin-top: 6px; line-height: 1.5;">
-                  Không đạt một điều kiện: không tự ghi nhận công. Nhân viên thử lại hoặc gửi đơn bổ sung kèm lý do để quản lý duyệt. Trình duyệt không đọc được BSSID: dùng ứng dụng trên thiết bị hỗ trợ. Mất Wi-Fi/GPS không tự chuyển sang phương thức khác.
-                </p>
-                <div style="margin-top: 8px;">
-                  <a class="link-action-blue" style="font-size: 12px;" onclick="navigateToView('requests')">Quản lý đơn bổ sung chấm công →</a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom Sticky Bar lưu thiết lập -->
-          <div class="bottom-sticky-bar" style="border-radius: var(--radius-md); margin-top: 24px;">
-            <div style="font-size: 12px; color: #64748b;">
-              <strong>Cấu hình áp dụng sau khi lưu</strong><br>
-              Những lượt chấm công đã ghi nhận không thay đổi.
-            </div>
-            <div style="display: flex; gap: 12px;">
-              <button class="btn-secondary-outline" onclick="navigateToView('dashboard')">Hủy</button>
-              <button class="btn-primary-blue" onclick="showToast('Đã lưu thiết lập phương thức chấm công thành công!', 'success')">Lưu thiết lập</button>
+              <p style="font-size:12px;color:#64748b;margin-top:12px;">
+                Các địa điểm đang có được đọc trực tiếp qua <code>GET /api/v1/work-locations</code>.
+                Tính năng chỉnh sửa hoặc vô hiệu hóa cần thêm API quản trị trên Attendance Service.
+              </p>
             </div>
           </div>
         </section>
