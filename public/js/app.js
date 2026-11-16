@@ -4114,6 +4114,70 @@ async function openPayslipDetailModal(slipId) {
 }
 
 // 7. Popup chỉnh sửa cấu hình lương
+async function openCreatePayrollConfigModal() {
+  if (!['ADMIN', 'HR'].includes(state.user?.role)) {
+    showToast('Chỉ ADMIN và HR được tạo cấu hình lương', 'error');
+    return;
+  }
+  try {
+    const response = await apiCall('/api/organization/employees');
+    if (!Array.isArray(response?.data)) throw new Error('Danh sách nhân sự không hợp lệ');
+    const configured = new Set(cachedPayrollConfigs.map(x => x.emp_id));
+    const people = response.data.filter(x => x.status === 'ACTIVE' && !configured.has(x.id));
+    if (!people.length) return showToast('Nhân viên đang hoạt động đã có cấu hình lương', 'warning');
+    const options = people.map(e => `<option value="${uiEscape(e.id)}">
+      ${uiEscape(e.code || e.id)} - ${uiEscape(e.full_name)}</option>`).join('');
+    openModal('Tạo cấu hình lương', `
+      <form id="createPayrollConfigForm" onsubmit="handleCreatePayrollConfigSubmit(event)"
+        style="display:flex;flex-direction:column;gap:10px;">
+        <label for="newConfigEmpId">Nhân viên</label>
+        <select id="newConfigEmpId" class="topbar-search-input" required>${options}</select>
+        <label for="newConfigBaseSalary">Lương cơ bản (VNĐ)</label>
+        <input id="newConfigBaseSalary" type="number" class="topbar-search-input" min="0" step="1000" required>
+        <label for="newConfigLunch">Phụ cấp ăn trưa (VNĐ)</label>
+        <input id="newConfigLunch" type="number" class="topbar-search-input" min="0" value="0">
+        <label for="newConfigTransport">Phụ cấp di chuyển (VNĐ)</label>
+        <input id="newConfigTransport" type="number" class="topbar-search-input" min="0" value="0">
+        <label for="newConfigInsurance">Tỷ lệ bảo hiểm (0 đến 1)</label>
+        <input id="newConfigInsurance" type="number" class="topbar-search-input" min="0" max="1" step="0.005" value="0.105">
+        <button id="btnCreatePayrollConfig" class="btn-primary-blue" type="submit">Lưu cấu hình</button>
+      </form>`);
+  } catch (err) {
+    showToast('Không thể lấy danh sách nhân sự: ' + err.message, 'error');
+  }
+}
+
+async function handleCreatePayrollConfigSubmit(event) {
+  event.preventDefault();
+  const number = id => Number(document.getElementById(id)?.value || 0);
+  const empId = document.getElementById('newConfigEmpId')?.value;
+  const baseSalary = number('newConfigBaseSalary');
+  const lunchAllowance = number('newConfigLunch');
+  const transportAllowance = number('newConfigTransport');
+  const insuranceRate = number('newConfigInsurance');
+  if (!empId || [baseSalary, lunchAllowance, transportAllowance, insuranceRate].some(
+      v => !Number.isFinite(v) || v < 0) || insuranceRate > 1) {
+    showToast('Cấu hình lương không hợp lệ', 'warning');
+    return;
+  }
+  const btn = document.getElementById('btnCreatePayrollConfig');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiCall('/api/v1/payroll-configs', {
+      method: 'POST',
+      body: JSON.stringify({ empId, baseSalary, lunchAllowance, transportAllowance, insuranceRate })
+    });
+    if (!res?.success) throw new Error(res?.error || 'Không lưu được cấu hình');
+    closeModal();
+    showToast('Đã lưu cấu hình vào Payroll Service', 'success');
+    await loadPayrollConfigs();
+  } catch (err) {
+    showToast('Lưu cấu hình thất bại: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function openEditPayrollConfigById(empId) {
   const config = cachedPayrollConfigs.find(x => String(x.emp_id) === String(empId));
   if (!config) return showToast('Không tìm thấy cấu hình lương', 'error');
