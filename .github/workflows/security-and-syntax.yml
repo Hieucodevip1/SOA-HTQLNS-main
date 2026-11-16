@@ -91,3 +91,7 @@ jobs:
             exit 1
           fi
           npm run test:e2e
+          # Runtime-only Chromium dependency; does not alter package.json or lockfile.
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node tests/browser-admin.e2e.js
