@@ -294,10 +294,76 @@ async function handleLogoutClick() {
   }
 }
 
-// Email OTP delivery is not yet configured in Notification Service.
-// Never claim a reset code was sent when no mail provider exists.
+let passwordResetEmail = '';
+
 function handleForgotPasswordClick() {
-  showToast('Khôi phục mật khẩu qua email chưa được cấu hình. Vui lòng liên hệ ADMIN hoặc HR.', 'warning');
+  openModal('Khôi phục mật khẩu', `
+    <form onsubmit="handleForgotEmailSubmit(event)" style="display:flex;flex-direction:column;gap:12px;">
+      <p style="font-size:12px;color:#64748b;">Nhập email đăng ký để nhận OTP 6 chữ số.
+      Tính năng chỉ hoạt động khi quản trị viên cấu hình dịch vụ gửi email.</p>
+      <label for="forgotEmail">Email tài khoản</label>
+      <input id="forgotEmail" type="email" class="figma-pill-input" required autocomplete="email">
+      <button id="btnSendOtp" type="submit" class="btn-primary-blue">Gửi mã OTP</button>
+    </form>`);
+}
+
+async function handleForgotEmailSubmit(event) {
+  event.preventDefault();
+  const email = document.getElementById('forgotEmail')?.value.trim().toLowerCase() || '';
+  const button = document.getElementById('btnSendOtp');
+  if (!email) return showToast('Nhập email tài khoản','warning');
+  if (button) button.disabled = true;
+  try {
+    const result = await apiCall('/api/auth/forgot-password', {
+      method:'POST',body:JSON.stringify({ email })
+    });
+    if (!result?.success) throw new Error(result?.error || 'Không thể yêu cầu OTP');
+    passwordResetEmail = email;
+    showToast('Nếu email tồn tại, hệ thống đã gửi hướng dẫn khôi phục', 'success');
+    openModal('Xác nhận OTP khôi phục', `
+      <form onsubmit="handleResetPasswordSubmit(event)"
+        style="display:flex;flex-direction:column;gap:12px;">
+        <p style="font-size:12px;color:#64748b;">
+          Nhập mã nhận được qua email. OTP hết hạn sau 15 phút.
+        </p>
+        <label for="resetOtp">Mã OTP (6 chữ số)</label>
+        <input id="resetOtp" class="figma-pill-input" inputmode="numeric"
+          pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+        <label for="resetNewPassword">Mật khẩu mới (ít nhất 8 ký tự)</label>
+        <input id="resetNewPassword" type="password" class="figma-pill-input"
+          minlength="8" autocomplete="new-password" required>
+        <label for="resetConfirmPassword">Xác nhận mật khẩu</label>
+        <input id="resetConfirmPassword" type="password" class="figma-pill-input"
+          minlength="8" autocomplete="new-password" required>
+        <button id="btnResetPassword" type="submit" class="btn-primary-blue">Đặt lại mật khẩu</button>
+      </form>`);
+  } catch(err) {
+    showToast('Chưa thể gửi OTP: ' + err.message, 'error');
+  } finally { if (button) button.disabled = false; }
+}
+
+async function handleResetPasswordSubmit(event) {
+  event.preventDefault();
+  const otpCode = document.getElementById('resetOtp')?.value.trim() || '';
+  const newPassword = document.getElementById('resetNewPassword')?.value || '';
+  const confirmation = document.getElementById('resetConfirmPassword')?.value || '';
+  if (!/^\d{6}$/.test(otpCode) || newPassword.length < 8 || newPassword !== confirmation) {
+    return showToast('OTP phải có 6 số và hai mật khẩu mới phải khớp (ít nhất 8 ký tự)','warning');
+  }
+  const button = document.getElementById('btnResetPassword');
+  if (button) button.disabled = true;
+  try {
+    const result = await apiCall('/api/auth/reset-password', {
+      method:'POST',body:JSON.stringify({ email:passwordResetEmail, otpCode, newPassword })
+    });
+    if (!result?.success) throw new Error(result?.error || 'Đặt lại mật khẩu thất bại');
+    passwordResetEmail = '';
+    closeModal();
+    clearFrontendSession();
+    showToast('Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại.', 'success');
+  } catch(err) {
+    showToast('Không thể đặt lại mật khẩu: ' + err.message,'error');
+  } finally { if(button) button.disabled=false; }
 }
 
 // ==============================================================================
