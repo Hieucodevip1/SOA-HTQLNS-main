@@ -70,6 +70,60 @@ function parseTimeOnDate(dateStr, timeStr) {
 // 1. CẤU HÌNH ĐỊA ĐIỂM CHẤM CÔNG GPS / WIFI (SCR_ADM_02)
 // ==============================================================================
 
+
+const LOCATION_PATHS = ['/api/v1/work-locations', '/api/work-locations', '/api/attendance/work-locations'];
+const LOCATION_ID_PATHS = LOCATION_PATHS.map(path => path + '/:id');
+
+function locationPayload(body, { partial = false } = {}) {
+  const fields = {};
+  const has = key => Object.prototype.hasOwnProperty.call(body, key);
+  const fail = message => { const e = new Error(message); e.status = 400; throw e; };
+  if (!partial || has('code')) {
+    if (typeof body.code !== 'string' || !/^[A-Za-z0-9_-]{2,50}$/.test(body.code.trim()))
+      fail('Mã địa điểm phải gồm 2–50 ký tự chữ, số, _ hoặc -');
+    fields.code = body.code.trim().toUpperCase();
+  }
+  if (!partial || has('name')) {
+    if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 150)
+      fail('Tên địa điểm phải có độ dài 1–150 ký tự');
+    fields.name = body.name.trim();
+  }
+  for (const [input, output, min, max] of [
+    ['latitude','latitude',-90,90], ['longitude','longitude',-180,180],
+    ['radiusMeters','radius_meters',10,5000]
+  ]) {
+    if (!partial || has(input)) {
+      const value = input === 'radiusMeters' && !has(input) ? 100 : body[input];
+      if (value === null || value === '' || !Number.isFinite(Number(value)) ||
+          Number(value) < min || Number(value) > max ||
+          (input === 'radiusMeters' && !Number.isInteger(Number(value)))) {
+        fail(input + ' nằm ngoài phạm vi hợp lệ');
+      }
+      fields[output] = Number(value);
+    }
+  }
+  for (const [input, output, max] of [
+    ['address','address',500],['wifiSsid','wifi_ssid',100],['wifiBssid','wifi_bssid',100]
+  ]) {
+    if (has(input)) {
+      const value = body[input];
+      if (value !== null && (typeof value !== 'string' || value.length > max))
+        fail(input + ' không hợp lệ');
+      fields[output] = value?.trim() || null;
+    }
+  }
+  if (has('status')) {
+    if (!['ACTIVE','INACTIVE'].includes(body.status)) fail('Trạng thái phải là ACTIVE hoặc INACTIVE');
+    fields.status = body.status;
+  }
+  if (has('requireFaceId') && body.requireFaceId !== false) {
+    const e = new Error('FaceID chưa có quy trình xác minh WebAuthn an toàn');
+    e.status = 422; throw e;
+  }
+  if (partial && !Object.keys(fields).length) fail('Không có thuộc tính địa điểm cần cập nhật');
+  return fields;
+}
+
 app.get(['/api/v1/work-locations', '/api/work-locations', '/api/attendance/work-locations'], requireAuth(), async (req, res, next) => {
   try {
     const [rows] = await pool.query('SELECT * FROM work_locations ORDER BY created_at DESC');
@@ -79,46 +133,61 @@ app.get(['/api/v1/work-locations', '/api/work-locations', '/api/attendance/work-
   }
 });
 
-app.post(['/api/v1/work-locations', '/api/work-locations', '/api/attendance/work-locations'], requireAuth(['ADMIN', 'HR']), async (req, res, next) => {
+app.post(LOCATION_PATHS, requireAuth(['ADMIN','HR']), async (req, res, next) => {
   try {
-    const {
-      code,
-      name,
-      address = null,
-      latitude,
-      longitude,
-      radiusMeters = 100,
-      wifiSsid = null,
-      wifiBssid = null,
-      requireFaceId = false
-    } = req.body;
-
-    if (!code || !name || latitude === undefined || longitude === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: 'Thiếu thông tin bắt buộc: code, name, latitude, longitude'
-      });
-    }
-
+    const data = locationPayload(req.body || {});
     const id = crypto.randomUUID();
+    const columns = ['id', ...Object.keys(data)];
     await pool.query(
-      `INSERT INTO work_locations (id, code, name, address, latitude, longitude, radius_meters, wifi_ssid, wifi_bssid, require_face_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, code.trim().toUpperCase(), name.trim(), address, latitude, longitude, radiusMeters, wifiSsid, wifiBssid, Boolean(requireFaceId)]
+      `INSERT INTO work_locations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      [id, ...Object.values(data)]
     );
-
-    const [created] = await pool.query('SELECT * FROM work_locations WHERE id = ?', [id]);
-    res.status(201).json({ success: true, message: 'Thêm địa điểm chấm công thành công', data: created[0] });
+    const [rows] = await pool.query('SELECT * FROM work_locations WHERE id = ?', [id]);
+    return res.status(201).json({ success: true, message: 'Tạo địa điểm chấm công thành công', data: rows[0] });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ success: false, error: 'Mã địa điểm đã tồn tại' });
-    }
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, error: 'Mã địa điểm đã tồn tại' });
+    if (err.status) return res.status(err.status).json({ success: false, error: err.message });
     next(err);
   }
 });
 
+app.get(LOCATION_ID_PATHS, requireAuth(), async (req, res, next) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM work_locations WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Địa điểm không tồn tại' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) { next(err); }
+});
+
+app.put(LOCATION_ID_PATHS, requireAuth(['ADMIN','HR']), async (req, res, next) => {
+  try {
+    const data = locationPayload(req.body || {}, { partial: true });
+    const columns = Object.keys(data);
+    const [update] = await pool.query(
+      `UPDATE work_locations SET ${columns.map(c => c + ' = ?').join(', ')} WHERE id = ?`,
+      [...Object.values(data), req.params.id]
+    );
+    if (!update.affectedRows) return res.status(404).json({ success: false, error: 'Địa điểm không tồn tại' });
+    const [rows] = await pool.query('SELECT * FROM work_locations WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Cập nhật địa điểm thành công', data: rows[0] });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, error: 'Mã địa điểm đã tồn tại' });
+    if (err.status) return res.status(err.status).json({ success: false, error: err.message });
+    next(err);
+  }
+});
+
+// Keep attendance history linked: DELETE means deactivate, not hard deletion.
+app.delete(LOCATION_ID_PATHS, requireAuth(['ADMIN','HR']), async (req, res, next) => {
+  try {
+    const [updated] = await pool.query("UPDATE work_locations SET status = 'INACTIVE' WHERE id = ?", [req.params.id]);
+    if (!updated.affectedRows) return res.status(404).json({ success: false, error: 'Địa điểm không tồn tại' });
+    res.json({ success: true, message: 'Ngừng sử dụng địa điểm; lịch sử chấm công được giữ nguyên' });
+  } catch (err) { next(err); }
+});
+
 // ==============================================================================
-// 2. CHẤM CÔNG CHECK-IN / CHECK-OUT (SCR_ATT_01)
+// // 2. CHẤM CÔNG CHECK-IN / CHECK-OUT (SCR_ATT_01)
 // ==============================================================================
 
 app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAuth(), async (req, res, next) => {
