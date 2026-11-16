@@ -1972,11 +1972,11 @@ input:checked + .slider:before {
                 <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 18px;">
                   <div>
                     <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Tệp đính kèm (Biên bản bàn giao / Giấy tờ)</label>
-                    <input type="text" id="leaveFormAttachment" class="topbar-search-input" style="padding: 8px 12px;" placeholder="Tên tệp (vd: Bien-ban-ban-giao.pdf)" value="Bien-ban-ban-giao.pdf">
+                    <input type="file" id="leaveFormAttachment" class="topbar-search-input" style="padding: 8px 12px;" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
                   </div>
                   <div style="display: flex; align-items: flex-end;">
                     <div style="font-size: 11px; color: #64748b; line-height: 1.4; padding-bottom: 8px;">
-                      📎 Đính kèm tệp hỗ trợ người duyệt thẩm định nhanh chóng.
+                      📎 Tải PDF, PNG hoặc JPEG tối đa 2 MB. Chỉ người gửi và người được phân quyền mới xem được.
                     </div>
                   </div>
                 </div>
@@ -2154,11 +2154,11 @@ input:checked + .slider:before {
                   <div class="file-info-left">
                     <span style="font-size: 20px;">📄</span>
                     <div>
-                      <div id="reqDetailAttachmentName" style="font-weight: 600;">Bien-ban-ban-giao.pdf</div>
-                      <div style="font-size: 11px; color: #94a3b8;">PDF • 245 KB • Đính kèm khi gửi đơn</div>
+                      <div id="reqDetailAttachmentName" style="font-weight: 600;">Chưa có tệp đính kèm</div>
+                      <div style="font-size: 11px; color: #94a3b8;">Tệp đính kèm bảo mật • Chỉ tải qua Auth API</div>
                     </div>
                   </div>
-                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="showToast('Backend mới lưu đường dẫn minh chứng, chưa có API tải tệp an toàn', 'warning')">Tải xuống ↓</a>
+                  <button type="button" id="btnDownloadLeaveAttachment" class="btn-secondary-outline" style="font-size:12px;display:none;" onclick="downloadLeaveAttachment()">Tải xuống ↓</button>
                 </div>
 
                 <!-- Alert Trạng thái phê duyệt (SCR_REQ_02 Figma) -->
