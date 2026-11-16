@@ -81,6 +81,21 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       refreshToken = data.data.refreshToken;
     });
 
+    test('ADMIN không được tự hạ quyền, tự khóa hoặc tự xóa tài khoản', async () => {
+      const adminId = 'u0000001-0000-0000-0000-000000000001';
+      const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+      for (const [suffix, method, body] of [
+        ['/role', 'PUT', {role:'EMPLOYEE'}],
+        ['/status', 'PUT', {status:'LOCKED'}],
+        ['', 'DELETE', null]
+      ]) {
+        const response = await fetch(`http://localhost:${AUTH_PORT}/api/auth/users/${adminId}${suffix}`, {
+          method, headers, ...(body ? {body:JSON.stringify(body)} : {})
+        });
+        assert.equal(response.status, 400, `${method} ${suffix} must reject self-admin mutation`);
+      }
+    });
+
     test('Từ chối đăng nhập khi sai mật khẩu (HTTP 401)', async () => {
       const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/login`, {
         method: 'POST',
