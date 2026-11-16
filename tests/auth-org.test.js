@@ -197,15 +197,19 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.ok(data.data.token);
     });
 
-    test('Yêu cầu mã OTP khôi phục mật khẩu /api/auth/forgot-password', async () => {
+    test('Không báo đã gửi OTP nếu thiếu cấu hình provider email (HTTP 503)', async (t) => {
+      if (process.env.RESEND_API_KEY && process.env.OTP_SENDER_EMAIL) {
+        return t.skip('Không gửi email thật trong kiểm thử tích hợp');
+      }
       const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: testEmail })
       });
-      assert.strictEqual(res.status, 200);
+      assert.equal(res.status, 503);
       const data = await res.json();
-      assert.strictEqual(data.success, true);
+      assert.equal(data.success, false);
+      assert.equal(data.code, 'OTP_EMAIL_NOT_CONFIGURED');
     });
 
     test('Admin xem danh sách người dùng hệ thống /api/auth/users', async () => {
