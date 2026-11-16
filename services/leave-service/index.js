@@ -272,6 +272,61 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
   }
 });
 
+// Cancel a pending request. Only the owner (or ADMIN/HR) can cancel.
+app.post(
+  ['/api/v1/leave-requests/:id/cancel', '/api/leaves/:id/cancel', '/api/leave/:id/cancel'],
+  requireAuth(),
+  async (req, res, next) => {
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const [rows] = await connection.query(
+        'SELECT * FROM leave_requests WHERE id = ? FOR UPDATE', [req.params.id]
+      );
+      if (!rows.length) {
+        await connection.rollback();
+        return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
+      }
+      const leave = rows[0];
+      const requester = getEmpIdFromUser(req.user);
+      if (leave.emp_id !== requester && !['ADMIN', 'HR'].includes(req.user.role)) {
+        await connection.rollback();
+        return res.status(403).json({ success: false, error: 'Không được hủy đơn của nhân viên khác' });
+      }
+      if (leave.status !== 'PENDING') {
+        await connection.rollback();
+        return res.status(409).json({ success: false, error: 'Chỉ có thể hủy đơn đang chờ duyệt' });
+      }
+
+      await connection.query(
+        "UPDATE leave_requests SET status = 'CANCELLED' WHERE id = ? AND status = 'PENDING'",
+        [leave.id]
+      );
+      const year = Number(String(leave.start_date).slice(0, 4));
+      await connection.query(
+        `UPDATE leave_balances
+         SET pending_days = GREATEST(0, pending_days - ?)
+         WHERE emp_id = ? AND leave_type_id = ? AND year = ?`,
+        [leave.total_days, leave.emp_id, leave.leave_type_id, year]
+      );
+      await connection.commit();
+      connection.release();
+      connection = null;
+      events.publish('LEAVE_REQUEST_CANCELLED', {
+        requestId: leave.id, empId: leave.emp_id, totalDays: leave.total_days
+      }).catch(() => {});
+      res.json({ success: true, message: 'Đã hủy đơn nghỉ phép và hoàn lại phép chờ duyệt' });
+    } catch (err) {
+      if (connection) await connection.rollback().catch(() => {});
+      next(err);
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+);
+
 // 5. Duyệt / Từ chối đơn xin nghỉ phép (SCR_REQ_01)
 const handleLeaveDecision = async (req, res, next) => {
   let connection;
