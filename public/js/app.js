@@ -2518,6 +2518,48 @@ async function loadProfileData() {
   }
 }
 
+function openEditProfileEmailModal() {
+  if (!state.token || !state.user) return;
+  openModal('Đổi email tài khoản', `
+    <form onsubmit="submitProfileEmailChange(event)"
+      style="display:flex;flex-direction:column;gap:12px;">
+      <p style="font-size:12px;color:#64748b;">Xác minh mật khẩu để cập nhật email ở Auth
+        và hồ sơ nhân sự. Vui lòng đăng nhập lại sau khi lưu.</p>
+      <label for="profileEditEmail">Email mới</label>
+      <input id="profileEditEmail" type="email" class="figma-pill-input"
+        value="${uiEscape(state.user.email || '')}" autocomplete="email" required>
+      <label for="profileEditCurrentPassword">Mật khẩu hiện tại</label>
+      <input id="profileEditCurrentPassword" type="password" class="figma-pill-input"
+        autocomplete="current-password" required>
+      <button type="submit" id="btnSaveProfileEmail" class="btn-primary-blue">
+        Xác nhận thay đổi email</button>
+    </form>`);
+}
+
+async function submitProfileEmailChange(event) {
+  event.preventDefault();
+  const email = document.getElementById('profileEditEmail')?.value.trim().toLowerCase() || '';
+  const currentPassword = document.getElementById('profileEditCurrentPassword')?.value || '';
+  if (!email || !currentPassword) {
+    return showToast('Cần nhập email và mật khẩu hiện tại', 'warning');
+  }
+  const button = document.getElementById('btnSaveProfileEmail');
+  if (button) button.disabled = true;
+  try {
+    const res = await apiCall('/api/auth/me', {
+      method: 'PUT', body: JSON.stringify({ email, currentPassword })
+    });
+    if (!res?.success) throw new Error(res?.error || 'Không thể thay đổi email');
+    closeModal();
+    clearFrontendSession();
+    showToast('Đã thay đổi email. Vui lòng đăng nhập lại.', 'success');
+  } catch(err) {
+    showToast('Không thể sửa email: ' + err.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function handleChangePasswordSubmit(event) {
   event.preventDefault();
   const oldPassword = document.getElementById('profileOldPassword')?.value || '';
