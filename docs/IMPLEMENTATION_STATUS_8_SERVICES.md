@@ -134,3 +134,30 @@ npm run test:e2e
 ```
 
 GitHub Actions tự kiểm tra cú pháp, UI/security regression, các API trực tiếp, MySQL nghiệp vụ và E2E qua Gateway. Những chức năng còn cần môi trường thực để nghiệm thu: gửi OTP đến email bên ngoài (cần tài khoản provider), WebAuthn/FaceID (cần HTTPS, RP ID và thiết bị hỗ trợ), kiểm thử trình duyệt tương tác, Wi-Fi BSSID tin cậy và nghiệp vụ Payroll phù hợp chính sách doanh nghiệp/pháp luật.
+
+
+## Đồng bộ các màn hình quản trị cuối cùng
+
+Đã hoàn thiện trên nhánh riêng (không merge `main`):
+
+- **Quản trị tài khoản (ADMIN):** bảng RBAC có thao tác đổi vai trò, khóa/mở khóa (ACTIVE, INACTIVE, LOCKED), và xóa tài khoản đăng nhập với hộp xác nhận. UI chặn tác động lên chính mình. Auth Service cũng kiểm tra quyền, cấm tự hạ quyền/tự khóa và cấm xóa hoặc khóa ADMIN đang hoạt động cuối cùng; thu hồi refresh token của tài khoản bị ngừng/khoá.
+- **Hồ sơ cá nhân:** `PUT /api/auth/me` cho thay email sau khi xác thực mật khẩu hiện tại; hai schema Auth/Organization cập nhật trong MySQL transaction; UI yêu cầu đăng nhập lại sau cập nhật. Không cho client tự bật `biometric_enabled` khi chưa có WebAuthn. **Chưa có bước xác minh quyền sở hữu email mới**, không sử dụng quy trình này cho hệ thống production trước khi bổ sung xác minh email.
+- **Quản trị phòng ban (ADMIN/HR):** nút Ngừng dùng thực hiện `PUT /api/organization/departments/:id` với `status=INACTIVE`, giữ dữ liệu nhân sự và tránh xóa vật lý.
+- **Nhật ký kiểm toán (ADMIN):** bảng Audit Log trên màn Cơ cấu phòng ban lấy 100 hoạt động gần nhất từ `GET /api/organization/audit-logs`.
+- **Danh mục nghỉ phép (ADMIN/HR):** bảng danh mục và form tạo loại phép mới; `GET/POST /api/v1/leave-types` với có/không hưởng lương, số ngày/năm và giấy tờ minh chứng.
+- **Danh mục ca (ADMIN/HR):** Ngừng dùng qua `DELETE /api/v1/shifts/:id` (server soft-disable) và kích hoạt lại bằng `PUT /api/v1/shifts/:id` với `status=ACTIVE`.
+- **Kiểm thử thao tác thật trên Chrome/Chromium:** `tests/browser-admin.e2e.js` đăng nhập từng vai trò ADMIN, HR, EMPLOYEE; kiểm tra màn quản trị và phân quyền, tạo loại phép, danh mục ca và trạng thái tài khoản. Workflow `.github/workflows/security-and-syntax.yml` dùng Ubuntu 24.04 cho trình duyệt và vẫn chạy các bài test API/MySQL có sẵn.
+
+Lệnh dành cho máy đã cấu hình Node.js + MySQL:
+
+```powershell
+npm run db:init
+npm start
+# trên cửa sổ PowerShell thứ hai
+npm run test:ui
+npm run test:e2e
+```
+
+Để chạy browser test ở máy riêng cần cài Playwright/Chromium tương ứng (`npm install --no-save playwright@1.56.1`, `npx playwright install chromium`), khởi động cả hệ thống và đảm bảo dữ liệu kiểm thử được cô lập.
+
+**Giới hạn:** E2E browser mới kiểm tra các luồng quản trị trọng yếu, chưa bao phủ mọi trường hợp lỗi UI và chưa xác nhận tính đúng đắn nghiệp vụ Payroll khi triển khai thực tế. Việc khóa tài khoản thu hồi refresh token nhưng access JWT đã cấp có thể còn hiệu lực tới khi hết hạn; cần session/token-revocation tập trung để khóa tức thời trên toàn bộ Microservices. Không được xem dự án là production-ready chỉ vì CI xanh.
