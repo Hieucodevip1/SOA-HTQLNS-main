@@ -392,8 +392,8 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
         headers: { Authorization: 'Bearer ' + employeeToken }
       });
       assert.equal(owner.status, 200);
-      assert.match(owner.headers.get('content-type'), /application\\/pdf/);
-      assert.match(await owner.text(), /%PDF-1\\.4/);
+      assert.match(owner.headers.get('content-type'), /application\/pdf/);
+      assert.match(await owner.text(), /%PDF-1\.4/);
       assert.equal((await fetch(GATEWAY_URL + url)).status, 401);
       const unrelated = jwt.signToken({userId: 'another-account', empId:'another-employee',
         role:'EMPLOYEE'});
