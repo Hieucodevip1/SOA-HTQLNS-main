@@ -732,6 +732,30 @@ app.post('/api/auth/logout', async (req, res) => {
 });
 
 // ==============================================================================
+// Admin mutations must protect the acting account and the final active administrator.
+async function readManagedUser(id) {
+  if (await isDbAvailable()) {
+    const rows = await db.query('SELECT id, role, status FROM users WHERE id = ? LIMIT 1', [id], DB_NAME);
+    return rows[0] || null;
+  }
+  return memoryUsers.get(id) || null;
+}
+
+async function isLastActiveAdmin(target) {
+  if (!target || target.role !== 'ADMIN' || target.status !== 'ACTIVE') return false;
+  if (await isDbAvailable()) {
+    const rows = await db.query(
+      "SELECT COUNT(*) AS total FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE'", [], DB_NAME
+    );
+    return Number(rows[0]?.total || 0) <= 1;
+  }
+  return [...memoryUsers.values()].filter(u => u.role === 'ADMIN' && u.status === 'ACTIVE').length <= 1;
+}
+
+function isSameActor(req, targetId) {
+  return String(req.user?.userId || req.user?.id || '') === String(targetId);
+}
+
 // 10. QUẢN TRỊ TÀI KHOẢN (ADMIN / HR)
 // ==============================================================================
 app.get('/api/auth/users', async (req, res) => {
@@ -778,6 +802,14 @@ app.put('/api/auth/users/:id/role', async (req, res) => {
 
     const { role } = req.body;
     const targetId = req.params.id;
+    if (isSameActor(req, targetId)) {
+      return badRequest(res, 'Không được tự thay đổi vai trò quản trị của chính mình');
+    }
+    const target = await readManagedUser(targetId);
+    if (!target) return notFound(res, 'Tài khoản không tồn tại');
+    if (role !== 'ADMIN' && await isLastActiveAdmin(target)) {
+      return conflict(res, 'Không thể hạ quyền quản trị viên đang hoạt động cuối cùng');
+    }
 
     if (!['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'].includes(role)) {
       return badRequest(res, 'Vai trò không hợp lệ');
@@ -807,6 +839,14 @@ app.put('/api/auth/users/:id/status', async (req, res) => {
 
     const { status: newStatus } = req.body;
     const targetId = req.params.id;
+    if (isSameActor(req, targetId)) {
+      return badRequest(res, 'Không thể tự khóa hoặc ngừng tài khoản quản trị của mình');
+    }
+    const target = await readManagedUser(targetId);
+    if (!target) return notFound(res, 'Tài khoản không tồn tại');
+    if (newStatus !== 'ACTIVE' && await isLastActiveAdmin(target)) {
+      return conflict(res, 'Không được khóa quản trị viên đang hoạt động cuối cùng');
+    }
 
     if (!['ACTIVE', 'INACTIVE', 'LOCKED'].includes(newStatus)) {
       return badRequest(res, 'Trạng thái không hợp lệ');
@@ -815,6 +855,9 @@ app.put('/api/auth/users/:id/status', async (req, res) => {
     const useDb = await isDbAvailable();
     if (useDb) {
       await db.query('UPDATE users SET status = ? WHERE id = ?', [newStatus, targetId], DB_NAME);
+      if (newStatus !== 'ACTIVE') {
+        await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [targetId], DB_NAME);
+      }
     } else {
       const u = memoryUsers.get(targetId);
       if (u) u.status = newStatus;
@@ -835,10 +878,15 @@ app.delete('/api/auth/users/:id', async (req, res) => {
     }
 
     const targetId = req.params.id;
-    if (targetId === (currentUser.userId || currentUser.id)) {
+    if (isSameActor(req, targetId)) {
       return badRequest(res, 'Bạn không thể tự xóa tài khoản của chính mình');
     }
 
+    const target = await readManagedUser(targetId);
+    if (!target) return notFound(res, 'Tài khoản không tồn tại');
+    if (await isLastActiveAdmin(target)) {
+      return conflict(res, 'Không thể xóa quản trị viên đang hoạt động cuối cùng');
+    }
     const useDb = await isDbAvailable();
     if (useDb) {
       await db.query('DELETE FROM users WHERE id = ?', [targetId], DB_NAME);
