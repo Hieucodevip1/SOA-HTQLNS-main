@@ -101,3 +101,35 @@ test('Password recovery calls real OTP endpoints and uses password-type inputs',
   assert.match(source, /api\/auth\/reset-password/);
   assert.match(source, /id="resetNewPassword" type="password"/);
 });
+
+
+test('RBAC users expose supported Auth operations without hardcoded user fixtures', () => {
+  assert.match(source, /function saveRbacRole\(/);
+  assert.match(source, /function saveRbacStatus\(/);
+  assert.match(source, /function deleteAuthUser\(/);
+  assert.match(source, /api\/auth\/users\/' \+ encodeURIComponent\(id\) \+ '\/status'/);
+  assert.match(source, /api\/auth\/users\/' \+ encodeURIComponent\(id\) \+ '\/role'/);
+  assert.match(source, /validRbacTarget\(id\)/);
+  assert.match(html, /id="rbacUsersTableBody"/);
+  assert.doesNotMatch(source, /id: 'usr_admin'/);
+});
+
+test('Department audit logs and soft-deactivation are wired to existing API', () => {
+  assert.match(source, /function deactivateDepartment\(/);
+  assert.match(source, /function loadOrganizationAuditLogs\(/);
+  assert.match(source, /api\/organization\/audit-logs/);
+  assert.match(source, /status: 'INACTIVE'/);
+  assert.match(html, /id="auditLogsPanel"/);
+  assert.match(html, /id="auditLogsTableBody"/);
+});
+
+test('Leave type catalog and Shift deactivation use real backend operations', () => {
+  assert.match(source, /function loadLeaveTypeAdminList\(/);
+  assert.match(source, /function openCreateLeaveTypeModal\(/);
+  assert.match(source, /function submitCreateLeaveType\(/);
+  assert.match(source, /api\/v1\/leave-types/);
+  assert.match(html, /id="leaveTypeAdminPanel"/);
+  assert.match(html, /id="leaveTypesAdminTableBody"/);
+  assert.match(source, /function setShiftActiveState\(/);
+  assert.match(source, /api\/v1\/shifts\/' \+ encodeURIComponent\(id\)/);
+});
