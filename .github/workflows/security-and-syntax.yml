@@ -28,7 +28,8 @@ jobs:
       - name: Check UI data handling
         run: npm run test:ui
   integration:
-    runs-on: ubuntu-latest
+    # Playwright's browser binaries support Ubuntu 24.04; ubuntu-latest may use 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
       mysql:
