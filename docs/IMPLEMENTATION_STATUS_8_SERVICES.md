@@ -146,7 +146,7 @@ GitHub Actions tự kiểm tra cú pháp, UI/security regression, các API trự
 - **Nhật ký kiểm toán (ADMIN):** bảng Audit Log trên màn Cơ cấu phòng ban lấy 100 hoạt động gần nhất từ `GET /api/organization/audit-logs`.
 - **Danh mục nghỉ phép (ADMIN/HR):** bảng danh mục và form tạo loại phép mới; `GET/POST /api/v1/leave-types` với có/không hưởng lương, số ngày/năm và giấy tờ minh chứng.
 - **Danh mục ca (ADMIN/HR):** Ngừng dùng qua `DELETE /api/v1/shifts/:id` (server soft-disable) và kích hoạt lại bằng `PUT /api/v1/shifts/:id` với `status=ACTIVE`.
-- **Kiểm thử thao tác thật trên Chrome/Chromium:** `tests/browser-admin.e2e.js` đăng nhập từng vai trò ADMIN, HR, EMPLOYEE; kiểm tra màn quản trị và phân quyền, tạo loại phép, danh mục ca và trạng thái tài khoản. Workflow `.github/workflows/security-and-syntax.yml` dùng Ubuntu 24.04 cho trình duyệt và vẫn chạy các bài test API/MySQL có sẵn.
+- **Kiểm thử thao tác thật trên Chrome/Chromium:** `tests/browser-admin.e2e.js` đăng nhập từng vai trò ADMIN, HR, MANAGER, EMPLOYEE; kiểm tra màn quản trị và phân quyền, tạo loại phép, danh mục ca và trạng thái tài khoản. Workflow `.github/workflows/security-and-syntax.yml` dùng Ubuntu 24.04 cho trình duyệt và vẫn chạy các bài test API/MySQL có sẵn.
 
 Lệnh dành cho máy đã cấu hình Node.js + MySQL:
 
