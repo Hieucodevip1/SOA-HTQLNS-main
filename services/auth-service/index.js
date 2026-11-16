@@ -236,63 +236,72 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
-    // Only an ADMIN may link a newly registered account to an existing employee.
     let finalEmpId = req.user?.role === 'ADMIN' ? (emp_id || null) : null;
     let finalFullName = `${first_name || ''} ${last_name || ''}`.trim() || username;
-    const isBiometric = Boolean(biometric_enabled);
+    // Biometric enrollment requires a verified assertion. A form boolean is not proof.
+    const isBiometric = false;
 
     const useDb = await isDbAvailable();
     if (useDb) {
-      if (!finalEmpId) {
-        try {
-          const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1');
-          if (empRows.length > 0) {
-            if (req.user?.role !== 'ADMIN') {
-              return forbidden(res, 'Hồ sơ nhân sự với email này đã tồn tại; liên hệ quản trị viên để liên kết tài khoản');
-            }
-            finalEmpId = empRows[0].id;
-            finalFullName = empRows[0].full_name;
-          } else {
-            finalEmpId = crypto.randomUUID();
-            const fName = first_name || username;
-            const lName = last_name || (assignedRole === 'MANAGER' ? '(Quản lý)' : '(Nhân viên)');
-            finalFullName = `${fName} ${lName}`.trim();
-            const empCode = 'EMP_' + Math.floor(10000 + Math.random() * 90000);
-
-            let deptId = null;
-            try {
-              const deptRows = await db.query('SELECT id FROM htqlns_organization.departments LIMIT 1');
-              deptId = deptRows[0]?.id || null;
-            } catch {}
-
-            await db.query(
-              `INSERT INTO htqlns_organization.employees 
-               (id, code, full_name, email, phone, department_id, join_date, contract_type, status)
-               VALUES (?, ?, ?, ?, ?, ?, CURDATE(), 'OFFICIAL', 'ACTIVE')`,
-              [finalEmpId, empCode, finalFullName, email, phone || '0911223344', deptId]
+      // MySQL transactions span both schemas on the same server. Prevent an
+      // orphan employee or a user with an invalid employee reference on failure.
+      try {
+        await db.withTransaction(async (connection) => {
+          if (finalEmpId) {
+            const [matching] = await connection.query(
+              'SELECT id, full_name FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+              [finalEmpId]
             );
+            if (!matching.length) {
+              const e = new Error('Không tìm thấy hồ sơ nhân viên để liên kết');
+              e.status = 400;
+              throw e;
+            }
+            finalFullName = matching[0].full_name;
+          } else {
+            const [existing] = await connection.query(
+              'SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1 FOR UPDATE',
+              [email]
+            );
+            if (existing.length) {
+              if (req.user?.role !== 'ADMIN') {
+                const e = new Error('Email này đã có hồ sơ nhân sự. Liên hệ ADMIN để liên kết tài khoản.');
+                e.status = 403;
+                throw e;
+              }
+              finalEmpId = existing[0].id;
+              finalFullName = existing[0].full_name;
+            } else {
+              finalEmpId = crypto.randomUUID();
+              finalFullName = `${first_name || username} ${last_name || ''}`.trim();
+              const empCode = 'EMP_' + finalEmpId.slice(0, 12).toUpperCase();
+              await connection.query(
+                `INSERT INTO htqlns_organization.employees
+                 (id, code, full_name, email, phone, department_id, join_date, contract_type, status)
+                 VALUES (?, ?, ?, ?, ?, NULL, CURDATE(), 'OFFICIAL', 'ACTIVE')`,
+                [finalEmpId, empCode, finalFullName, email, phone || null]
+              );
+            }
           }
-        } catch (e) {
-          console.warn('[AUTH] Tự động tạo hồ sơ nhân sự organization:', e.message);
-        }
-      }
 
-      await db.query(
-        `INSERT INTO users (id, emp_id, username, email, password_hash, role, biometric_enabled, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [userId, finalEmpId, username, email, passwordHash, assignedRole, isBiometric],
-        DB_NAME
-      );
+          await connection.query(
+            `INSERT INTO users
+             (id, emp_id, username, email, password_hash, role, biometric_enabled, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+            [userId, finalEmpId, username, email, passwordHash, assignedRole, isBiometric]
+          );
+        }, DB_NAME);
+      } catch (err) {
+        if (err.status === 403) return forbidden(res, err.message);
+        if (err.status === 400) return badRequest(res, err.message);
+        if (err.code === 'ER_DUP_ENTRY') return conflict(res, 'Username, email hoặc mã nhân viên đã tồn tại');
+        throw err;
+      }
     } else {
       memoryUsers.set(userId, {
-        id: userId,
-        emp_id: finalEmpId,
-        username,
-        email,
-        password_hash: passwordHash,
-        role: assignedRole,
-        biometric_enabled: isBiometric,
-        status: 'ACTIVE'
+        id: userId, emp_id: finalEmpId, username, email,
+        password_hash: passwordHash, role: assignedRole,
+        biometric_enabled: isBiometric, status: 'ACTIVE'
       });
     }
 
