@@ -70,6 +70,8 @@ jobs:
         run: |
           npm run test:attendance
           npm run test:leave
+      - name: Verify direct Auth and Organization endpoints with OTP configuration checks
+        run: npm run test:auth-org
       - name: Boot full SOA stack and test all eight services via Gateway
         run: |
           # Registrar intentionally skips NODE_ENV=test; enable discovery for this full-stack E2E run.
