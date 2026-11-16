@@ -405,6 +405,7 @@ function applyRoleBasedUI() {
     if (pendingRequestsCard) pendingRequestsCard.style.display = 'none';
     if (personalRequestsCard) personalRequestsCard.style.display = 'block';
     loadEmployeeDashboardData();
+    loadEmployeeDashboardKpis();
   } else {
     if (adminOverviewSection) adminOverviewSection.style.display = 'block';
     if (empOverviewSection) empOverviewSection.style.display = 'none';
@@ -439,20 +440,11 @@ function applyRoleBasedUI() {
     const sub4 = document.getElementById('dashMetricSub4');
 
     if (lbl1) lbl1.innerText = 'Chấm công tháng';
-    if (val1) val1.innerText = '22 / 22';
-    if (sub1) sub1.innerText = 'Đạt 100% ngày công chuẩn →';
-
     if (lbl2) lbl2.innerText = 'Quỹ phép còn';
-    if (val2) val2.innerText = '10 / 12';
-    if (sub2) sub2.innerText = 'Đã nghỉ 2 ngày phép năm →';
-
     if (lbl3) lbl3.innerText = 'Đi muộn tháng';
-    if (val3) val3.innerText = '00';
-    if (sub3) sub3.innerText = 'Chuyên cần tốt, không bị trừ thưởng';
-
     if (lbl4) lbl4.innerText = 'Đơn đang chờ';
-    if (val4) val4.innerText = '01';
-    if (sub4) sub4.innerText = 'Nghỉ phép năm ngày 02/11/2026 →';
+    for (const el of [val1, val2, val3, val4]) if (el) el.innerText = '—';
+    for (const el of [sub1, sub2, sub3, sub4]) if (el) el.innerText = 'Đang tải từ hệ thống...';
   } else {
     if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
     if (personalRequestsCard) personalRequestsCard.style.display = 'none';
@@ -471,20 +463,11 @@ function applyRoleBasedUI() {
     const sub4 = document.getElementById('dashMetricSub4');
 
     if (lbl1) lbl1.innerText = 'Đã đi làm';
-    if (val1) val1.innerText = '34 / 40';
-    if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
-
     if (lbl2) lbl2.innerText = 'Nghỉ phép';
-    if (val2) val2.innerText = '04';
-    if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-
     if (lbl3) lbl3.innerText = 'Đi muộn';
-    if (val3) val3.innerText = '03';
-    if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
-
     if (lbl4) lbl4.innerText = 'Đơn chờ duyệt';
-    if (val4) val4.innerText = '07';
-    if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
+    for (const el of [val1, val2, val3, val4]) if (el) el.innerText = '—';
+    for (const el of [sub1, sub2, sub3, sub4]) if (el) el.innerText = 'Đang tải từ hệ thống...';
   }
 
   // 7. Quyền hạn thao tác phân ca & ca làm việc
@@ -1206,8 +1189,117 @@ async function submitCreateLeaveRequest() {
 // 7. NẠP DỮ LIỆU CÁC DỊCH VỤ & GIAO DIỆN
 // ==============================================================================
 async function loadDashboardData() {
-  await Promise.all([loadDepartmentsData(), loadEmployeesData(), loadDashboardPendingRequests()]);
+  const privileged = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
+  if (privileged) {
+    await Promise.allSettled([
+      loadDepartmentsData(), loadEmployeesData(), loadDashboardPendingRequests(), loadDashboardKpis()
+    ]);
+  } else {
+    await Promise.allSettled([loadDashboardPendingRequests(), loadEmployeeDashboardKpis()]);
+  }
 }
+
+async function loadDashboardKpis() {
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
+  for (const id of ['dashMetricVal1','dashMetricVal2','dashMetricVal3','dashMetricVal4']) set(id, '—');
+  try {
+    const today = statDateLocal(new Date());
+    const [staffRes, attendanceRes, leaveRes] = await Promise.all([
+      apiCall('/api/organization/employees'),
+      apiCall('/api/attendance?workDate=' + encodeURIComponent(today)),
+      apiCall('/api/leave')
+    ]);
+    if (![staffRes.data, attendanceRes.data, leaveRes.data].every(Array.isArray)) {
+      throw new Error('Phản hồi Dashboard không đúng định dạng');
+    }
+    const employees = staffRes.data.filter(x => x.status === 'ACTIVE');
+    const attendance = attendanceRes.data.filter(x => x.work_date && statDateLocal(new Date(x.work_date)) === today);
+    const checked = attendance.filter(x => x.check_in_time);
+    const late = checked.filter(x => Number(x.late_minutes) > 0);
+    const off = leaveRes.data.filter(x => x.status === 'APPROVED' &&
+      statDateLocal(new Date(x.start_date)) <= today && statDateLocal(new Date(x.end_date)) >= today);
+    const pending = leaveRes.data.filter(x => x.status === 'PENDING');
+    set('dashMetricVal1', checked.length + ' / ' + employees.length);
+    set('dashMetricVal2', off.length);
+    set('dashMetricVal3', late.length);
+    set('dashMetricVal4', pending.length);
+    set('dashMetricSub1', 'Nhân viên đã Check-in trong ngày');
+    set('dashMetricSub2', 'Đơn đã duyệt có ngày nghỉ hôm nay');
+    set('dashMetricSub3', late.length + ' lượt chấm công đi muộn hôm nay');
+    set('dashMetricSub4', 'Đơn nghỉ phép đang chờ duyệt');
+
+    const badge = document.getElementById('dashLateCountBadge');
+    if (badge) badge.textContent = late.length + ' người';
+    const dateLabel = document.getElementById('currentDatePillText');
+    if (dateLabel) dateLabel.textContent = '📅 ' + new Date().toLocaleDateString('vi-VN') + ' • Hôm nay';
+    const tbody = document.getElementById('dashLateEmployeesTableBody');
+    if (tbody) {
+      tbody.innerHTML = late.length ? late.map(x => `<tr>
+        <td><strong>${uiEscape(x.emp_name || x.emp_id)}</strong></td>
+        <td>${uiEscape(x.dept_name || '-')}</td>
+        <td>${Number(x.late_minutes)} phút</td>
+        <td><span class="badge-status badge-rejected">Đi muộn</span></td>
+      </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;">Hôm nay chưa ghi nhận trường hợp đi muộn</td></tr>';
+    }
+  } catch (err) {
+    console.error('Dashboard API:', err);
+    set('dashMetricSub1', 'Không thể tải dữ liệu chấm công');
+    set('dashMetricSub4', 'Không thể tải danh sách đơn');
+  }
+}
+
+async function loadEmployeeDashboardKpis() {
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
+  try {
+    const [attendanceRes, leaveRes, balanceRes, otRes] = await Promise.all([
+      apiCall('/api/attendance'),
+      apiCall('/api/leave'),
+      apiCall('/api/v1/leave-balances'),
+      apiCall('/api/v1/ot-requests')
+    ]);
+    if (![attendanceRes.data, leaveRes.data, balanceRes.data, otRes.data].every(Array.isArray)) {
+      throw new Error('Dữ liệu Dashboard cá nhân không đúng định dạng');
+    }
+    const now = new Date(), month = now.getMonth(), year = now.getFullYear();
+    const periodRows = attendanceRes.data.filter(x => x.work_date &&
+      new Date(x.work_date).getMonth() === month && new Date(x.work_date).getFullYear() === year);
+    const checked = periodRows.filter(x => x.check_in_time);
+    const late = checked.filter(x => Number(x.late_minutes) > 0);
+    const balance = balanceRes.data.reduce((a, r) => {
+      a.total += Number(r.total_days || 0);
+      a.used += Number(r.used_days || 0);
+      a.pending += Number(r.pending_days || 0);
+      return a;
+    }, { total: 0, used: 0, pending: 0 });
+    const pending = leaveRes.data.filter(r => r.status === 'PENDING').length;
+    const approvedOt = otRes.data.filter(o => o.status === 'APPROVED' &&
+      o.work_date && new Date(o.work_date).getFullYear() === year && new Date(o.work_date).getMonth() === month)
+      .reduce((sum, o) => sum + Number(o.total_hours || 0), 0);
+    const remaining = Math.max(0, balance.total - balance.used - balance.pending);
+
+    set('dashMetricVal1', checked.length + ' lượt');
+    set('dashMetricVal2', remaining.toFixed(1) + ' ngày');
+    set('dashMetricVal3', late.length);
+    set('dashMetricVal4', pending);
+    set('dashMetricSub1', 'Số lần Check-in trong tháng hiện tại');
+    set('dashMetricSub2', 'Quỹ phép còn lại từ hệ thống');
+    set('dashMetricSub3', 'Số lượt đi muộn trong tháng');
+    set('dashMetricSub4', 'Đơn nghỉ phép đang chờ duyệt');
+    set('dashEmpKpiWorkDays', checked.length + ' lượt');
+    set('dashEmpKpiLateCount', late.length);
+    set('dashEmpKpiLeaveBalance', remaining.toFixed(1) + ' ngày');
+    set('dashEmpKpiOtHours', approvedOt.toFixed(1) + ' h');
+    const dateLabel = document.getElementById('dashEmpTodayDateText');
+    if (dateLabel) dateLabel.textContent = 'Hôm nay: ' + now.toLocaleDateString('vi-VN');
+  } catch (err) {
+    console.error('Employee dashboard metrics:', err);
+    for (const id of [
+      'dashMetricVal1','dashMetricVal2','dashMetricVal3','dashMetricVal4',
+      'dashEmpKpiWorkDays','dashEmpKpiLateCount','dashEmpKpiLeaveBalance','dashEmpKpiOtHours'
+    ]) set(id, '—');
+  }
+}
+
 
 async function loadDepartmentsData() {
   try {
