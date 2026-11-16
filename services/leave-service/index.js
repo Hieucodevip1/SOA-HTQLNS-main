@@ -157,6 +157,9 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
     if (!rows.length) {
       return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
     }
+    if (req.user.role === 'EMPLOYEE' && rows[0].emp_id !== getEmpIdFromUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Không được xem đơn nghỉ phép của người khác' });
+    }
     res.json({ success: true, data: rows[0] });
   } catch (err) {
     next(err);
