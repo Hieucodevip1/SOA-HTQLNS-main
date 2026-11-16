@@ -68,7 +68,8 @@ jobs:
         run: npm run test:registration
       - name: Boot full SOA stack and test all eight services via Gateway
         run: |
-          npm start > /tmp/htqlns-soa.log 2>&1 &
+          # Registrar intentionally skips NODE_ENV=test; enable discovery for this full-stack E2E run.
+          NODE_ENV=development npm start > /tmp/htqlns-soa.log 2>&1 &
           APP_PID=$!
           trap 'kill $APP_PID 2>/dev/null || true; tail -n 55 /tmp/htqlns-soa.log' EXIT
           READY=0
