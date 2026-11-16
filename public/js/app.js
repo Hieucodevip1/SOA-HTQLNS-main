@@ -572,6 +572,7 @@ function navigateToView(viewName) {
     loadMyAttendanceData();
     checkTodayAttendanceStatus();
   }
+  if (viewName === 'settings') loadWorkLocations();
   if (viewName === 'rbac') loadRbacUsersData();
   if (viewName === 'stats') loadStatsData();
   if (viewName === 'soa-monitor') loadSoaServicesStatus();
@@ -1444,16 +1445,17 @@ async function loadMyAttendanceData() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 15px;">Đang nạp dữ liệu chấm công cá nhân...</td></tr>`;
 
   let records = [];
+  let loadError = null;
   try {
     const res = await apiCall('/api/attendance');
     if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
       records = res.data.map(r => ({
         id: r.id,
-        work_date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
+        work_date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '-',
         date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
         in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
         out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-        duration: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time ? 'Đang trong ca' : '-'),
+        duration: r.actual_working_hours != null && Number(r.actual_working_hours) > 0 ? `${r.actual_working_hours} h` : (r.check_in_time ? 'Đang trong ca' : '-'),
         type: r.check_in_method === 'WIFI' ? 'Wi-Fi Office' : (r.check_in_method === 'GPS' ? 'GPS Mobile' : (r.location_name || 'Văn phòng')),
         status: r.status,
         late_minutes: r.late_minutes || 0,
@@ -1463,17 +1465,18 @@ async function loadMyAttendanceData() {
       }));
     }
   } catch (err) {
-    console.warn('Lỗi gọi API attendance cá nhân, sử dụng dữ liệu mặc định:', err.message);
+    loadError = err;
+    console.error('Attendance Service:', err.message);
   }
 
+  if (loadError) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#dc2626;">Không tải được lịch sử chấm công: ' + uiEscape(loadError.message) + '</td></tr>';
+    return;
+  }
   if (!records.length) {
-    records = [
-      { id: 'my-1', date: '30/10/2026', work_date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-2', date: '29/10/2026', work_date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-3', date: '28/10/2026', work_date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE', late_minutes: 12, adj_status: null },
-      { id: 'my-4', date: '27/10/2026', work_date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-5', date: '26/10/2026', work_date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null }
-    ];
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;">Chưa có lịch sử chấm công trong hệ thống</td></tr>';
+    checkTodayAttendanceStatus();
+    return;
   }
 
   tbody.innerHTML = records.map(r => {
@@ -1481,7 +1484,7 @@ async function loadMyAttendanceData() {
     let adjCell = '<span style="color: #94a3b8;">-</span>';
 
     if (r.status === 'LATE') {
-      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
+      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 0}p)</span>`;
       if (r.adj_status === 'APPROVED') {
         adjCell = '<span class="badge-status badge-approved">✓ Đã duyệt giải trình</span>';
       } else if (r.adj_status === 'PENDING') {
@@ -2583,11 +2586,68 @@ async function markNotificationRead(id) {
   }
 }
 
-// Bật tắt thiết lập phương thức chấm công (Figma Image 4)
-function handleSettingToggle(type) {
-  const isWifi = document.getElementById('toggleWifi')?.checked;
-  const isGps = document.getElementById('toggleGps')?.checked;
-  showToast(`Cập nhật phương thức: Wi-Fi: ${isWifi ? 'BẬT' : 'TẮT'} | GPS: ${isGps ? 'BẬT' : 'TẮT'}`, 'success');
+// Work location management mirrors Attendance Service's GET and POST endpoints.
+async function loadWorkLocations() {
+  const tbody = document.getElementById('workLocationsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5">Đang tải các địa điểm...</td></tr>';
+  try {
+    const response = await apiCall('/api/v1/work-locations');
+    if (!response?.success || !Array.isArray(response.data)) throw new Error('Dữ liệu địa điểm không hợp lệ');
+    const locations = response.data;
+    tbody.innerHTML = locations.length ? locations.map(loc => `<tr>
+      <td><strong>${uiEscape(loc.code)}</strong></td>
+      <td><strong>${uiEscape(loc.name)}</strong>
+        <div style="font-size:11px;color:#64748b;">${uiEscape(loc.address || '-')}</div>
+        <div style="font-size:11px;color:#64748b;">${uiEscape(loc.wifi_ssid || 'Không có Wi-Fi')}</div>
+      </td>
+      <td>${Number(loc.latitude)}, ${Number(loc.longitude)}</td>
+      <td>${Number(loc.radius_meters)} m</td>
+      <td>${uiEscape(loc.status)}</td>
+    </tr>`).join('') : '<tr><td colspan="5">Chưa có địa điểm chấm công được cấu hình.</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;">Không tải được địa điểm: ' + uiEscape(err.message) + '</td></tr>';
+  }
+}
+
+async function handleCreateWorkLocation(event) {
+  event.preventDefault();
+  if (!['ADMIN','HR'].includes(state.user?.role)) {
+    showToast('Chỉ ADMIN hoặc HR được tạo địa điểm chấm công', 'error');
+    return;
+  }
+  const get = id => document.getElementById(id)?.value.trim() || '';
+  const latitude = Number(get('locLat'));
+  const longitude = Number(get('locLng'));
+  const radiusMeters = Number(get('locRadius'));
+  const code = get('locCode');
+  const name = get('locName');
+  if (!code || !name || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      Math.abs(latitude) > 90 || Math.abs(longitude) > 180 || !Number.isInteger(radiusMeters) ||
+      radiusMeters < 10 || radiusMeters > 5000) {
+    showToast('Mã, tên, tọa độ hoặc bán kính không hợp lệ', 'warning');
+    return;
+  }
+  const button = document.getElementById('btnSaveWorkLocation');
+  if (button) button.disabled = true;
+  try {
+    const response = await apiCall('/api/v1/work-locations', {
+      method: 'POST',
+      body: JSON.stringify({
+        code, name, address: get('locAddress') || null, latitude, longitude,
+        radiusMeters, wifiSsid: get('locWifi') || null,
+        wifiBssid: get('locBssid') || null, requireFaceId: false
+      })
+    });
+    if (!response?.success) throw new Error(response?.error || 'Không thể tạo địa điểm');
+    document.getElementById('workLocationForm')?.reset();
+    showToast('Đã lưu địa điểm chấm công vào MySQL', 'success');
+    await loadWorkLocations();
+  } catch (err) {
+    showToast('Lưu địa điểm thất bại: ' + err.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 // ==============================================================================
