@@ -9,7 +9,7 @@ require('../../shared/env');
 const crypto = require('crypto');
 const env = require('../../shared/env');
 const db = require('../../shared/db');
-const { createServiceApp } = require('../../shared/service-base');
+const { createServiceApp, requireAuth } = require('../../shared/service-base');
 const { registerService } = require('../../shared/registrar');
 const events = require('../../shared/events');
 const {
@@ -234,6 +234,19 @@ app.use((req, res, next) => {
     } catch {
       req.user = null;
     }
+  }
+  next();
+});
+
+// The service enforces access even when called directly, bypassing the API Gateway.
+app.use('/api', requireAuth());
+app.use('/api', (req, res, next) => {
+  const role = req.user.role;
+  if (/\/audit-logs(?:\/|$)/.test(req.path) && !['ADMIN', 'HR'].includes(role)) {
+    return res.status(403).json({ success: false, error: 'Không có quyền xem nhật ký thao tác' });
+  }
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !['ADMIN', 'HR', 'MANAGER'].includes(role)) {
+    return res.status(403).json({ success: false, error: 'Không có quyền thay đổi hồ sơ tổ chức' });
   }
   next();
 });
