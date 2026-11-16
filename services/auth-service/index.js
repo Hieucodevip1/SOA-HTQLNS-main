@@ -164,10 +164,9 @@ async function enrichUserProfile(user, useDb) {
 const app = createServiceApp('auth-service', {
   port: PORT,
   checkHealth: async () => {
-    if (process.env.REQUIRE_DB === 'true') {
-      return isDbAvailable();
-    }
-    return true;
+    const demoMemoryAllowed = process.env.ALLOW_MEMORY_FALLBACK === 'true' &&
+      env.NODE_ENV !== 'production';
+    return demoMemoryAllowed ? true : isDbAvailable();
   }
 });
 
