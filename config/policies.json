@@ -848,6 +848,26 @@
       ]
     },
     {
+      "prefix": "/api/v1/leave-attachments",
+      "service": "leave-service",
+      "rules": [
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ],
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 20
+          }
+        }
+      ]
+    },
+    {
       "prefix": "/api/v1/leave-requests",
       "service": "leave-service",
       "rules": [
