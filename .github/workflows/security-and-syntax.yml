@@ -66,6 +66,10 @@ jobs:
         run: npm run test:features
       - name: Verify transactional account registration
         run: npm run test:registration
+      - name: Verify direct Attendance and Leave APIs, including evidence access
+        run: |
+          npm run test:attendance
+          npm run test:leave
       - name: Boot full SOA stack and test all eight services via Gateway
         run: |
           # Registrar intentionally skips NODE_ENV=test; enable discovery for this full-stack E2E run.
