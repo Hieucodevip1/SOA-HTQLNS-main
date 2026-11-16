@@ -2414,7 +2414,7 @@ input:checked + .slider:before {
           <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
             <div>
               <h1 class="page-heading-title">Quản lý Bảng lương &amp; Phiếu lương</h1>
-              <div class="page-heading-desc">Tính toán tự động theo ngày công, phép năm, giờ tăng ca OT và khấu trừ BHXH, thuế TNCN theo luật Việt Nam.</div>
+              <div class="page-heading-desc">Tổng hợp ngày công, phép năm, OT và khấu trừ theo cấu hình demo. Công thức thuế, bảo hiểm cần được kiểm chứng trước khi áp dụng cho bảng lương thực tế.</div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               <button class="btn-primary-blue" id="btnPayrollCalculate" onclick="openCalculatePayrollModal()" style="display: inline-flex; align-items: center; gap: 6px;">
@@ -2532,6 +2532,7 @@ input:checked + .slider:before {
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Danh mục cấu hình lương &amp; Định mức phụ cấp</div>
+                <button type="button" id="btnPayrollAddConfig" class="btn-primary-blue" style="margin-top:10px;" onclick="openCreatePayrollConfigModal()">+ Thêm cấu hình lương</button>
                 <div style="font-size: 12px; color: #64748b;">Thiết lập mức lương cơ sở, phụ cấp ăn trưa, xăng xe và tỷ lệ trích bảo hiểm</div>
               </div>
             </div>
