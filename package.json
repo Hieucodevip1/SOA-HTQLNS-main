@@ -5,7 +5,7 @@
   "main": "scripts/run-all.js",
   "scripts": {
     "start": "node scripts/run-all.js",
-    "test": "node --test --test-concurrency=1 tests/security-regression.test.js tests/infra.test.js tests/auth-org.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/e2e.test.js",
+    "test": "node --test --test-concurrency=1 tests/ui-regression.test.js tests/security-regression.test.js tests/infra.test.js tests/auth-org.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/e2e.test.js",
     "test:infra": "node --test tests/infra.test.js",
     "test:auth-org": "node --test tests/auth-org.test.js",
     "test:attendance": "node --test tests/attendance.test.js",
@@ -27,7 +27,8 @@
     "test:security": "node --test tests/security-regression.test.js",
     "db:init": "node scripts/init-db.js",
     "test:features": "node --test --test-concurrency=1 tests/leave-cancel.integration.test.js tests/shift-swaps.integration.test.js",
-    "test:registration": "node --test tests/auth-registration.integration.test.js"
+    "test:registration": "node --test tests/auth-registration.integration.test.js",
+    "test:ui": "node --test tests/ui-regression.test.js"
   },
   "engines": {
     "node": ">=18"
