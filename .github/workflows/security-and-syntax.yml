@@ -1,0 +1,27 @@
+name: Security and syntax checks
+
+on:
+  push:
+    branches:
+      - feature/complete-8-microservices
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install packages
+        run: npm ci
+      - name: Validate JavaScript syntax
+        run: |
+          find services shared scripts tests gateway event-bus registry public/js -type f -name '*.js' -print0 | xargs -0 -n 1 node --check
+      - name: Run security regression tests
+        run: npm run test:security
