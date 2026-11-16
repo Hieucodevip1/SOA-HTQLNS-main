@@ -499,34 +499,53 @@ app.get('/api/auth/me', async (req, res) => {
 // ==============================================================================
 app.put('/api/auth/me', async (req, res) => {
   try {
-    const currentUser = req.user;
-    if (!currentUser) return unauthorized(res);
-
-    const { biometric_enabled, email } = req.body;
-    const userId = currentUser.userId || currentUser.id;
-
-    const useDb = await isDbAvailable();
-    if (useDb) {
-      if (biometric_enabled !== undefined) {
-        await db.query('UPDATE users SET biometric_enabled = ? WHERE id = ?', [Boolean(biometric_enabled), userId], DB_NAME);
-      }
-      if (email) {
-        await db.query('UPDATE users SET email = ? WHERE id = ?', [email, userId], DB_NAME);
-      }
-    } else {
-      const u = memoryUsers.get(userId);
-      if (u) {
-        if (biometric_enabled !== undefined) u.biometric_enabled = Boolean(biometric_enabled);
-        if (email) u.email = email;
-      }
+    if (!req.user) return unauthorized(res, 'Yêu cầu đăng nhập');
+    // Verified WebAuthn enrollment must not be replaced by a client boolean.
+    if (req.body?.biometric_enabled !== undefined) {
+      return res.status(422).json({ success: false,
+        error: 'Sinh trắc học chưa có quy trình xác minh an toàn' });
     }
-
-    return success(res, null, 200, 'Cập nhật thông tin thành công');
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const currentPassword = req.body?.currentPassword;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return badRequest(res, 'Email không hợp lệ');
+    }
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      return badRequest(res, 'Cần nhập mật khẩu hiện tại để đổi email');
+    }
+    const userId = req.user.userId || req.user.id;
+    const useDb = await isDbAvailable();
+    const rows = useDb
+      ? await db.query('SELECT id, emp_id, email, password_hash FROM users WHERE id = ? LIMIT 1', [userId], DB_NAME)
+      : [memoryUsers.get(userId)].filter(Boolean);
+    const account = rows[0];
+    if (!account) return notFound(res, 'Tài khoản không tồn tại');
+    if (!await bcrypt.compare(currentPassword, account.password_hash)) {
+      return unauthorized(res, 'Mật khẩu hiện tại không đúng');
+    }
+    if (account.email.toLowerCase() !== email) {
+      if (useDb) {
+        await db.withTransaction(async conn => {
+          await conn.query('UPDATE users SET email = ? WHERE id = ?', [email, userId]);
+          if (account.emp_id) {
+            await conn.query('UPDATE htqlns_organization.employees SET email = ? WHERE id = ?',
+              [email, account.emp_id]);
+          }
+        }, DB_NAME);
+      } else {
+        account.email = email;
+      }
+      events.publish('user.email.updated', { userId, empId: account.emp_id, email },
+        { source: 'auth-service' }).catch(() => {});
+    }
+    return success(res, { email }, 200, 'Email đã cập nhật. Đăng nhập lại để sử dụng hồ sơ mới');
   } catch (err) {
-    return error(res, err.message);
+    if (err.code === 'ER_DUP_ENTRY') return conflict(res, 'Email đã được sử dụng');
+    return error(res, 'Không thể thay đổi email tài khoản');
   }
 });
 
+// ==============================================================================
 // ==============================================================================
 // 6. ENDPOINT: Đổi mật khẩu (POST /api/auth/change-password)
 // ==============================================================================
