@@ -374,4 +374,39 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
       assert.ok(Array.isArray(data.data));
     });
   });
+  test('E2E: upload và tải PDF riêng tư qua Gateway → Leave Service → MySQL', async () => {
+    assert.ok(employeeToken, 'Cần đăng nhập EMPLOYEE trước khi chạy bài kiểm thử');
+    const pdfBase64 = Buffer.from('%PDF-1.4\\n1 0 obj\\n<<>>\\nendobj\\n%%EOF').toString('base64');
+    const upload = await fetch(GATEWAY_URL + '/api/v1/leave-attachments', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + employeeToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: 'e2e-evidence.pdf', mediaType: 'application/pdf',
+        contentBase64: pdfBase64 })
+    });
+    assert.equal(upload.status, 201, JSON.stringify(await upload.clone().json()));
+    const payload = await upload.json();
+    const url = payload.data.attachmentUrl;
+    const id = payload.data.id;
+    try {
+      const owner = await fetch(GATEWAY_URL + url, {
+        headers: { Authorization: 'Bearer ' + employeeToken }
+      });
+      assert.equal(owner.status, 200);
+      assert.match(owner.headers.get('content-type'), /application\\/pdf/);
+      assert.match(await owner.text(), /%PDF-1\\.4/);
+      assert.equal((await fetch(GATEWAY_URL + url)).status, 401);
+      const unrelated = jwt.signToken({userId: 'another-account', empId:'another-employee',
+        role:'EMPLOYEE'});
+      assert.equal((await fetch(GATEWAY_URL + url, {
+        headers: { Authorization: 'Bearer ' + unrelated }
+      })).status, 404);
+      assert.equal((await fetch(GATEWAY_URL + url, {
+        headers: { Authorization: 'Bearer ' + adminToken }
+      })).status, 200);
+    } finally {
+      const pool = db.getPool(process.env.LEAVE_DB_NAME || 'htqlns_leave');
+      await pool.query('DELETE FROM leave_attachments WHERE id = ?', [id]);
+    }
+  });
+
 });
