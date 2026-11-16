@@ -201,11 +201,8 @@ async function handleLoginSubmit(e) {
     }
 
     state.token = res.data.token;
-    state.user = res.data.user || {
-      username,
-      role: username === 'admin' ? 'ADMIN' : (username === 'manager' ? 'MANAGER' : (username === 'hr_admin' ? 'HR' : 'EMPLOYEE')),
-      fullName: username === 'manager' ? 'Thầy Lâm' : username
-    };
+    if (!res.data.user || !res.data.user.role) throw new Error('Phản hồi đăng nhập thiếu thông tin vai trò');
+    state.user = res.data.user;
 
     safeSetStorage('htqlns_token', state.token);
     safeSetStorage('htqlns_user', JSON.stringify(state.user));
@@ -215,7 +212,7 @@ async function handleLoginSubmit(e) {
     initPortalDashboard('dashboard');
   } catch (err) {
     console.error('Lỗi đăng nhập:', err);
-    showToast(err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác (Mặc định: 123456)', 'error');
+    showToast(err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác', 'error');
   } finally {
     btn.disabled = false;
     btn.innerText = 'Login';
@@ -230,7 +227,7 @@ async function handleRegisterSubmit(e) {
   const email = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPassword').value;
   const confirmPassword = document.getElementById('regConfirmPassword').value;
-  const role = document.getElementById('regRole')?.value || 'EMPLOYEE';
+  const role = 'EMPLOYEE'; // Public registration cannot assign MANAGER / HR / ADMIN.
   const btn = document.getElementById('btnRegisterAction');
 
   if (password !== confirmPassword) {
@@ -258,7 +255,7 @@ async function handleRegisterSubmit(e) {
       throw new Error(res?.error || res?.message || 'Đăng ký không thành công');
     }
 
-    const roleLabel = role === 'MANAGER' ? 'Quản lý' : 'Nhân viên';
+    const roleLabel = 'Nhân viên';
     showToast(`Đăng ký tài khoản ${username} (${roleLabel}) thành công! Mời bạn đăng nhập.`, 'success');
     toggleAuthMode('login');
     document.getElementById('loginUsername').value = username;
@@ -272,25 +269,35 @@ async function handleRegisterSubmit(e) {
   }
 }
 
-function handleLogoutClick() {
-  if (!confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) return;
-
+function clearFrontendSession() {
   state.token = null;
   state.user = null;
   safeRemoveStorage('htqlns_token');
   safeRemoveStorage('htqlns_user');
   safeRemoveStorage('htqlns_current_view');
-
-  document.getElementById('portalApp').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
+  const portal = document.getElementById('portalApp');
+  const login = document.getElementById('loginScreen');
+  if (portal) portal.style.display = 'none';
+  if (login) login.style.display = 'flex';
   toggleAuthMode('login');
-  showToast('Đã đăng xuất thành công', 'success');
 }
 
+async function handleLogoutClick() {
+  if (!confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) return;
+  try {
+    await apiCall('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  } catch (err) {
+    console.warn('Không thể thu hồi phiên ở server:', err.message);
+  } finally {
+    clearFrontendSession();
+    showToast('Đã đăng xuất trên thiết bị này', 'success');
+  }
+}
+
+// Email OTP delivery is not yet configured in Notification Service.
+// Never claim a reset code was sent when no mail provider exists.
 function handleForgotPasswordClick() {
-  const email = prompt('Nhập địa chỉ email tài khoản để nhận mã OTP khôi phục:', 'hieu.vd@htqlns.com');
-  if (!email) return;
-  showToast(`Mã xác thực OTP đã được gửi đến email ${email}.`, 'success');
+  showToast('Khôi phục mật khẩu qua email chưa được cấu hình. Vui lòng liên hệ ADMIN hoặc HR.', 'warning');
 }
 
 // ==============================================================================
@@ -315,19 +322,14 @@ function showScreenView(screen) {
     return;
   }
 
-  // Vào portal
+  // Preview navigation must never manufacture a privileged session.
+  if (!state.token || !isTokenValid(state.token) || !state.user) {
+    showToast('Cần đăng nhập bằng tài khoản thực để xem chức năng này', 'warning');
+    showScreenView('login');
+    return;
+  }
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').style.display = 'flex';
-
-  if (!state.user) {
-    state.user = {
-      username: 'manager',
-      role: 'MANAGER',
-      fullName: 'Thầy Lâm',
-      email: 'lam@htqlns.com'
-    };
-  }
-
   updateTopbarUser();
   applyRoleBasedUI();
   navigateToView(screen);
@@ -338,14 +340,7 @@ function updateTopbarUser() {
   const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
   const isEmployee = state.user.role === 'EMPLOYEE' || state.user.username === 'employee';
 
-  let displayName = state.user.fullName;
-  if (!displayName) {
-    if (state.user.username === 'employee') displayName = 'Vũ Đức Hiếu';
-    else if (state.user.username === 'manager') displayName = 'Thầy Lâm';
-    else if (state.user.username === 'admin') displayName = 'Nguyễn Quản Trị (Admin)';
-    else if (state.user.username === 'hr_admin') displayName = 'Trần Thị Thu Hà (HR)';
-    else displayName = state.user.username;
-  }
+  const displayName = state.user.fullName || state.user.full_name || state.user.username || 'Người dùng';
 
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
                       (state.user.role === 'HR' ? 'Phòng Nhân sự' :
@@ -1759,20 +1754,64 @@ function changeStatPeriod(period) {
 }
 
 // Nạp dữ liệu hồ sơ cá nhân
-function loadProfileData() {
-  if (!state.user) return;
-  const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
-  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : state.user.username);
+async function loadProfileData() {
+  if (!state.token || !state.user) return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value == null || value === '' ? '—' : String(value);
+  };
+  try {
+    const profile = await apiCall('/api/auth/me');
+    if (!profile?.success || !profile.data) throw new Error('Không tải được thông tin tài khoản');
+    const u = profile.data;
+    state.user = { ...state.user, ...u };
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
+    set('profDisplayName', u.fullName || u.full_name || u.username);
+    set('profUsername', u.username);
+    set('profEmail', u.email);
+    set('profRole', u.role);
+    set('profAccountStatus', u.status === 'ACTIVE' ? 'Đang hoạt động' : (u.status || '—'));
+    updateTopbarUser();
+    try {
+      const org = await apiCall('/api/organization/employees/me/profile');
+      const employee = org?.data;
+      if (employee) {
+        const department = (state.departments || []).find(d => d.id === employee.department_id);
+        set('profDepartment', employee.department_name || department?.name || employee.department_id || 'Chưa phân phòng ban');
+      } else set('profDepartment', 'Chưa liên kết hồ sơ nhân sự');
+    } catch (err) {
+      set('profDepartment', 'Không tải được phòng ban');
+    }
+  } catch (err) {
+    showToast('Lỗi tải hồ sơ: ' + err.message, 'error');
+    set('profAccountStatus', 'Không thể xác minh');
+  }
+}
 
-  const nameEl = document.getElementById('profDisplayName');
-  const userEl = document.getElementById('profUsername');
-  const emailEl = document.getElementById('profEmail');
-  const roleEl = document.getElementById('profRole');
-
-  if (nameEl) nameEl.innerText = displayName;
-  if (userEl) userEl.innerText = state.user.username || 'manager';
-  if (emailEl) emailEl.innerText = state.user.email || `${state.user.username}@htqlns.com`;
-  if (roleEl) roleEl.innerText = state.user.role || 'MANAGER';
+async function handleChangePasswordSubmit(event) {
+  event.preventDefault();
+  const oldPassword = document.getElementById('profileOldPassword')?.value || '';
+  const newPassword = document.getElementById('profileNewPassword')?.value || '';
+  const confirmPassword = document.getElementById('profileConfirmPassword')?.value || '';
+  if (newPassword.length < 6 || newPassword !== confirmPassword || oldPassword === newPassword) {
+    showToast('Mật khẩu mới tối thiểu 6 ký tự, khác mật khẩu cũ và phải nhập lại chính xác', 'warning');
+    return;
+  }
+  const button = document.getElementById('btnProfileChangePassword');
+  if (button) button.disabled = true;
+  try {
+    const response = await apiCall('/api/auth/change-password', {
+      method: 'POST', body: JSON.stringify({ oldPassword, newPassword })
+    });
+    if (!response?.success) throw new Error(response?.error || 'Không thể đổi mật khẩu');
+    document.getElementById('changePasswordForm')?.reset();
+    clearFrontendSession();
+    showToast('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.', 'success');
+  } catch (err) {
+    showToast('Không thể đổi mật khẩu: ' + err.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 // Giám sát cụm Microservices SOA
