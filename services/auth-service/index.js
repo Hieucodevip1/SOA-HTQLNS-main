@@ -186,6 +186,17 @@ app.use((req, res, next) => {
 });
 
 // ==============================================================================
+// Never silently replace MySQL records with hard-coded demo data.
+app.use('/api', async (req, res, next) => {
+  const demoMemoryAllowed = process.env.ALLOW_MEMORY_FALLBACK === 'true' &&
+    process.env.NODE_ENV !== 'production';
+  if (demoMemoryAllowed || await isDbAvailable()) return next();
+  return res.status(503).json({
+    success: false, code: 'DATABASE_UNAVAILABLE',
+    error: 'Không thể kết nối MySQL. Hệ thống không sử dụng dữ liệu mẫu thay thế.'
+  });
+});
+
 // 1. ENDPOINT: Đăng ký tài khoản (POST /api/auth/register)
 // ==============================================================================
 app.post('/api/auth/register', async (req, res) => {
