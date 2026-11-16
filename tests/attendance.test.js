@@ -95,6 +95,7 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
 
   // 4. Admin thêm mới địa điểm chấm công văn phòng chi nhánh (HTTP 201)
   let testLocationCode = `LOC_${Date.now()}`;
+  let testLocationId = null;
   test('Admin thêm mới địa điểm chấm công thành công (HTTP 201)', async () => {
     const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/work-locations`, {
       method: 'POST',
@@ -116,6 +117,37 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.code, testLocationCode);
+    testLocationId = data.data.id;
+  });
+
+  test('Admin cập nhật địa điểm GPS và EMPLOYEE không được sửa', async () => {
+    assert.ok(testLocationId);
+    const endpoint = `http://localhost:${ATT_PORT}/api/v1/work-locations/${testLocationId}`;
+    const request = token => fetch(endpoint, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Chi nhánh kiểm thử cập nhật', radiusMeters: 130 })
+    });
+    assert.equal((await request(employeeToken)).status, 403);
+    const response = await request(adminToken);
+    assert.equal(response.status, 200);
+    const json = await response.json();
+    assert.equal(json.data.radius_meters, 130);
+    assert.equal(json.data.name, 'Chi nhánh kiểm thử cập nhật');
+  });
+
+  test('Admin ngừng sử dụng địa điểm bằng soft-delete và vẫn đọc được lịch sử cấu hình', async () => {
+    const url = `http://localhost:${ATT_PORT}/api/v1/work-locations/${testLocationId}`;
+    assert.equal((await fetch(url, { method: 'DELETE', headers: {
+      Authorization: `Bearer ${employeeToken}`
+    } })).status, 403);
+    const result = await fetch(url, { method: 'DELETE', headers: {
+      Authorization: `Bearer ${adminToken}`
+    } });
+    assert.equal(result.status, 200);
+    const details = await fetch(url, { headers: { Authorization: `Bearer ${adminToken}` } });
+    assert.equal(details.status, 200);
+    assert.equal((await details.json()).data.status, 'INACTIVE');
   });
 
   // 5. Check-in ngoài bán kính GPS (HTTP 403 OUT_OF_RANGE)
@@ -138,8 +170,18 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     assert.strictEqual(data.code, 'OUT_OF_RANGE');
   });
 
-  // 6. Check-in thành công qua Wi-Fi văn phòng hợp lệ (HTTP 201)
-  test('Check-in thành công qua Wi-Fi công ty (HTTP 201)', async () => {
+  // 6. Wi-Fi SSID supplied by client alone is not a trusted presence proof.
+  test('Từ chối Check-in chỉ bằng tên Wi-Fi (HTTP 400)', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/check-in`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${employeeToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'WIFI', wifiSsid: 'HTQLNS_OFFICE_5G' })
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).code, 'LOCATION_REQUIRED');
+  });
+
+  test('Check-in được chấp nhận khi có GPS trong vùng hợp lệ (HTTP 201)', async () => {
     const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/check-in`, {
       method: 'POST',
       headers: {
@@ -147,14 +189,16 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        method: 'WIFI',
-        wifiSsid: 'HTQLNS_OFFICE_5G'
+        method: 'GPS',
+        latitude: 13.759142,
+        longitude: 109.218536
       })
     });
     assert.strictEqual(res.status, 201);
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.ok(data.data.id);
+    assert.equal(data.data.check_in_method, 'GPS');
   });
 
   // 7. Từ chối Check-in lần 2 trong cùng một ngày (HTTP 400)
@@ -194,6 +238,15 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.ok(data.data.check_out_time);
+  });
+
+  test('Check-out lần hai phải bị từ chối (409)', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/check-out`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${employeeToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'GPS', latitude: 13.759142, longitude: 109.218536 })
+    });
+    assert.equal(res.status, 409);
   });
 
   // 9. Lấy lịch sử chấm công cá nhân
