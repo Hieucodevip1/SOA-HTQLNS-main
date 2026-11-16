@@ -2654,6 +2654,7 @@ function switchShiftTab(tabName) {
     }
     if (contentAssignments) contentAssignments.style.display = 'block';
     loadShiftAssignments();
+    loadShiftSwapRequests();
   } else if (tabName === 'ot') {
     if (tabBtnOt) {
       tabBtnOt.style.background = '#ffffff';
@@ -2690,6 +2691,7 @@ async function loadShiftsData() {
   await Promise.allSettled([
     loadShiftsCatalog(),
     loadShiftAssignments(),
+    loadShiftSwapRequests(),
     loadOtRequests()
   ]);
 }
@@ -2793,7 +2795,10 @@ async function loadShiftAssignments() {
           <td style="text-align: center;">
             ${(canManage && a.status === 'SCHEDULED') ? `
               <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Hủy</button>
-            ` : `<span style="font-size: 11px; color: #94a3b8;">—</span>`}
+            ` : ((state.user?.role === 'EMPLOYEE' && ['SCHEDULED','SWAPPED'].includes(a.status) &&
+              String(a.work_date).slice(0,10) > new Date().toISOString().slice(0,10))
+                ? `<button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="openShiftSwapModal('${a.id}', '${String(a.work_date).slice(0,10)}')">Xin đổi ca</button>`
+                : `<span style="font-size: 11px; color: #94a3b8;">—</span>`)}
           </td>
         </tr>
       `;
@@ -2802,6 +2807,118 @@ async function loadShiftAssignments() {
     console.error('Lỗi tải lịch phân ca:', err);
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
   }
+}
+
+// Swap requests are rendered from Shift Service rather than simulated UI state.
+function swapUiText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+async function loadShiftSwapRequests() {
+  const parent = document.getElementById('tabContentAssignments');
+  if (!parent) return;
+  let panel = document.getElementById('shiftSwapRequestsPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'shiftSwapRequestsPanel';
+    panel.style.marginTop = '22px';
+    parent.appendChild(panel);
+  }
+  try {
+    const response = await apiCall('/api/v1/shift-swaps');
+    const rows = response?.data || [];
+    const canApprove = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
+    const myId = state.user?.empId || state.user?.emp_id;
+    panel.innerHTML = `
+      <h3 style="font-size: 16px; margin-bottom: 10px;">Yêu cầu đổi ca</h3>
+      <div style="overflow-x: auto;">
+        <table class="figma-table">
+          <thead><tr><th>Ngày</th><th>Nhân viên yêu cầu</th><th>Nhân viên đổi cùng</th><th>Đổi ca</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(s => `
+              <tr>
+                <td>${swapUiText(String(s.work_date).slice(0,10))}</td>
+                <td>${swapUiText(s.requester_emp_id)}</td>
+                <td>${swapUiText(s.target_emp_id)}</td>
+                <td>${swapUiText(s.requester_shift_code)} ↔ ${swapUiText(s.target_shift_code)}</td>
+                <td>${swapUiText(s.status)}</td>
+                <td>
+                  ${canApprove && s.status === 'PENDING' ? `
+                    <button class="btn-approve-sm" onclick="handleShiftSwapDecision('${s.id}', 'APPROVED')">Duyệt</button>
+                    <button class="btn-reject-sm" onclick="handleShiftSwapDecision('${s.id}', 'REJECTED')">Từ chối</button>
+                  ` : ''}
+                  ${s.status === 'PENDING' && s.requester_emp_id === myId ? `
+                    <button class="btn-reject-sm" onclick="cancelShiftSwap('${s.id}')">Hủy</button>
+                  ` : ''}
+                </td>
+              </tr>`).join('') : '<tr><td colspan="6">Chưa có yêu cầu đổi ca</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    panel.textContent = 'Không thể tải yêu cầu đổi ca: ' + err.message;
+  }
+}
+
+async function openShiftSwapModal(assignmentId, date) {
+  try {
+    const response = await apiCall(`/api/v1/shift-swaps/candidates?date=${encodeURIComponent(date)}`);
+    const candidates = response?.data || [];
+    if (!candidates.length) {
+      showToast('Không tìm thấy ca làm việc khác để đổi vào ngày này', 'warning');
+      return;
+    }
+    const options = candidates.map(c => `
+      <option value="${swapUiText(c.id)}">${swapUiText(c.shift_code)} - ${swapUiText(c.emp_id)}</option>`
+    ).join('');
+    openModal('Yêu cầu đổi ca', `
+      <form onsubmit="submitShiftSwap(event, '${assignmentId}')">
+        <label>Chọn phân ca muốn đổi</label>
+        <select id="swapTargetAssignment" class="topbar-search-input" required>${options}</select>
+        <label style="display:block;margin-top:12px;">Lý do đổi ca</label>
+        <textarea id="swapRequestReason" class="topbar-search-input" rows="3" required maxlength="1000"></textarea>
+        <button type="submit" class="btn-primary-blue" style="margin-top:12px;">Gửi yêu cầu</button>
+      </form>`);
+  } catch (err) { showToast('Lỗi tải phân ca: ' + err.message, 'error'); }
+}
+
+async function submitShiftSwap(e, requesterAssignmentId) {
+  e.preventDefault();
+  try {
+    await apiCall('/api/v1/shift-swaps', {
+      method: 'POST',
+      body: JSON.stringify({
+        requesterAssignmentId,
+        targetAssignmentId: document.getElementById('swapTargetAssignment').value,
+        reason: document.getElementById('swapRequestReason').value.trim()
+      })
+    });
+    closeModal();
+    showToast('Đã gửi yêu cầu đổi ca để quản lý xét duyệt', 'success');
+    await loadShiftSwapRequests();
+  } catch (err) { showToast('Không thể gửi yêu cầu: ' + err.message, 'error'); }
+}
+
+async function handleShiftSwapDecision(id, decision) {
+  if (!confirm(decision === 'APPROVED' ? 'Xác nhận đổi ca cho hai nhân viên?' : 'Từ chối yêu cầu đổi ca?')) return;
+  try {
+    await apiCall(`/api/v1/shift-swaps/${encodeURIComponent(id)}/decision`, {
+      method: 'PATCH', body: JSON.stringify({ decision })
+    });
+    showToast(decision === 'APPROVED' ? 'Đã thực hiện đổi ca' : 'Đã từ chối đổi ca', 'success');
+    await Promise.all([loadShiftAssignments(), loadShiftSwapRequests()]);
+  } catch (err) { showToast('Không thể xử lý yêu cầu: ' + err.message, 'error'); }
+}
+
+async function cancelShiftSwap(id) {
+  if (!confirm('Hủy yêu cầu đổi ca này?')) return;
+  try {
+    await apiCall(`/api/v1/shift-swaps/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+    showToast('Đã hủy yêu cầu đổi ca', 'success');
+    await loadShiftSwapRequests();
+  } catch (err) { showToast('Không thể hủy yêu cầu: ' + err.message, 'error'); }
 }
 
 // 3. Đơn đăng ký tăng ca OT (SCR_OT_01, SCR_OT_02)
