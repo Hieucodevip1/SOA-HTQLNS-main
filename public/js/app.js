@@ -1202,49 +1202,76 @@ async function loadDashboardData() {
 async function loadDashboardKpis() {
   const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
   for (const id of ['dashMetricVal1','dashMetricVal2','dashMetricVal3','dashMetricVal4']) set(id, '—');
+  const range = dashboardScopeRange();
   try {
-    const today = statDateLocal(new Date());
-    const [staffRes, attendanceRes, leaveRes] = await Promise.all([
+    const query = new URLSearchParams({ fromDate: range.from, toDate: range.to });
+    const [staffRes, attRes, leaveRes] = await Promise.all([
       apiCall('/api/organization/employees'),
-      apiCall('/api/attendance?workDate=' + encodeURIComponent(today)),
+      apiCall('/api/attendance?' + query),
       apiCall('/api/leave')
     ]);
-    if (![staffRes.data, attendanceRes.data, leaveRes.data].every(Array.isArray)) {
+    if (![staffRes.data, attRes.data, leaveRes.data].every(Array.isArray)) {
       throw new Error('Phản hồi Dashboard không đúng định dạng');
     }
-    const employees = staffRes.data.filter(x => x.status === 'ACTIVE');
-    const attendance = attendanceRes.data.filter(x => x.work_date && statDateLocal(new Date(x.work_date)) === today);
-    const checked = attendance.filter(x => x.check_in_time);
-    const late = checked.filter(x => Number(x.late_minutes) > 0);
-    const off = leaveRes.data.filter(x => x.status === 'APPROVED' &&
-      statDateLocal(new Date(x.start_date)) <= today && statDateLocal(new Date(x.end_date)) >= today);
-    const pending = leaveRes.data.filter(x => x.status === 'PENDING');
-    set('dashMetricVal1', checked.length + ' / ' + employees.length);
-    set('dashMetricVal2', off.length);
+    const employees = staffRes.data.filter(e => e.status === 'ACTIVE' &&
+      (dashboardScope.departmentId === 'ALL' || e.department_id === dashboardScope.departmentId));
+    const ids = new Set(employees.map(e => e.id));
+    const records = attRes.data.filter(a => ids.has(a.emp_id) && a.work_date &&
+      statDateLocal(new Date(a.work_date)) >= range.from &&
+      statDateLocal(new Date(a.work_date)) <= range.to);
+    const checked = records.filter(a => a.check_in_time);
+    const checkedIds = new Set(checked.map(a => a.emp_id));
+    const late = checked.filter(a => Number(a.late_minutes) > 0);
+    const lateIds = new Set(late.map(a => a.emp_id));
+    const approved = leaveRes.data.filter(x => ids.has(x.emp_id) && x.status === 'APPROVED' &&
+      statDateLocal(new Date(x.start_date)) <= range.to &&
+      statDateLocal(new Date(x.end_date)) >= range.from);
+    const leaveIds = new Set(approved.map(x => x.emp_id).filter(id => !checkedIds.has(id)));
+    const pending = leaveRes.data.filter(x => ids.has(x.emp_id) && x.status === 'PENDING');
+    const missing = Math.max(0, employees.length - checkedIds.size - leaveIds.size);
+    const onTime = Math.max(0, checkedIds.size - lateIds.size);
+
+    set('dashMetricVal1', checkedIds.size + ' / ' + employees.length);
+    set('dashMetricVal2', approved.length);
     set('dashMetricVal3', late.length);
     set('dashMetricVal4', pending.length);
-    set('dashMetricSub1', 'Nhân viên đã Check-in trong ngày');
-    set('dashMetricSub2', 'Đơn đã duyệt có ngày nghỉ hôm nay');
-    set('dashMetricSub3', late.length + ' lượt chấm công đi muộn hôm nay');
+    set('dashMetricSub1', 'Nhân viên đã ghi nhận Check-in trong kỳ');
+    set('dashMetricSub2', 'Đơn đã duyệt có ngày nghỉ trong kỳ');
+    set('dashMetricSub3', late.length + ' lượt chấm công đi muộn trong kỳ');
     set('dashMetricSub4', 'Đơn nghỉ phép đang chờ duyệt');
+    set('donutCenterNumber', employees.length);
+    set('donutLegendOntime', onTime);
+    set('donutLegendLate', lateIds.size);
+    set('donutLegendLeave', leaveIds.size);
+    set('donutLegendAbsent', missing);
+    set('donutSummaryFoot',
+      onTime + ' đúng giờ + ' + lateIds.size + ' đi muộn + ' + leaveIds.size +
+      ' có phép + ' + missing + ' chưa ghi công = ' + employees.length + ' nhân viên');
+    set('dashLateCountBadge', late.length + ' lượt');
 
-    const badge = document.getElementById('dashLateCountBadge');
-    if (badge) badge.textContent = late.length + ' người';
-    const dateLabel = document.getElementById('currentDatePillText');
-    if (dateLabel) dateLabel.textContent = '📅 ' + new Date().toLocaleDateString('vi-VN') + ' • Hôm nay';
-    const tbody = document.getElementById('dashLateEmployeesTableBody');
-    if (tbody) {
-      tbody.innerHTML = late.length ? late.map(x => `<tr>
-        <td><strong>${uiEscape(x.emp_name || x.emp_id)}</strong></td>
-        <td>${uiEscape(x.dept_name || '-')}</td>
-        <td>${Number(x.late_minutes)} phút</td>
+    const label = { today: 'Hôm nay', yesterday: 'Hôm qua',
+      last7: '7 ngày gần đây', month: 'Từ đầu tháng' }[dashboardScope.period] || 'Kỳ chọn';
+    set('currentDatePillText', '📅 ' + label + ' (' + range.from + ' → ' + range.to + ')');
+    const dept = (state.departments || []).find(d => d.id === dashboardScope.departmentId);
+    set('currentDeptPillText', '🏢 ' + (dept?.name || 'Toàn cơ quan') + ' • ' + employees.length + ' người');
+    const body = document.getElementById('dashLateEmployeesTableBody');
+    if (body) {
+      body.innerHTML = late.length ? late.map(a => `<tr>
+        <td><strong>${uiEscape(a.emp_name || a.emp_id)}</strong></td>
+        <td>${uiEscape(a.dept_name || '-')}</td>
+        <td>${Number(a.late_minutes)} phút</td>
         <td><span class="badge-status badge-rejected">Đi muộn</span></td>
-      </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;">Hôm nay chưa ghi nhận trường hợp đi muộn</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;">Không ghi nhận đi muộn trong kỳ</td></tr>';
     }
   } catch (err) {
     console.error('Dashboard API:', err);
-    set('dashMetricSub1', 'Không thể tải dữ liệu chấm công');
-    set('dashMetricSub4', 'Không thể tải danh sách đơn');
+    for (const id of [
+      'dashMetricVal1','dashMetricVal2','dashMetricVal3','dashMetricVal4',
+      'donutCenterNumber','donutLegendOntime','donutLegendLate','donutLegendLeave',
+      'donutLegendAbsent'
+    ]) set(id, '—');
+    set('dashMetricSub1', 'Không thể tải dữ liệu Dashboard');
+    set('dashMetricSub4', 'Kiểm tra các dịch vụ liên quan');
   }
 }
 
