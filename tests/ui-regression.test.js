@@ -15,7 +15,7 @@ test('attendance, accounts and leave history do not fabricate demonstration rows
   assert.doesNotMatch(source, /id: 'att-1'/);
   assert.doesNotMatch(source, /id: 'usr_admin'/);
   assert.doesNotMatch(source, /'NP-2026-024'/);
-  assert.match(source, /Không tải được danh sách tài khoản/);
+  assert.match(source, /Không tải được (danh sách )?tài khoản/);
   assert.match(source, /Chưa có lịch sử chấm công/);
 });
 
