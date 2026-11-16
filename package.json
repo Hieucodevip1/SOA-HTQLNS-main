@@ -26,7 +26,8 @@
     "start:analytics": "node services/analytics-service/index.js",
     "test:security": "node --test tests/security-regression.test.js",
     "db:init": "node scripts/init-db.js",
-    "test:features": "node --test --test-concurrency=1 tests/leave-cancel.integration.test.js tests/shift-swaps.integration.test.js"
+    "test:features": "node --test --test-concurrency=1 tests/leave-cancel.integration.test.js tests/shift-swaps.integration.test.js",
+    "test:registration": "node --test tests/auth-registration.integration.test.js"
   },
   "engines": {
     "node": ">=18"
