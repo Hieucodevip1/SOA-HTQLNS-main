@@ -2098,168 +2098,70 @@ function scrollToLateTable() {
   }
 }
 
+// Dashboard filter changes the API query, not only displayed labels.
+const dashboardScope = { period: 'today', departmentId: 'ALL' };
+
+function dashboardScopeRange() {
+  const now = new Date();
+  const day = new Date(now);
+  if (dashboardScope.period === 'yesterday') day.setDate(day.getDate() - 1);
+  let from = statDateLocal(day), to = from;
+  if (dashboardScope.period === 'last7') {
+    const seven = new Date(now);
+    seven.setDate(seven.getDate() - 6);
+    from = statDateLocal(seven);
+    to = statDateLocal(now);
+  } else if (dashboardScope.period === 'month') {
+    from = statDateLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    to = statDateLocal(now);
+  }
+  return { from, to };
+}
+
 function openDateFilterModal() {
   const options = [
-    { label: '📅 Hôm nay (30/10/2026)', value: '30/10/2026 • Hôm nay' },
-    { label: '📅 Hôm qua (29/10/2026)', value: '29/10/2026 • Hôm qua' },
-    { label: '📅 7 ngày qua (24/10 - 30/10)', value: '7 ngày qua' },
-    { label: '📅 Tháng này (10/2026)', value: 'Tháng 10/2026' }
+    { id: 'today', label: '📅 Hôm nay' },
+    { id: 'yesterday', label: '📅 Hôm qua' },
+    { id: 'last7', label: '📅 7 ngày gần nhất' },
+    { id: 'month', label: '📅 Từ đầu tháng đến nay' }
   ];
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn khoảng thời gian theo dõi dữ liệu:</p>
-      ${options.map(opt => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600;" onclick="selectDateFilter('${opt.value}')">
-          ${opt.label}
-        </button>
-      `).join('')}
-    </div>
-  `;
-  openModal('Lọc dữ liệu theo thời gian', html);
+  const html = `<div style="display:flex;flex-direction:column;gap:10px;">
+    ${options.map(o => `<button class="btn-secondary-outline"
+      onclick="selectDateFilter('${o.id}')">${o.label}</button>`).join('')}
+  </div>`;
+  openModal('Lọc Dashboard theo ngày', html);
 }
 
-function selectDateFilter(val) {
-  const el = document.getElementById('currentDatePillText');
-  if (el) el.innerText = val;
+async function selectDateFilter(period) {
+  if (!['today', 'yesterday', 'last7', 'month'].includes(period)) return;
+  dashboardScope.period = period;
   closeModal();
-  showToast(`Đã lọc dữ liệu theo: ${val}`, 'success');
+  await loadDashboardKpis();
 }
 
-function openDeptFilterModal() {
-  const depts = [
-    { name: 'Toàn cơ quan', count: 95 },
-    { name: 'Phòng Kỹ Thuật', count: 40 },
-    { name: 'Phòng Nhân sự', count: 12 },
-    { name: 'Phòng Tài Chính - Kế Toán', count: 15 },
-    { name: 'Phòng Kinh Doanh', count: 28 }
-  ];
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn đơn vị / phòng ban để xem thống kê:</p>
-      ${depts.map(d => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between;" onclick="selectDeptFilter('${d.name}', ${d.count})">
-          <span>🏢 ${d.name}</span>
-          <span style="color: #64748b; font-size: 12px;">${d.count} người</span>
-        </button>
-      `).join('')}
-    </div>
-  `;
-  openModal('Lọc theo Phòng ban', html);
-}
-
-function selectDeptFilter(name, count) {
-  const el = document.getElementById('currentDeptPillText');
-  if (el) el.innerText = `🏢 ${name} • ${count} người`;
-  closeModal();
-
-  // Cập nhật các chỉ số KPI Dashboard theo phòng ban đã chọn
-  const role = state.user?.role || 'EMPLOYEE';
-  if (role !== 'EMPLOYEE') {
-    const val1 = document.getElementById('dashMetricVal1');
-    const sub1 = document.getElementById('dashMetricSub1');
-    const val2 = document.getElementById('dashMetricVal2');
-    const sub2 = document.getElementById('dashMetricSub2');
-    const val3 = document.getElementById('dashMetricVal3');
-    const sub3 = document.getElementById('dashMetricSub3');
-    const val4 = document.getElementById('dashMetricVal4');
-    const sub4 = document.getElementById('dashMetricSub4');
-
-    const donutNum = document.getElementById('donutCenterNumber');
-    const legOntime = document.getElementById('donutLegendOntime');
-    const legLate = document.getElementById('donutLegendLate');
-    const legLeave = document.getElementById('donutLegendLeave');
-    const legAbsent = document.getElementById('donutLegendAbsent');
-    const donutFoot = document.getElementById('donutSummaryFoot');
-
-    if (count === 95) {
-      // Toàn cơ quan (95 người)
-      if (val1) val1.innerText = '82 / 95';
-      if (sub1) sub1.innerText = '86.3% nhân sự • Gồm 6 người đi muộn';
-      if (val2) val2.innerText = '08';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '06';
-      if (sub3) sub3.innerText = 'Là một phần trong 82 người đi làm';
-      if (val4) val4.innerText = '12';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '95';
-      if (legOntime) legOntime.innerText = '76';
-      if (legLate) legLate.innerText = '06';
-      if (legLeave) legLeave.innerText = '08';
-      if (legAbsent) legAbsent.innerText = '05';
-      if (donutFoot) donutFoot.innerText = '76 đúng giờ + 6 đi muộn + 8 nghỉ phép + 5 chưa chấm công = 95 nhân viên';
-    } else if (count === 28) {
-      // Phòng Kinh Doanh (28 người)
-      if (val1) val1.innerText = '24 / 28';
-      if (sub1) sub1.innerText = '85.7% nhân sự • Gồm 2 người đi muộn';
-      if (val2) val2.innerText = '02';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '02';
-      if (sub3) sub3.innerText = 'Là một phần trong 24 người đi làm';
-      if (val4) val4.innerText = '03';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '28';
-      if (legOntime) legOntime.innerText = '22';
-      if (legLate) legLate.innerText = '02';
-      if (legLeave) legLeave.innerText = '02';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '22 đúng giờ + 2 đi muộn + 2 nghỉ phép + 2 chưa chấm công = 28 nhân viên';
-    } else if (count === 15) {
-      // Phòng Tài Chính (15 người)
-      if (val1) val1.innerText = '14 / 15';
-      if (sub1) sub1.innerText = '93.3% nhân sự • Đúng giờ';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '00';
-      if (sub3) sub3.innerText = 'Không có nhân sự đi muộn';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '15';
-      if (legOntime) legOntime.innerText = '14';
-      if (legLate) legLate.innerText = '00';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '00';
-      if (donutFoot) donutFoot.innerText = '14 đúng giờ + 0 đi muộn + 1 nghỉ phép + 0 chưa chấm công = 15 nhân viên';
-    } else if (count === 12) {
-      // Phòng Nhân Sự (12 người)
-      if (val1) val1.innerText = '10 / 12';
-      if (sub1) sub1.innerText = '83.3% nhân sự • Gồm 1 người đi muộn';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '01';
-      if (sub3) sub3.innerText = 'Là một phần trong 10 người đi làm';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '12';
-      if (legOntime) legOntime.innerText = '09';
-      if (legLate) legLate.innerText = '01';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '01';
-      if (donutFoot) donutFoot.innerText = '9 đúng giờ + 1 đi muộn + 1 nghỉ phép + 1 chưa chấm công = 12 nhân viên';
-    } else {
-      // Mặc định: Phòng Kỹ Thuật (40 người)
-      if (val1) val1.innerText = '34 / 40';
-      if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
-      if (val2) val2.innerText = '04';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '03';
-      if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
-      if (val4) val4.innerText = '07';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '40';
-      if (legOntime) legOntime.innerText = '31';
-      if (legLate) legLate.innerText = '03';
-      if (legLeave) legLeave.innerText = '04';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên';
-    }
+async function openDeptFilterModal() {
+  try {
+    const result = await apiCall('/api/organization/departments');
+    if (!Array.isArray(result?.data)) throw new Error('Dữ liệu phòng ban không hợp lệ');
+    state.departments = result.data;
+    const options = [{ id: 'ALL', name: 'Toàn cơ quan' }, ...result.data.map(x => ({ id: x.id, name: x.name }))];
+    openModal('Lọc Dashboard theo phòng ban', `<div style="display:flex;flex-direction:column;gap:8px;">
+      ${options.map(o => {
+        const id = String(o.id).replace(/[^a-zA-Z0-9-]/g, '');
+        return `<button class="btn-secondary-outline" onclick="selectDeptFilter('${id}')">
+          ${uiEscape(o.name)}</button>`;
+      }).join('')}
+    </div>`);
+  } catch (err) {
+    showToast('Không thể tải bộ lọc phòng ban: ' + err.message, 'error');
   }
+}
 
-  showToast(`Đã lọc dữ liệu theo: ${name} (${count} nhân sự)`, 'success');
+async function selectDeptFilter(departmentId) {
+  if (departmentId !== 'ALL' && !(state.departments || []).some(d => d.id === departmentId)) return;
+  dashboardScope.departmentId = departmentId;
+  closeModal();
+  await loadDashboardKpis();
 }
 
 function openOnTimeDetailModal(name, code, checkinTime, checkoutTime, dept) {
