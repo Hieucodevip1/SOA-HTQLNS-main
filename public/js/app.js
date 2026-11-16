@@ -1339,7 +1339,7 @@ async function loadDepartmentsData() {
   } catch (err) {
     state.departments = [];
     const tbody = document.getElementById('departmentsTableFullBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#dc2626;">Không tải được phòng ban. Kiểm tra kết nối và thử lại.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#dc2626;">Không tải được phòng ban. Kiểm tra kết nối và thử lại.</td></tr>';
     console.error('Organization API departments:', err);
   }
 }
@@ -1349,7 +1349,7 @@ function renderDepartmentsTable(list) {
   if (!tbody) return;
 
   if (!list || list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu phòng ban</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #94a3b8;">Chưa có dữ liệu phòng ban</td></tr>`;
     return;
   }
 
@@ -1360,13 +1360,59 @@ function renderDepartmentsTable(list) {
       <td><strong>${uiEscape(d.code)}</strong></td>
       <td><strong>${uiEscape(d.name)}</strong></td>
       <td>${uiEscape(d.manager_name || 'Chưa bổ nhiệm')}</td>
-      <td><span class="badge-status badge-approved">${d.employee_count || 0} nhân sự</span></td>
+      <td><span class="badge-status badge-approved">${Number(d.employee_count || 0)} nhân sự</span></td>
       <td>${uiEscape(d.description || '-')}</td>
       <td><span class="badge-status ${d.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${uiEscape(d.status || 'Không xác định')}</span></td>
+      <td>${['ADMIN','HR'].includes(state.user?.role)
+        ? `<button class="btn-secondary-outline" onclick="openEditDepartmentModal('${uiEscape(d.id)}')">Sửa</button>`
+        : '—'}</td>
     </tr>
   `
     )
     .join('');
+}
+
+function orgValidId(id) { return /^[a-zA-Z0-9-]{4,64}$/.test(String(id)); }
+
+function openEditDepartmentModal(id) {
+  if (!['ADMIN','HR'].includes(state.user?.role) || !orgValidId(id)) return;
+  const department = state.departments.find(d => String(d.id) === String(id));
+  if (!department) return showToast('Không tìm thấy phòng ban trong dữ liệu hiện tại', 'error');
+  openModal('Cập nhật phòng ban', `
+    <form onsubmit="handleUpdateDepartmentSubmit(event, '${id}')"
+      style="display:flex;flex-direction:column;gap:12px;">
+      <label for="editDeptName">Tên phòng ban</label>
+      <input id="editDeptName" class="figma-pill-input" maxlength="150"
+        value="${uiEscape(department.name)}" required>
+      <label for="editDeptDesc">Mô tả</label>
+      <textarea id="editDeptDesc" class="figma-pill-input" rows="3">${uiEscape(department.description || '')}</textarea>
+      <label for="editDeptStatus">Trạng thái</label>
+      <select id="editDeptStatus" class="figma-pill-input">
+        <option value="ACTIVE" ${department.status === 'ACTIVE' ? 'selected' : ''}>Hoạt động</option>
+        <option value="INACTIVE" ${department.status === 'INACTIVE' ? 'selected' : ''}>Ngừng hoạt động</option>
+      </select>
+      <button id="btnUpdateDept" type="submit" class="btn-primary-blue">Lưu thay đổi</button>
+    </form>`);
+}
+
+async function handleUpdateDepartmentSubmit(event, id) {
+  event.preventDefault();
+  if (!orgValidId(id)) return;
+  const name = document.getElementById('editDeptName')?.value.trim();
+  const description = document.getElementById('editDeptDesc')?.value.trim();
+  const status = document.getElementById('editDeptStatus')?.value;
+  if (!name || !['ACTIVE','INACTIVE'].includes(status)) return showToast('Thông tin phòng ban không hợp lệ','warning');
+  const btn = document.getElementById('btnUpdateDept');
+  if (btn) btn.disabled = true;
+  try {
+    await apiCall(`/api/organization/departments/${encodeURIComponent(id)}`, {
+      method:'PUT', body: JSON.stringify({ name, description, status })
+    });
+    closeModal(); showToast('Đã cập nhật phòng ban', 'success');
+    await loadDepartmentsData();
+  } catch(err) {
+    showToast('Không lưu được phòng ban: '+err.message,'error');
+  } finally { if(btn) btn.disabled = false; }
 }
 
 function handleDepartmentFilter() {
@@ -1415,12 +1461,87 @@ function renderEmployeesTable(list) {
       <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${uiEscape(e.contract_type || 'OFFICIAL')}</span></td>
       <td><span class="badge-status ${e.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${e.status}</span></td>
       <td style="text-align: center;">
-        ${canDelete ? `<button class="btn-reject-sm" onclick="confirmDeleteEmployee('${uiEscape(e.id)}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;">🗑️ Xóa</button>` : '-'}
+        ${canDelete
+          ? `<button class="btn-secondary-outline" onclick="openEditEmployeeModal('${uiEscape(e.id)}')">Sửa</button>
+             <button class="btn-reject-sm" onclick="confirmDeleteEmployee('${uiEscape(e.id)}')" style="cursor:pointer;">Nghỉ việc</button>`
+          : '—'}
       </td>
     </tr>
   `
     )
     .join('');
+}
+
+async function openEditEmployeeModal(id) {
+  if (!['ADMIN','HR','MANAGER'].includes(state.user?.role) || !orgValidId(id)) return;
+  const employee = state.employees.find(e => String(e.id) === String(id));
+  if (!employee) return showToast('Không tìm thấy hồ sơ nhân viên', 'error');
+  try {
+    const [deps, positions] = await Promise.all([
+      apiCall('/api/organization/departments'),
+      apiCall('/api/organization/positions')
+    ]);
+    if (!Array.isArray(deps.data) || !Array.isArray(positions.data)) throw new Error('Danh mục tổ chức không hợp lệ');
+    state.departments = deps.data;
+    state.positions = positions.data;
+    const opt = (items, field, active) => [
+      '<option value="">Chưa phân công</option>',
+      ...items.map(item => `<option value="${uiEscape(item.id)}" ${item.id === active ? 'selected':''}>${uiEscape(item[field])}</option>`)
+    ].join('');
+    openModal('Cập nhật nhân viên', `
+      <form onsubmit="handleUpdateEmployeeSubmit(event, '${id}')"
+        style="display:flex;flex-direction:column;gap:10px;max-height:65vh;overflow:auto;">
+        <label for="editEmpName">Họ và tên</label>
+        <input id="editEmpName" class="figma-pill-input" maxlength="150" value="${uiEscape(employee.full_name)}" required>
+        <label>Email (không thể đổi tại màn hình này)</label>
+        <input class="figma-pill-input" disabled value="${uiEscape(employee.email)}">
+        <label for="editEmpPhone">Số điện thoại</label>
+        <input id="editEmpPhone" class="figma-pill-input" value="${uiEscape(employee.phone || '')}">
+        <label for="editEmpDepartment">Phòng ban</label>
+        <select id="editEmpDepartment" class="figma-pill-input">${opt(deps.data,'name',employee.department_id)}</select>
+        <label for="editEmpPosition">Chức vụ</label>
+        <select id="editEmpPosition" class="figma-pill-input">${opt(positions.data,'title',employee.position_id)}</select>
+        <label for="editEmpContract">Hợp đồng</label>
+        <select id="editEmpContract" class="figma-pill-input">
+          ${['OFFICIAL','PROBATION','PART_TIME','INTERN'].map(x => `<option ${employee.contract_type === x ? 'selected' : ''}>${x}</option>`).join('')}
+        </select>
+        <label for="editEmpStatus">Trạng thái</label>
+        <select id="editEmpStatus" class="figma-pill-input">
+          ${['ACTIVE','ON_LEAVE','RESIGNED'].map(x => `<option ${employee.status === x ? 'selected' : ''}>${x}</option>`).join('')}
+        </select>
+        <button id="btnUpdateEmployee" type="submit" class="btn-primary-blue">Lưu hồ sơ</button>
+      </form>`);
+  } catch(err) {
+    showToast('Lỗi tải thông tin tổ chức: '+err.message,'error');
+  }
+}
+
+async function handleUpdateEmployeeSubmit(event,id) {
+  event.preventDefault();
+  if (!orgValidId(id)) return;
+  const textValue = key => document.getElementById(key)?.value.trim() || '';
+  const full_name = textValue('editEmpName');
+  const phone = textValue('editEmpPhone');
+  const department_id = textValue('editEmpDepartment');
+  const position_id = textValue('editEmpPosition');
+  const status = textValue('editEmpStatus');
+  const contract_type = textValue('editEmpContract');
+  if (!full_name) return showToast('Vui lòng nhập tên nhân viên','warning');
+  const btn = document.getElementById('btnUpdateEmployee');
+  if(btn)btn.disabled=true;
+  try {
+    await apiCall(`/api/organization/employees/${encodeURIComponent(id)}`, {
+      method:'PUT',
+      body:JSON.stringify({full_name,phone,
+        ...(department_id ? { department_id } : {}),
+        ...(position_id ? { position_id } : {}),
+        status,contract_type})
+    });
+    closeModal();showToast('Cập nhật hồ sơ thành công','success');
+    await loadEmployeesData();
+  } catch(err) {
+    showToast('Không lưu được hồ sơ: '+err.message,'error');
+  } finally{if(btn)btn.disabled=false;}
 }
 
 async function confirmDeleteEmployee(id) {
@@ -1434,7 +1555,7 @@ async function confirmDeleteEmployee(id) {
       method: 'DELETE'
     });
     if (res && res.success) {
-      showToast(`Đã xóa nhân viên "${name}" thành công!`, 'success');
+      showToast(`Đã cập nhật trạng thái nghỉ việc cho "${name}"`, 'success');
       loadEmployeesData();
     } else {
       throw new Error(res?.error || 'Xóa nhân viên thất bại');
