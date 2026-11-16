@@ -480,6 +480,160 @@ const otDecisionPaths = [
 app.patch(otDecisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleOtDecision);
 app.put(otDecisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleOtDecision);
 
+
+function swapError(message, status = 409) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+// A swap changes two workers' shift types for the same future work date.
+app.get('/api/v1/shift-swaps', requireAuth(), async (req, res, next) => {
+  try {
+    const empId = getEmpIdFromUser(req.user);
+    const isManager = ['ADMIN','HR','MANAGER'].includes(req.user.role);
+    const where = isManager ? '' : 'WHERE ss.requester_emp_id = ? OR ss.target_emp_id = ?';
+    const [rows] = await pool.query(
+      `SELECT ss.*, a.work_date, s1.code AS requester_shift_code, s2.code AS target_shift_code
+       FROM shift_swaps ss
+       JOIN shift_assignments a ON a.id = ss.requester_assignment_id
+       JOIN shift_assignments b ON b.id = ss.target_assignment_id
+       JOIN shifts s1 ON s1.id = a.shift_id
+       JOIN shifts s2 ON s2.id = b.shift_id
+       ${where} ORDER BY ss.created_at DESC LIMIT 200`,
+      isManager ? [] : [empId, empId]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/v1/shift-swaps/candidates', requireAuth(), async (req, res, next) => {
+  try {
+    const empId = getEmpIdFromUser(req.user);
+    const date = req.query.date;
+    if (!empId || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        date <= new Date().toISOString().slice(0,10)) {
+      return res.status(400).json({ success: false, error: 'Ngày đổi ca phải trong tương lai' });
+    }
+    const [rows] = await pool.query(
+      `SELECT a.id, a.emp_id, a.work_date, s.code AS shift_code, s.name AS shift_name
+       FROM shift_assignments a JOIN shifts s ON s.id = a.shift_id
+       WHERE a.work_date = ? AND a.emp_id <> ? AND a.status IN ('SCHEDULED','SWAPPED')
+       ORDER BY s.code, a.emp_id LIMIT 100`,
+      [date, empId]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/v1/shift-swaps', requireAuth(), async (req, res, next) => {
+  let conn;
+  try {
+    const empId = getEmpIdFromUser(req.user);
+    const { requesterAssignmentId, targetAssignmentId, reason } = req.body || {};
+    if (!empId || typeof requesterAssignmentId !== 'string' || typeof targetAssignmentId !== 'string' ||
+        !requesterAssignmentId || !targetAssignmentId || requesterAssignmentId === targetAssignmentId ||
+        typeof reason !== 'string' || !reason.trim() || reason.length > 1000) {
+      return res.status(400).json({ success: false, error: 'Dữ liệu yêu cầu đổi ca không hợp lệ' });
+    }
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      'SELECT * FROM shift_assignments WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+      [requesterAssignmentId, targetAssignmentId]
+    );
+    const mine = rows.find(r => r.id === requesterAssignmentId);
+    const other = rows.find(r => r.id === targetAssignmentId);
+    if (!mine || !other || mine.emp_id !== empId || other.emp_id === empId) {
+      throw swapError('Phân ca không hợp lệ hoặc không thuộc bạn', 403);
+    }
+    const date = String(mine.work_date).slice(0,10);
+    if (date !== String(other.work_date).slice(0,10) || date <= new Date().toISOString().slice(0,10) ||
+        mine.shift_id === other.shift_id || !['SCHEDULED','SWAPPED'].includes(mine.status) ||
+        !['SCHEDULED','SWAPPED'].includes(other.status)) {
+      throw swapError('Hai nhân viên phải có ca khác nhau vào cùng một ngày trong tương lai');
+    }
+    const [pending] = await conn.query(
+      `SELECT id FROM shift_swaps WHERE status = 'PENDING'
+       AND (requester_assignment_id IN (?, ?) OR target_assignment_id IN (?, ?)) LIMIT 1`,
+      [mine.id, other.id, mine.id, other.id]
+    );
+    if (pending.length) throw swapError('Một phân ca đang có yêu cầu đổi ca chờ duyệt');
+    const id = crypto.randomUUID();
+    await conn.query(
+      `INSERT INTO shift_swaps
+        (id, requester_emp_id, target_emp_id, requester_assignment_id, target_assignment_id, reason, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`,
+      [id, empId, other.emp_id, mine.id, other.id, reason.trim()]
+    );
+    await conn.commit(); conn.release(); conn = null;
+    events.publish('SHIFT_SWAP_REQUESTED', { requestId: id, empId, targetEmpId: other.emp_id }).catch(() => {});
+    res.status(201).json({ success: true, data: { id, status: 'PENDING' }, message: 'Đã gửi yêu cầu đổi ca' });
+  } catch (err) {
+    if (err.status) res.status(err.status).json({ success: false, error: err.message });
+    else next(err);
+  } finally {
+    if (conn) { await conn.rollback().catch(() => {}); conn.release(); }
+  }
+});
+
+app.patch('/api/v1/shift-swaps/:id/decision', requireAuth(['ADMIN','HR','MANAGER']), async (req, res, next) => {
+  let conn;
+  try {
+    const { decision } = req.body || {};
+    if (!['APPROVED','REJECTED'].includes(decision)) {
+      return res.status(400).json({ success: false, error: 'decision phải là APPROVED hoặc REJECTED' });
+    }
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [swaps] = await conn.query('SELECT * FROM shift_swaps WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (!swaps.length || swaps[0].status !== 'PENDING') {
+      throw swapError(swaps.length ? 'Yêu cầu đã xử lý' : 'Không tìm thấy yêu cầu', swaps.length ? 409 : 404);
+    }
+    const swap = swaps[0];
+    if (decision === 'APPROVED') {
+      const [assignments] = await conn.query(
+        'SELECT * FROM shift_assignments WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+        [swap.requester_assignment_id, swap.target_assignment_id]
+      );
+      const first = assignments.find(a => a.id === swap.requester_assignment_id);
+      const second = assignments.find(a => a.id === swap.target_assignment_id);
+      if (!first || !second || first.emp_id !== swap.requester_emp_id ||
+          second.emp_id !== swap.target_emp_id ||
+          String(first.work_date).slice(0,10) !== String(second.work_date).slice(0,10) ||
+          String(first.work_date).slice(0,10) <= new Date().toISOString().slice(0,10) ||
+          first.shift_id === second.shift_id ||
+          !['SCHEDULED','SWAPPED'].includes(first.status) ||
+          !['SCHEDULED','SWAPPED'].includes(second.status)) {
+        throw swapError('Phân ca không còn đủ điều kiện đổi');
+      }
+      await conn.query("UPDATE shift_assignments SET shift_id = ?, status = 'SWAPPED' WHERE id = ?", [second.shift_id, first.id]);
+      await conn.query("UPDATE shift_assignments SET shift_id = ?, status = 'SWAPPED' WHERE id = ?", [first.shift_id, second.id]);
+    }
+    await conn.query('UPDATE shift_swaps SET status = ?, approver_id = ? WHERE id = ?',
+      [decision, getEmpIdFromUser(req.user), swap.id]);
+    await conn.commit(); conn.release(); conn = null;
+    events.publish(`SHIFT_SWAP_${decision}`, {
+      requestId: swap.id, empId: swap.requester_emp_id, targetEmpId: swap.target_emp_id
+    }).catch(() => {});
+    res.json({ success: true, message: decision === 'APPROVED' ? 'Đã duyệt và đổi ca' : 'Đã từ chối đổi ca' });
+  } catch (err) {
+    if (err.status) res.status(err.status).json({ success: false, error: err.message });
+    else next(err);
+  } finally { if (conn) { await conn.rollback().catch(() => {}); conn.release(); } }
+});
+
+app.post('/api/v1/shift-swaps/:id/cancel', requireAuth(), async (req, res, next) => {
+  try {
+    const [result] = await pool.query(
+      "UPDATE shift_swaps SET status = 'CANCELLED' WHERE id = ? AND requester_emp_id = ? AND status = 'PENDING'",
+      [req.params.id, getEmpIdFromUser(req.user)]
+    );
+    if (!result.affectedRows) return res.status(409).json({ success: false, error: 'Yêu cầu không thể hủy' });
+    res.json({ success: true, message: 'Đã hủy yêu cầu đổi ca' });
+  } catch (err) { next(err); }
+});
+
 // ==============================================================================
 // 4. INTERNAL API CHO CÁC MICROSERVICE KHÁC (attendance-service, payroll-service)
 // ==============================================================================
@@ -498,7 +652,7 @@ app.get('/internal/shifts/schedule', requireInternalKey, async (req, res, next) 
               s.grace_late_minutes, s.grace_early_minutes, s.working_hours
        FROM shift_assignments sa
        JOIN shifts s ON sa.shift_id = s.id
-       WHERE sa.emp_id = ? AND sa.work_date = ? AND sa.status = 'SCHEDULED'
+       WHERE sa.emp_id = ? AND sa.work_date = ? AND sa.status IN ('SCHEDULED','SWAPPED')
        LIMIT 1`,
       [empId, date]
     );
