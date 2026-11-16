@@ -493,6 +493,8 @@ function applyRoleBasedUI() {
   if (btnPayrollCalc) btnPayrollCalc.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (btnPayrollPub) btnPayrollPub.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (btnPayrollCfg) btnPayrollCfg.style.display = isAdminOrHr ? 'inline-flex' : 'none';
+  const addConfig = document.getElementById('btnPayrollAddConfig');
+  if (addConfig) addConfig.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (tabPayrollCfg) tabPayrollCfg.style.display = isAdminOrHr ? 'inline-block' : 'none';
   if (tabPayrollPer) tabPayrollPer.style.display = (role !== 'EMPLOYEE') ? 'inline-block' : 'none';
 
@@ -3683,12 +3685,31 @@ function formatVND(amount) {
   return Number(amount).toLocaleString('vi-VN') + ' đ';
 }
 
+let payrollFiltersInitialized = false;
+function initializePayrollFilters() {
+  if (payrollFiltersInitialized) return;
+  payrollFiltersInitialized = true;
+  const today = new Date();
+  const month = document.getElementById('filterPayrollMonth');
+  const year = document.getElementById('filterPayrollYear');
+  if (month) {
+    month.innerHTML = Array.from({ length: 12 }, (_, i) =>
+      `<option value="${i + 1}">Tháng ${i + 1}</option>`).join('');
+    month.value = String(today.getMonth() + 1);
+  }
+  if (year) {
+    year.innerHTML = [today.getFullYear(), today.getFullYear() - 1, today.getFullYear() - 2]
+      .map(y => `<option value="${y}">Năm ${y}</option>`).join('');
+    year.value = String(today.getFullYear());
+  }
+}
 async function loadPayrollData() {
-  await Promise.allSettled([
-    loadPayslips(),
-    loadPayrollConfigs(),
-    loadPayrollPeriods()
-  ]);
+  initializePayrollFilters();
+  const role = state.user?.role;
+  const tasks = [loadPayslips()];
+  if (['ADMIN', 'HR'].includes(role)) tasks.push(loadPayrollConfigs());
+  if (['ADMIN', 'HR', 'MANAGER'].includes(role)) tasks.push(loadPayrollPeriods());
+  await Promise.allSettled(tasks);
 }
 
 // 1. Danh sách Phiếu lương (SCR_PAY_01)
@@ -3696,8 +3717,8 @@ async function loadPayslips() {
   const tbody = document.getElementById('tableBodyPayrollSlips');
   if (!tbody) return;
 
-  const month = document.getElementById('filterPayrollMonth')?.value || '11';
-  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+  const month = document.getElementById('filterPayrollMonth')?.value || String(new Date().getMonth() + 1);
+  const year = document.getElementById('filterPayrollYear')?.value || String(new Date().getFullYear());
 
   try {
     const res = await apiCall(`/api/v1/payslips?month=${month}&year=${year}`);
@@ -3730,9 +3751,9 @@ async function loadPayslips() {
 
       return `
         <tr>
-          <td><strong>${p.emp_code || p.emp_id}</strong></td>
-          <td><span style="font-weight: 600; color: #0f172a;">${p.emp_name || 'Nhân viên'}</span></td>
-          <td>${p.department_name || 'Phòng Kỹ Thuật'}</td>
+          <td><strong>${uiEscape(p.emp_code || p.emp_id)}</strong></td>
+          <td><span style="font-weight: 600; color: #0f172a;">${uiEscape(p.emp_name || 'Nhân viên')}</span></td>
+          <td>${uiEscape(p.department_name || '-')}</td>
           <td>${formatVND(p.base_salary)}</td>
           <td>${Number(p.actual_work_days).toFixed(1)} / ${Number(p.paid_leave_days).toFixed(1)} ngày</td>
           <td>${Number(p.ot_hours).toFixed(1)}h (${formatVND(p.ot_pay)})</td>
@@ -3770,9 +3791,9 @@ async function loadPayrollConfigs() {
     const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
     tbody.innerHTML = cachedPayrollConfigs.map(c => `
       <tr>
-        <td><strong>${c.emp_code || c.emp_id}</strong></td>
-        <td><span style="font-weight: 600; color: #0f172a;">${c.emp_name || 'Nhân viên'}</span></td>
-        <td>${c.department_name || 'Phòng ban'}</td>
+        <td><strong>${uiEscape(c.emp_code || c.emp_id)}</strong></td>
+        <td><span style="font-weight: 600; color: #0f172a;">${uiEscape(c.emp_name || 'Nhân viên')}</span></td>
+        <td>${uiEscape(c.department_name || 'Phòng ban')}</td>
         <td><strong>${formatVND(c.base_salary)}</strong></td>
         <td>${formatVND(c.lunch_allowance)}</td>
         <td>${formatVND(c.transport_allowance)}</td>
@@ -3781,7 +3802,7 @@ async function loadPayrollConfigs() {
         <td>x${Number(c.ot_multiplier_weekday).toFixed(1)} / x${Number(c.ot_multiplier_weekend).toFixed(1)}</td>
         <td style="text-align: center;">
           ${isAdminOrHr ? `
-            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openEditPayrollConfigModal(${JSON.stringify(c)})'>Sửa</button>
+            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="openEditPayrollConfigById('${uiEscape(c.emp_id)}')">Sửa</button>
           ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
         </td>
       </tr>
@@ -3802,8 +3823,8 @@ async function loadPayrollPeriods() {
     cachedPayrollPeriods = res?.data || [];
 
     // Cập nhật trạng thái kỳ lương hiện hành
-    const month = document.getElementById('filterPayrollMonth')?.value || '11';
-    const year = document.getElementById('filterPayrollYear')?.value || '2026';
+    const month = document.getElementById('filterPayrollMonth')?.value || String(new Date().getMonth() + 1);
+    const year = document.getElementById('filterPayrollYear')?.value || String(new Date().getFullYear());
     const currentPeriod = cachedPayrollPeriods.find(p => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
     const kpiStatus = document.getElementById('kpiPayrollStatus');
@@ -3861,8 +3882,8 @@ async function loadPayrollPeriods() {
 
 // 4. Popup tính lương tự động
 function openCalculatePayrollModal() {
-  const month = document.getElementById('filterPayrollMonth')?.value || '11';
-  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+  const month = document.getElementById('filterPayrollMonth')?.value || String(new Date().getMonth() + 1);
+  const year = document.getElementById('filterPayrollYear')?.value || String(new Date().getFullYear());
 
   const html = `
     <form id="formModalCalcPayroll" onsubmit="handleCalcPayrollSubmit(event)">
@@ -3954,8 +3975,8 @@ async function handleCalcPayrollSubmit(e) {
 
 // 5. Chốt kỳ lương & phát hành phiếu lương
 async function handlePublishPayrollClick() {
-  const month = document.getElementById('filterPayrollMonth')?.value || '11';
-  const year = document.getElementById('filterPayrollYear')?.value || '2026';
+  const month = document.getElementById('filterPayrollMonth')?.value || String(new Date().getMonth() + 1);
+  const year = document.getElementById('filterPayrollYear')?.value || String(new Date().getFullYear());
 
   if (!confirm(`Bạn có chắc chắn muốn CHỐT và PHÁT HÀNH phiếu lương tháng ${month}/${year}?\nSau khi chốt, bảng lương sẽ được khóa chính thức và gửi thông báo tới toàn thể nhân viên.`)) {
     return;
@@ -4093,6 +4114,12 @@ async function openPayslipDetailModal(slipId) {
 }
 
 // 7. Popup chỉnh sửa cấu hình lương
+function openEditPayrollConfigById(empId) {
+  const config = cachedPayrollConfigs.find(x => String(x.emp_id) === String(empId));
+  if (!config) return showToast('Không tìm thấy cấu hình lương', 'error');
+  openEditPayrollConfigModal(config);
+}
+
 function openEditPayrollConfigModal(config) {
   const html = `
     <form id="formModalEditConfig" onsubmit="handleEditConfigSubmit(event, '${config.emp_id}')">
