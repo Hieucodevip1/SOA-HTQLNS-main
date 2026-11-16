@@ -62,6 +62,13 @@ describe('Leave cancellation integration', () => {
     assert.equal(Number(balance.pending_days), 1);
   });
 
+  test('another employee cannot view private leave details', async () => {
+    const res = await fetch(base + `/api/v1/leave-requests/${requestId}`, {
+      headers: { Authorization: `Bearer ${otherToken}` }
+    });
+    assert.equal(res.status, 403);
+  });
+
   test('another employee may not cancel a request', async () => {
     const res = await fetch(base + `/api/v1/leave-requests/${requestId}/cancel`, {
       method: 'POST', headers: { Authorization: `Bearer ${otherToken}` }
