@@ -43,11 +43,25 @@ async function run() {
       // Lock/unlock an existing seeded employee. Confirm the server result each time.
       const userRow = page.locator('#rbac-status-' + EMPLOYEE_ACCOUNT_ID).locator('xpath=ancestor::tr');
       await page.locator('#rbac-status-' + EMPLOYEE_ACCOUNT_ID).selectOption('LOCKED');
+      const updatedLOCKED = page.waitForResponse(r =>
+        r.url().includes('/api/auth/users/' + EMPLOYEE_ACCOUNT_ID + '/status') &&
+        r.request().method() === 'PUT', { timeout: 15000 });
+      const refreshedLOCKED = page.waitForResponse(r =>
+        r.url().endsWith('/api/auth/users') && r.request().method() === 'GET', { timeout: 15000 });
       await userRow.getByRole('button', {name:'Lưu trạng thái'}).click();
+      assert.equal((await updatedLOCKED).status(), 200);
+      await refreshedLOCKED;
       await page.waitForFunction(id => document.querySelector('#rbac-status-' + id)?.value === 'LOCKED',
         EMPLOYEE_ACCOUNT_ID);
       await page.locator('#rbac-status-' + EMPLOYEE_ACCOUNT_ID).selectOption('ACTIVE');
+      const updatedACTIVE = page.waitForResponse(r =>
+        r.url().includes('/api/auth/users/' + EMPLOYEE_ACCOUNT_ID + '/status') &&
+        r.request().method() === 'PUT', { timeout: 15000 });
+      const refreshedACTIVE = page.waitForResponse(r =>
+        r.url().endsWith('/api/auth/users') && r.request().method() === 'GET', { timeout: 15000 });
       await userRow.getByRole('button', {name:'Lưu trạng thái'}).click();
+      assert.equal((await updatedACTIVE).status(), 200);
+      await refreshedACTIVE;
       await page.waitForFunction(id => document.querySelector('#rbac-status-' + id)?.value === 'ACTIVE',
         EMPLOYEE_ACCOUNT_ID);
 
