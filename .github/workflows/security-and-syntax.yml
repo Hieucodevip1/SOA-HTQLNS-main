@@ -62,3 +62,5 @@ jobs:
         run: npm run db:init
       - name: Exercise leave and shift workflows
         run: npm run test:features
+      - name: Verify transactional account registration
+        run: npm run test:registration
