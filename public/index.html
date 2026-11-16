@@ -1410,7 +1410,7 @@ input:checked + .slider:before {
               <label style="display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; padding-left: 12px; font-weight: 500;">Vai trò tài khoản:</label>
               <select id="regRole" class="figma-pill-input" style="cursor: pointer; appearance: auto; -webkit-appearance: menulist; padding-top: 10px; padding-bottom: 10px;">
                 <option value="EMPLOYEE">👨‍💻 Nhân viên (Employee)</option>
-                <option value="MANAGER">👨‍💼 Quản lý bộ phận (Manager)</option>
+                <!-- Vai trò đặc quyền chỉ được quản trị viên cấp -->
               </select>
             </div>
 
@@ -1518,7 +1518,7 @@ input:checked + .slider:before {
         <div class="topbar-right-profile" style="display: flex; align-items: center; gap: 14px;">
           <button class="notif-bell-btn" title="Thông báo mới" onclick="openNotificationsModal()" style="cursor: pointer;">
             🔔
-            <span class="notif-badge-dot"></span>
+            <span class="notif-badge-dot" id="notificationUnreadDot" style="display:none;"></span>
           </button>
 
           <div class="user-info-box" onclick="navigateToView('profile')" style="cursor: pointer;" title="Nhấp để xem hồ sơ cá nhân">
@@ -3216,9 +3216,9 @@ input:checked + .slider:before {
 
             <!-- Bộ lọc kỳ thống kê -->
             <div style="display: flex; gap: 8px;">
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('2026-10')" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">📅 Tháng 10/2026 (Hiện tại)</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('2026-09')" style="cursor: pointer;">📅 Tháng 09/2026</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('2026-Q3')" style="cursor: pointer;">📅 Quý III/2026</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('current')" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">📅 Tháng hiện tại</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('previous')" style="cursor: pointer;">📅 Tháng trước</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('quarter')" style="cursor: pointer;">📅 Quý hiện tại</button>
             </div>
           </div>
 
@@ -3287,8 +3287,8 @@ input:checked + .slider:before {
                 <div style="font-size: 12px; color: #64748b;">Số liệu tổng kết công chuẩn, công thực tế và ngày nghỉ của 4 phòng ban</div>
               </div>
               <div style="display: flex; gap: 8px;">
-                <button class="btn-primary-blue" onclick="showToast('Đang xuất dữ liệu Excel (.xlsx)...', 'success')">📊 Xuất Excel</button>
-                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="showToast('Đang tải file PDF báo cáo...', 'success')">📄 Tải PDF</button>
+                <button class="btn-primary-blue" onclick="exportStatsCsv()">📊 Xuất CSV (Excel)</button>
+                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="printStatsReport()">📄 In / Lưu PDF</button>
               </div>
             </div>
             <table class="figma-table">
@@ -3362,7 +3362,7 @@ input:checked + .slider:before {
                 <div class="card-title-text">Cảnh báo Vi phạm Ngưỡng (Analytics Alert Thresholds)</div>
                 <div style="font-size: 12px; color: #64748b;">Giám sát tự động từ Analytics Service (:3008) theo quy định Luật Lao động & Nội quy công ty</div>
               </div>
-              <span class="badge-status badge-approved">2 ngưỡng kích hoạt</span>
+              <span class="badge-status badge-approved" id="statAlertCount">Đang tải...</span>
             </div>
             <table class="figma-table">
               <thead>
@@ -3377,7 +3377,7 @@ input:checked + .slider:before {
                   <th style="text-align: center;">Thao tác / Giải trình</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="statAlertsBody">
                 <tr>
                   <td><strong>TH-LATE-3</strong></td>
                   <td>Cảnh báo đi muộn quá 3 lần/tháng</td>
@@ -3438,11 +3438,11 @@ input:checked + .slider:before {
                 </div>
                 <div class="info-field-group">
                   <span class="info-label">Phòng ban</span>
-                  <span class="info-val">Phòng Kỹ Thuật</span>
+                  <span class="info-val" id="profDepartment">Chưa có thông tin</span>
                 </div>
                 <div class="info-field-group">
                   <span class="info-label">Trạng thái</span>
-                  <span class="info-val"><span class="badge-status badge-approved">Đang hoạt động</span></span>
+                  <span class="info-val" id="profAccountStatus">Đang tải...</span>
                 </div>
               </div>
 
@@ -3457,27 +3457,27 @@ input:checked + .slider:before {
                 <div class="card-title-text">Bảo mật & Đổi mật khẩu</div>
               </div>
 
-              <form onsubmit="event.preventDefault(); showToast('Đổi mật khẩu thành công!', 'success');">
+              <form id="changePasswordForm" onsubmit="handleChangePasswordSubmit(event)">
                 <div class="figma-input-wrapper" style="margin-bottom: 12px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu hiện tại</label>
-                  <input type="password" class="figma-pill-input" placeholder="Nhập mật khẩu hiện tại" value="123456" required>
+                  <input type="password" id="profileOldPassword" class="figma-pill-input" placeholder="Nhập mật khẩu hiện tại" required autocomplete="current-password">
                 </div>
                 <div class="figma-input-wrapper" style="margin-bottom: 12px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu mới</label>
-                  <input type="password" class="figma-pill-input" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" required minlength="6">
+                  <input type="password" id="profileNewPassword" class="figma-pill-input" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" required minlength="6" autocomplete="new-password">
                 </div>
                 <div class="figma-input-wrapper" style="margin-bottom: 16px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Xác nhận mật khẩu mới</label>
-                  <input type="password" class="figma-pill-input" placeholder="Nhập lại mật khẩu mới" required minlength="6">
+                  <input type="password" id="profileConfirmPassword" class="figma-pill-input" placeholder="Nhập lại mật khẩu mới" required minlength="6" autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn-primary-blue" style="width: 100%;">Cập nhật mật khẩu</button>
+                <button type="submit" id="btnProfileChangePassword" class="btn-primary-blue" style="width: 100%;">Cập nhật mật khẩu</button>
               </form>
 
               <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
                 <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Xác thực Sinh trắc học (Figma Image 5)</div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="font-size: 13px; color: #475569;">Bật FaceID / Vân tay khi đăng nhập</span>
-                  <input type="checkbox" checked onchange="showToast('Đã lưu cấu hình sinh trắc học!', 'success')" style="transform: scale(1.3); cursor: pointer;">
+                  <span style="font-size: 13px; color: #475569;">FaceID / Vân tay — chưa hỗ trợ xác thực WebAuthn</span>
+                  <input type="checkbox" disabled title="Chưa có backend WebAuthn để xác thực sinh trắc học" style="transform: scale(1.3);">
                 </div>
               </div>
             </div>
