@@ -238,7 +238,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     const adminUser = { userId: 'e001', username: 'admin', role: 'ADMIN' };
     const adminHeaders = {
       'Content-Type': 'application/json',
-      'x-user': Buffer.from(JSON.stringify(adminUser)).toString('base64')
+      Authorization: `Bearer ${jwt.signToken({ userId: 'e001', username: 'admin', role: 'ADMIN' })}`
     };
 
     test('Health check /health phản hồi UP', async () => {
@@ -249,8 +249,23 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(data.service, 'organization-service');
     });
 
+    test('Không có JWT thì không được xem danh sách nhân sự (HTTP 401)', async () => {
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`);
+      assert.strictEqual(res.status, 401);
+    });
+
+    test('Nhân viên không có quyền tự tạo phòng ban (HTTP 403)', async () => {
+      const employeeJwt = jwt.signToken({ userId: 'test-emp', role: 'EMPLOYEE' });
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/departments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${employeeJwt}` },
+        body: JSON.stringify({ code: 'FORBIDDEN-ORG', name: 'Không được tạo' })
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
     test('Lấy danh sách cơ cấu phòng ban /api/organization/departments', async () => {
-      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/departments`);
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/departments`, { headers: adminHeaders });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.data));
@@ -259,7 +274,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     });
 
     test('Lấy danh mục vị trí việc làm /api/organization/positions', async () => {
-      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/positions`);
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/positions`, { headers: adminHeaders });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.data));
@@ -285,7 +300,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     });
 
     test('Lấy danh sách hồ sơ nhân sự /api/organization/employees', async () => {
-      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`);
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`, { headers: adminHeaders });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.data));
