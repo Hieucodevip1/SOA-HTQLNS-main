@@ -20,7 +20,7 @@ test('attendance, accounts and leave history do not fabricate demonstration rows
 });
 
 test('employee creation matches the Organization API and does not hard-delete', () => {
-  assert.match(source, /full_name: fullName, email, phone, department_id:/);
+  assert.match(source, /full_name: fullName, email, phone,\s*department_id:/);
   assert.doesNotMatch(source, /permanent=true/);
 });
 
@@ -30,4 +30,47 @@ test('HTML escaping prevents injected tags and attribute delimiters', () => {
   const escape = new Function(match[0] + '\nreturn uiEscape;')();
   assert.equal(escape('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
   assert.equal(escape("O'Neil & Sons"), 'O&#39;Neil &amp; Sons');
+});
+
+
+const html = readFileSync(join(__dirname, '../public/index.html'), 'utf8');
+
+test('profile changes and notifications use authenticated API endpoints', () => {
+  assert.match(source, /api\/auth\/change-password/);
+  assert.match(source, /api\/auth\/me/);
+  assert.match(source, /api\/v1\/notifications/);
+  assert.match(source, /markNotificationRead/);
+  assert.match(html, /changePasswordForm/);
+  assert.match(html, /profileOldPassword/);
+});
+
+test('employee, department and position screens support real Organization APIs', () => {
+  assert.match(source, /openEditDepartmentModal/);
+  assert.match(source, /handleUpdateDepartmentSubmit/);
+  assert.match(source, /\/api\/organization\/departments\/\$\{encodeURIComponent\(id\)\}/);
+  assert.match(source, /openEditEmployeeModal/);
+  assert.match(source, /handleUpdateEmployeeSubmit/);
+  assert.match(source, /\/api\/organization\/employees\/\$\{encodeURIComponent\(id\)\}/);
+  assert.match(source, /api\/organization\/positions/);
+  assert.match(html, /positionsTableBody/);
+  assert.match(source, /position_id: positionId/);
+});
+
+test('timesheets, reports and payroll actions are backed by real APIs', () => {
+  assert.match(source, /exportAttendanceCsv/);
+  assert.match(source, /statRange/);
+  assert.match(source, /api\/v1\/analytics\/dashboard/);
+  assert.match(source, /api\/v1\/work-locations/);
+  assert.match(source, /openCreatePayrollConfigModal/);
+  assert.match(source, /api\/v1\/payroll-configs/);
+  assert.match(source, /api\/system\/services/);
+  assert.match(html, /workLocationsTableBody/);
+  assert.doesNotMatch(source, /id: 'my-1'/);
+});
+
+test('registration does not advertise privileged public role or demo bypass', () => {
+  assert.doesNotMatch(source, /username: 'manager',\s*role: 'MANAGER',\s*fullName: 'Thầy Lâm'/);
+  assert.match(source, /const role = 'EMPLOYEE'/);
+  assert.doesNotMatch(html, /option value="MANAGER"/);
+  assert.match(html, /FaceID \/ Vân tay — chưa hỗ trợ/);
 });
