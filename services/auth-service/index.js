@@ -576,83 +576,136 @@ app.post('/api/auth/change-password', async (req, res) => {
 });
 
 // ==============================================================================
-// 7. ENDPOINT: Quên mật khẩu - Cấp OTP (POST /api/auth/forgot-password)
-// ==============================================================================
+// 7–8. Khôi phục mật khẩu OTP với email thực (Resend HTTP API, không cần thêm dependency).
+// RESEND_API_KEY và OTP_SENDER_EMAIL phải được cấu hình ngoài Git.
+// Tuyệt đối không phát OTP lên Event Bus hay ghi vào log.
+const otpAttemptBuckets = new Map();
+function otpDigest(userId, code) {
+  return crypto.createHmac('sha256', process.env.OTP_HASH_SECRET || env.JWT_SECRET)
+    .update(String(userId) + ':' + String(code)).digest('hex').slice(0, 10);
+}
+function resetBucketKey(email) { return String(email || '').trim().toLowerCase(); }
+function otpAttemptsAvailable(email) {
+  const key = resetBucketKey(email);
+  const now = Date.now();
+  if (otpAttemptBuckets.size > 10000) otpAttemptBuckets.clear();
+  const bucket = otpAttemptBuckets.get(key);
+  if (!bucket || bucket.until <= now) {
+    otpAttemptBuckets.set(key, { attempts: 0, until: now + 15 * 60 * 1000 });
+    return true;
+  }
+  return bucket.attempts < 5;
+}
+function bumpOtpAttempt(email) {
+  const key = resetBucketKey(email);
+  const bucket = otpAttemptBuckets.get(key);
+  if (bucket) bucket.attempts++;
+}
+function hasOtpMailer() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.OTP_SENDER_EMAIL);
+}
+async function sendOtpEmail(email, code) {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + process.env.RESEND_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: process.env.OTP_SENDER_EMAIL,
+      to: [email],
+      subject: 'HTQLNS - Ma xac thuc dat lai mat khau',
+      text: 'Ma OTP cua ban: ' + code + '\nMa het han sau 15 phut. Khong chia se ma voi bat ky ai.'
+    }),
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error('Email provider rejected OTP delivery (' + response.status + ')');
+}
+
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) return badRequest(res, 'Vui lòng cung cấp email');
-
-    const user = await findUserByLogin(email);
-    if (!user) {
-      // Để bảo mật, không thông báo rõ email không tồn tại
-      return success(res, null, 200, 'Nếu email tồn tại trong hệ thống, mã OTP đã được gửi');
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return badRequest(res, 'Địa chỉ email không hợp lệ');
+    }
+    if (!hasOtpMailer()) {
+      return res.status(503).json({ success: false, code: 'OTP_EMAIL_NOT_CONFIGURED',
+        error: 'Chức năng khôi phục mật khẩu qua email chưa được cấu hình bởi quản trị viên' });
     }
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60000); // 15 phút
+    // Generic response prevents account discovery.
+    const generic = 'Nếu email tồn tại trong hệ thống, hướng dẫn khôi phục sẽ được gửi';
+    const user = await findUserByLogin(email);
+    if (!user) return success(res, null, 200, generic);
 
+    const code = String(crypto.randomInt(100000, 1000000));
+    const hash = otpDigest(user.id, code);
+    const expiresAt = new Date(Date.now() + 15 * 60000);
     const useDb = await isDbAvailable();
     if (useDb) {
-      await db.query(
-        'UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE id = ?',
-        [otpCode, expiresAt, user.id],
-        DB_NAME
-      );
+      await db.query('UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE id = ?',
+        [hash, expiresAt, user.id], DB_NAME);
     } else {
-      user.otp_code = otpCode;
+      user.otp_code = hash;
       user.otp_expires_at = expiresAt;
     }
-
-    // Bắn event để Notification Service gửi email
-    events.publish('auth.otp_generated', {
-      userId: user.id,
-      email: user.email,
-      otpCode
-    }, { source: 'auth-service' });
-
-    return success(res, { email }, 200, 'Mã xác thực OTP đã được gửi tới email của bạn');
+    try {
+      await sendOtpEmail(user.email, code);
+    } catch (emailErr) {
+      // Revoke any undelivered code. Never return success for a known failed delivery.
+      if (useDb) await db.query('UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = ?',
+        [user.id], DB_NAME);
+      else { user.otp_code = null; user.otp_expires_at = null; }
+      console.error('[AUTH] OTP email delivery failed:', emailErr.message);
+      return res.status(503).json({ success: false, code: 'OTP_EMAIL_DELIVERY_FAILED',
+        error: 'Không thể gửi email lúc này; vui lòng thử lại sau' });
+    }
+    otpAttemptBuckets.delete(resetBucketKey(email));
+    return success(res, null, 200, generic);
   } catch (err) {
-    return error(res, err.message);
+    return error(res, 'Không thể xử lý yêu cầu khôi phục mật khẩu');
   }
 });
 
-// ==============================================================================
-// 8. ENDPOINT: Đặt lại mật khẩu với OTP (POST /api/auth/reset-password)
-// ==============================================================================
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { email, otpCode, newPassword } = req.body;
-    if (!email || !otpCode || !newPassword) {
-      return badRequest(res, 'Vui lòng cung cấp email, mã OTP và mật khẩu mới');
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const otpCode = String(req.body?.otpCode ?? '');
+    const newPassword = req.body?.newPassword;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        !/^\d{6}$/.test(otpCode) || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return badRequest(res, 'Yêu cầu email, OTP 6 chữ số và mật khẩu mới từ 8 ký tự');
     }
-    if (newPassword.length < 6) {
-      return badRequest(res, 'Mật khẩu mới phải có ít nhất 6 ký tự');
+    if (!otpAttemptsAvailable(email)) {
+      return res.status(429).json({ success: false, error: 'Thử OTP quá nhiều lần, vui lòng đợi 15 phút' });
     }
-
     const user = await findUserByLogin(email);
-    if (!user || user.otp_code !== otpCode || !user.otp_expires_at || new Date(user.otp_expires_at) < new Date()) {
+    if (!user || !user.otp_code || !user.otp_expires_at ||
+        new Date(user.otp_expires_at).getTime() < Date.now()) {
+      bumpOtpAttempt(email);
       return badRequest(res, 'Mã OTP không hợp lệ hoặc đã hết hạn');
     }
-
+    const expected = Buffer.from(otpDigest(user.id, otpCode), 'utf8');
+    const stored = Buffer.from(String(user.otp_code), 'utf8');
+    if (stored.length !== expected.length || !crypto.timingSafeEqual(stored, expected)) {
+      bumpOtpAttempt(email);
+      return badRequest(res, 'Mã OTP không hợp lệ hoặc đã hết hạn');
+    }
     const newHash = await bcrypt.hash(newPassword, 10);
     const useDb = await isDbAvailable();
-
     if (useDb) {
-      await db.query(
-        'UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE id = ?',
-        [newHash, user.id],
-        DB_NAME
-      );
+      await db.query('UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE id = ?',
+        [newHash, user.id], DB_NAME);
+      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [user.id], DB_NAME);
     } else {
       user.password_hash = newHash;
       user.otp_code = null;
       user.otp_expires_at = null;
     }
-
-    return success(res, null, 200, 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.');
+    otpAttemptBuckets.delete(resetBucketKey(email));
+    return success(res, null, 200, 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.');
   } catch (err) {
-    return error(res, err.message);
+    return error(res, 'Không thể đặt lại mật khẩu');
   }
 });
 
