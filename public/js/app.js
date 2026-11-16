@@ -72,6 +72,13 @@ let state = {
 
 // Application data is loaded from the API. Never render hard-coded HR records as real data.
 
+// Escape database text used by dynamically rendered HTML tables.
+function uiEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
 // ==============================================================================
 // 3. TOAST THÔNG BÁO
 // ==============================================================================
@@ -1228,12 +1235,12 @@ function renderDepartmentsTable(list) {
     .map(
       (d) => `
     <tr>
-      <td><strong>${d.code}</strong></td>
-      <td><strong>${d.name}</strong></td>
-      <td>${d.manager_name || 'Chưa bổ nhiệm'}</td>
+      <td><strong>${uiEscape(d.code)}</strong></td>
+      <td><strong>${uiEscape(d.name)}</strong></td>
+      <td>${uiEscape(d.manager_name || 'Chưa bổ nhiệm')}</td>
       <td><span class="badge-status badge-approved">${d.employee_count || 0} nhân sự</span></td>
-      <td>${d.description || '-'}</td>
-      <td><span class="badge-status ${d.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${d.status || 'ACTIVE'}</span></td>
+      <td>${uiEscape(d.description || '-')}</td>
+      <td><span class="badge-status ${d.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${uiEscape(d.status || 'Không xác định')}</span></td>
     </tr>
   `
     )
@@ -1277,16 +1284,16 @@ function renderEmployeesTable(list) {
     .map(
       (e) => `
     <tr>
-      <td><strong>${e.code || e.employee_code}</strong></td>
-      <td><strong>${e.full_name}</strong></td>
-      <td>${e.email}</td>
-      <td>${e.phone || '-'}</td>
-      <td>${e.department_name || '-'}</td>
-      <td>${e.position_title || e.position_name || '-'}</td>
-      <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
+      <td><strong>${uiEscape(e.code || e.employee_code)}</strong></td>
+      <td><strong>${uiEscape(e.full_name)}</strong></td>
+      <td>${uiEscape(e.email)}</td>
+      <td>${uiEscape(e.phone || '-')}</td>
+      <td>${uiEscape(e.department_name || '-')}</td>
+      <td>${uiEscape(e.position_title || e.position_name || '-')}</td>
+      <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${uiEscape(e.contract_type || 'OFFICIAL')}</span></td>
       <td><span class="badge-status ${e.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${e.status}</span></td>
       <td style="text-align: center;">
-        ${canDelete ? `<button class="btn-reject-sm" onclick="confirmDeleteEmployee('${e.id}', '${e.full_name || e.code}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;">🗑️ Xóa</button>` : '-'}
+        ${canDelete ? `<button class="btn-reject-sm" onclick="confirmDeleteEmployee('${uiEscape(e.id)}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;">🗑️ Xóa</button>` : '-'}
       </td>
     </tr>
   `
@@ -1294,12 +1301,14 @@ function renderEmployeesTable(list) {
     .join('');
 }
 
-async function confirmDeleteEmployee(id, name) {
-  if (!confirm(`Bạn có chắc chắn muốn xóa nhân viên "${name}" khỏi hệ thống không?`)) {
+async function confirmDeleteEmployee(id) {
+  const employee = (state.employees || []).find(e => String(e.id) === id);
+  const name = employee?.full_name || employee?.code || id;
+  if (!confirm(`Bạn có chắc chắn muốn chuyển nhân viên "${name}" sang trạng thái nghỉ việc không?`)) {
     return;
   }
   try {
-    const res = await apiCall(`/api/organization/employees/${id}?permanent=true`, {
+    const res = await apiCall(`/api/organization/employees/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
     if (res && res.success) {
@@ -1347,19 +1356,19 @@ async function loadAttendanceHistoryData() {
     const res = await apiCall(`/api/attendance${qs}`);
     if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
       records = res.data.map(r => {
-        const empCode = r.emp_code || (r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : 'NV-001');
+        const empCode = r.emp_code || (r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : '-');
         return {
           id: r.id,
           emp_id: r.emp_id,
           code: empCode,
           name: r.emp_name || `Nhân viên (${empCode})`,
-          dept: r.dept_name || 'Phòng Kỹ Thuật',
-          dept_code: r.dept_code || 'TECH',
-          work_date: r.work_date ? new Date(r.work_date).toISOString().split('T')[0] : '2026-10-30',
-          date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026',
+          dept: r.dept_name || 'Chưa phân phòng ban',
+          dept_code: r.dept_code || '',
+          work_date: r.work_date ? new Date(r.work_date).toISOString().split('T')[0] : '',
+          date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '-',
           in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
           out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-          hours: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time && r.check_out_time ? '8.0 h' : '0.0 h'),
+          hours: r.actual_working_hours != null ? `${r.actual_working_hours} h` : '-',
           status: r.status,
           late_minutes: r.late_minutes || 0,
           adj_id: r.adjustment_id || null,
@@ -1579,9 +1588,9 @@ async function loadRbacUsersData() {
 
     return `
       <tr>
-        <td><strong>${u.username}</strong></td>
-        <td>${u.email || '-'}</td>
-        <td><code>${u.emp_id || '-'}</code></td>
+        <td><strong>${uiEscape(u.username)}</strong></td>
+        <td>${uiEscape(u.email || '-')}</td>
+        <td><code>${uiEscape(u.emp_id || '-')}</code></td>
         <td>${roleBadge}</td>
         <td>
           <select id="role-select-${u.id}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
