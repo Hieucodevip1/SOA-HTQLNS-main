@@ -13,6 +13,7 @@ describe('Auth + Organization registration transaction', () => {
   const orgDb = db.getPool(process.env.ORGANIZATION_DB_NAME || 'htqlns_organization');
   const suffix = crypto.randomUUID().slice(0, 8);
   const email = `new-${suffix}@example.test`;
+  const changedEmail = `changed-${suffix}@example.test`;
   const otherEmail = `existing-${suffix}@example.test`;
   const adminJwt = jwt.signToken({ userId: 'integration-admin', role: 'ADMIN' });
   let child, userId, empId;
@@ -43,7 +44,7 @@ describe('Auth + Organization registration transaction', () => {
       await authDb.query('DELETE FROM refresh_tokens WHERE user_id = ?', [userId]);
       await authDb.query('DELETE FROM users WHERE id = ?', [userId]);
     }
-    await orgDb.query('DELETE FROM employees WHERE email IN (?, ?)', [email, otherEmail]);
+    await orgDb.query('DELETE FROM employees WHERE email IN (?, ?, ?)', [email, changedEmail, otherEmail]);
     if (child) child.kill();
     await db.closeAllPools();
   });
@@ -68,6 +69,30 @@ describe('Auth + Organization registration transaction', () => {
     assert.equal(account.role, 'EMPLOYEE');
     assert.equal(Number(account.biometric_enabled), 0);
     assert.equal(employee.email, email);
+  });
+
+  test('owner verifies password before changing email in Auth and Organization', async () => {
+    const login = await fetch(url + '/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username: `user_${suffix}`, password:'password123'})
+    });
+    assert.equal(login.status, 200);
+    const jwtToken = (await login.json()).data.token;
+    const endpoint = url + '/api/auth/me';
+    const headers = {Authorization:'Bearer '+jwtToken, 'Content-Type':'application/json'};
+
+    const wrong = await fetch(endpoint, {
+      method:'PUT', headers, body:JSON.stringify({email:changedEmail,currentPassword:'wrong-password'})
+    });
+    assert.equal(wrong.status, 401);
+    const updated = await fetch(endpoint, {
+      method:'PUT',headers,body:JSON.stringify({email:changedEmail,currentPassword:'password123'})
+    });
+    assert.equal(updated.status, 200, JSON.stringify(await updated.clone().json()));
+    const [[auth]] = await authDb.query('SELECT email FROM users WHERE id = ?', [userId]);
+    const [[employee]] = await orgDb.query('SELECT email FROM employees WHERE id = ?', [empId]);
+    assert.equal(auth.email, changedEmail);
+    assert.equal(employee.email, changedEmail);
   });
 
   test('public registration cannot claim an existing personnel email', async () => {
