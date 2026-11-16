@@ -459,6 +459,10 @@ function applyRoleBasedUI() {
 
   // 4. Cơ cấu phòng ban: ADMIN hoặc HR
   if (navDepartments) navDepartments.style.display = (role === 'ADMIN' || role === 'HR') ? 'flex' : 'none';
+  const auditPanel = document.getElementById('auditLogsPanel');
+  if (auditPanel) auditPanel.style.display = role === 'ADMIN' ? 'block' : 'none';
+  const leaveTypePanel = document.getElementById('leaveTypeAdminPanel');
+  if (leaveTypePanel) leaveTypePanel.style.display = ['ADMIN','HR'].includes(role) ? 'block' : 'none';
 
   // 5. Bảng công NV toàn công ty & Danh sách nhân viên: Ẩn với EMPLOYEE
   if (navEmpHistory) navEmpHistory.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
@@ -615,11 +619,15 @@ function navigateToView(viewName) {
 
   // Nạp dữ liệu tương ứng
   if (viewName === 'dashboard') loadDashboardData();
-  if (viewName === 'requests') loadRequestsData();
+  if (viewName === 'requests') {
+    loadRequestsData();
+    if (['ADMIN','HR'].includes(role)) loadLeaveTypeAdminList();
+  }
   if (viewName === 'employees') loadEmployeesData();
   if (viewName === 'departments') {
     loadDepartmentsData();
     loadPositionsData();
+    if (role === 'ADMIN') loadOrganizationAuditLogs();
   }
   if (viewName === 'attendance-history') loadAttendanceHistoryData();
   if (viewName === 'my-attendance') {
@@ -697,6 +705,81 @@ function calculateLeaveDays() {
     ? (startVal === endVal && workingDays === 1 ? 0.5 : 0)
     : workingDays;
   totalInput.value = total.toFixed(1);
+}
+
+
+async function loadLeaveTypeAdminList() {
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  const tbody = document.getElementById('leaveTypesAdminTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6">Đang tải danh mục loại nghỉ phép...</td></tr>';
+  try {
+    const result = await apiCall('/api/v1/leave-types');
+    if (!result?.success || !Array.isArray(result.data)) {
+      throw new Error('Leave Service trả về dữ liệu danh mục không hợp lệ');
+    }
+    state.leaveTypes = result.data;
+    tbody.innerHTML = result.data.length ? result.data.map(t => `<tr>
+      <td><strong>${uiEscape(t.code)}</strong></td>
+      <td>${uiEscape(t.name)}</td>
+      <td>${Number(t.is_paid) ? 'Có' : 'Không'}</td>
+      <td>${Number(t.max_days_per_year) === 0 ? 'Không giới hạn' :
+        Number(t.max_days_per_year).toFixed(1) + ' ngày'}</td>
+      <td>${Number(t.require_attachment) ? 'Bắt buộc' : 'Không bắt buộc'}</td>
+      <td>${uiEscape(t.status || 'ACTIVE')}</td>
+    </tr>`).join('') : '<tr><td colspan="6">Chưa có danh mục nghỉ phép.</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626">Không tải được danh mục: ' +
+      uiEscape(err.message) + '</td></tr>';
+  }
+}
+
+function openCreateLeaveTypeModal() {
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  openModal('Thêm loại nghỉ phép', `
+    <form onsubmit="submitCreateLeaveType(event)" style="display:flex;flex-direction:column;gap:10px">
+      <label for="newLeaveTypeCode">Mã loại phép</label>
+      <input id="newLeaveTypeCode" class="figma-pill-input" maxlength="50"
+        placeholder="VD: AL, SL, UL" pattern="[A-Za-z0-9_-]{2,50}" required>
+      <label for="newLeaveTypeName">Tên loại phép</label>
+      <input id="newLeaveTypeName" class="figma-pill-input" maxlength="150" required>
+      <label for="newLeaveTypeMaxDays">Số ngày tối đa trong năm (0 = không giới hạn)</label>
+      <input id="newLeaveTypeMaxDays" type="number" min="0" max="999.9"
+        step="0.5" class="figma-pill-input" value="12" required>
+      <label><input id="newLeaveTypePaid" type="checkbox" checked> Có hưởng lương</label>
+      <label><input id="newLeaveTypeAttachment" type="checkbox"> Yêu cầu minh chứng</label>
+      <button id="btnCreateLeaveType" class="btn-primary-blue" type="submit">Lưu loại nghỉ phép</button>
+    </form>`);
+}
+
+async function submitCreateLeaveType(event) {
+  event.preventDefault();
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  const code = document.getElementById('newLeaveTypeCode')?.value.trim().toUpperCase() || '';
+  const name = document.getElementById('newLeaveTypeName')?.value.trim() || '';
+  const maxDaysPerYear = Number(document.getElementById('newLeaveTypeMaxDays')?.value);
+  const isPaid = Boolean(document.getElementById('newLeaveTypePaid')?.checked);
+  const requireAttachment = Boolean(document.getElementById('newLeaveTypeAttachment')?.checked);
+  if (!/^[A-Z0-9_-]{2,50}$/.test(code) || !name || name.length > 150 ||
+      !Number.isFinite(maxDaysPerYear) || maxDaysPerYear < 0 || maxDaysPerYear > 999.9) {
+    return showToast('Mã, tên hoặc số ngày phép không hợp lệ', 'warning');
+  }
+  const button = document.getElementById('btnCreateLeaveType');
+  if (button) button.disabled = true;
+  try {
+    const response = await apiCall('/api/v1/leave-types', {
+      method: 'POST',
+      body: JSON.stringify({ code, name, maxDaysPerYear, isPaid, requireAttachment })
+    });
+    if (!response?.success) throw new Error(response?.error || 'Không tạo được loại nghỉ phép');
+    closeModal();
+    showToast('Đã tạo danh mục nghỉ phép trong Leave Service', 'success');
+    await Promise.all([loadLeaveTypeAdminList(), loadRequestsData()]);
+  } catch (err) {
+    showToast('Không lưu được danh mục: ' + err.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 async function loadRequestsData() {
@@ -1498,7 +1581,10 @@ function renderDepartmentsTable(list) {
       <td>${uiEscape(d.description || '-')}</td>
       <td><span class="badge-status ${d.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">${uiEscape(d.status || 'Không xác định')}</span></td>
       <td>${['ADMIN','HR'].includes(state.user?.role)
-        ? `<button class="btn-secondary-outline" onclick="openEditDepartmentModal('${uiEscape(d.id)}')">Sửa</button>`
+        ? `<button class="btn-secondary-outline" onclick="openEditDepartmentModal('${uiEscape(d.id)}')">Sửa</button>
+          ${d.status === 'ACTIVE'
+            ? `<button class="btn-reject-sm" onclick="deactivateDepartment('${uiEscape(d.id)}')">Ngừng dùng</button>`
+            : ''}`
         : '—'}</td>
     </tr>
   `
@@ -1507,6 +1593,60 @@ function renderDepartmentsTable(list) {
 }
 
 function orgValidId(id) { return /^[a-zA-Z0-9-]{4,64}$/.test(String(id)); }
+
+async function loadOrganizationAuditLogs() {
+  if (state.user?.role !== 'ADMIN') return;
+  const body = document.getElementById('auditLogsTableBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="5">Đang tải nhật ký thao tác...</td></tr>';
+  try {
+    const response = await apiCall('/api/organization/audit-logs');
+    if (!response?.success || !Array.isArray(response.data)) {
+      throw new Error('Organization Service không trả về danh sách nhật ký hợp lệ');
+    }
+    body.innerHTML = response.data.length
+      ? response.data.map(log => {
+        const timestamp = log.created_at ? new Date(log.created_at) : null;
+        const when = timestamp && !Number.isNaN(timestamp.getTime())
+          ? timestamp.toLocaleString('vi-VN') : '—';
+        const details = log.details == null ? '—' :
+          typeof log.details === 'string' ? log.details : JSON.stringify(log.details);
+        return `<tr>
+          <td>${uiEscape(when)}</td>
+          <td>${uiEscape(log.action)}</td>
+          <td>${uiEscape(log.actor_name || log.actor_id || 'Hệ thống')}</td>
+          <td>${uiEscape(log.resource)} <span style="font-size:11px;color:#64748b">${uiEscape(log.resource_id || '')}</span></td>
+          <td title="${uiEscape(details).slice(0, 1000)}">${uiEscape(details).slice(0, 250)}</td>
+        </tr>`;
+      }).join('')
+      : '<tr><td colspan="5">Chưa phát sinh nhật ký thao tác.</td></tr>';
+  } catch (err) {
+    body.innerHTML = '<tr><td colspan="5" style="color:#dc2626">Không tải được Audit Log: ' +
+      uiEscape(err.message) + '</td></tr>';
+  }
+}
+
+async function deactivateDepartment(id) {
+  if (!['ADMIN','HR'].includes(state.user?.role) || !orgValidId(id)) return;
+  const dept = (state.departments || []).find(x => x.id === id);
+  if (!dept || dept.status !== 'ACTIVE') return;
+  if (!confirm('Ngừng sử dụng phòng ban "' + dept.name +
+      '"? Hồ sơ nhân sự cũ vẫn được giữ.')) return;
+  try {
+    const response = await apiCall('/api/organization/departments/' + encodeURIComponent(id), {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'INACTIVE' })
+    });
+    if (!response?.success) throw new Error(response?.error || 'Không cập nhật được trạng thái');
+    showToast('Đã ngừng sử dụng phòng ban', 'success');
+    await loadDepartmentsData();
+    if (state.user?.role === 'ADMIN') await loadOrganizationAuditLogs();
+  } catch (err) {
+    showToast('Không thể ngừng sử dụng phòng ban: ' + err.message, 'error');
+  }
+}
+
+
 
 function openEditDepartmentModal(id) {
   if (!['ADMIN','HR'].includes(state.user?.role) || !orgValidId(id)) return;
@@ -3355,8 +3495,8 @@ async function loadShiftsCatalog() {
     const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
     tbody.innerHTML = cachedShiftsList.map(s => `
       <tr>
-        <td><strong>${s.code}</strong></td>
-        <td><span style="font-weight: 600; color: #0f172a;">${s.name}</span></td>
+        <td><strong>${uiEscape(s.code)}</strong></td>
+        <td><span style="font-weight: 600; color: #0f172a;">${uiEscape(s.name)}</span></td>
         <td>${s.start_time.slice(0, 5)}</td>
         <td>${s.end_time.slice(0, 5)}</td>
         <td>${s.break_minutes || 0} phút</td>
@@ -3369,7 +3509,11 @@ async function loadShiftsCatalog() {
         </td>
         <td style="text-align: center;">
           ${isAdminOrHr ? `
-            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openCreateShiftModal(${JSON.stringify(s)})'>Sửa</button>
+            <button class="btn-secondary-outline" style="padding:4px 10px;font-size:11.5px"
+              onclick="openEditShiftById('${uiEscape(s.id)}')">Sửa</button>
+            <button class="btn-secondary-outline" style="padding:4px 10px;font-size:11.5px"
+              onclick="setShiftActiveState('${uiEscape(s.id)}', ${s.status !== 'ACTIVE'})">
+              ${s.status === 'ACTIVE' ? 'Ngừng dùng' : 'Kích hoạt lại'}</button>
           ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
         </td>
       </tr>
@@ -3377,6 +3521,34 @@ async function loadShiftsCatalog() {
   } catch (err) {
     console.error('Lỗi nạp danh mục ca:', err);
     tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+  }
+}
+
+
+function openEditShiftById(id) {
+  if (!['ADMIN','HR'].includes(state.user?.role) || !orgValidId(id)) return;
+  const shift = cachedShiftsList.find(s => String(s.id) === String(id));
+  if (!shift) return showToast('Không tìm thấy ca làm việc trong danh mục', 'error');
+  openCreateShiftModal(shift);
+}
+
+async function setShiftActiveState(id, makeActive) {
+  if (!['ADMIN','HR'].includes(state.user?.role) || !orgValidId(id)) return;
+  const shift = cachedShiftsList.find(s => String(s.id) === String(id));
+  if (!shift) return;
+  const action = makeActive ? 'kích hoạt lại' : 'ngừng sử dụng';
+  if (!confirm('Bạn có chắc muốn ' + action + ' ca "' + shift.name + '"?')) return;
+  try {
+    const response = makeActive
+      ? await apiCall('/api/v1/shifts/' + encodeURIComponent(id), {
+          method: 'PUT', body: JSON.stringify({status: 'ACTIVE'})
+        })
+      : await apiCall('/api/v1/shifts/' + encodeURIComponent(id), {method: 'DELETE'});
+    if (!response?.success) throw new Error(response?.error || 'Không cập nhật được ca');
+    showToast('Đã ' + action + ' ca làm việc', 'success');
+    await loadShiftsCatalog();
+  } catch (err) {
+    showToast('Không thể cập nhật trạng thái ca: ' + err.message, 'error');
   }
 }
 
