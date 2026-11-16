@@ -96,7 +96,11 @@
           "methods": [
             "POST"
           ],
-          "auth": false
+          "auth": false,
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 10
+          }
         }
       ]
     },
