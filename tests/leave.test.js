@@ -150,6 +150,49 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     assert.strictEqual(data.data.attachment_url, 'Bien-ban-ban-giao.pdf');
   });
 
+  let uploadedAttachmentUrl = null;
+  test('Upload minh chứng PDF và truy cập theo quyền nhân viên', async () => {
+    const otherToken = jwt.signToken({
+      userId: 'u_other_leave_test', empId: 'e0000001-0000-0000-0000-000000000003',
+      username: 'other-employee', role: 'EMPLOYEE'
+    });
+    const body = {
+      fileName: 'giay-hen.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF').toString('base64')
+    };
+    const upload = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-attachments`, {
+      method:'POST', headers:{ Authorization:`Bearer ${employeeToken}`, 'Content-Type':'application/json' },
+      body:JSON.stringify(body)
+    });
+    assert.equal(upload.status, 201);
+    const data = await upload.json();
+    assert.equal(data.success, true);
+    uploadedAttachmentUrl = data.data.attachmentUrl;
+    assert.ok(uploadedAttachmentUrl.startsWith('/api/v1/leave-attachments/'));
+
+    const download = async token => fetch('http://localhost:' + LEAVE_PORT + uploadedAttachmentUrl, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const owner = await download(employeeToken);
+    assert.equal(owner.status, 200);
+    assert.match(owner.headers.get('content-type'), /application\/pdf/);
+    assert.match(await owner.text(), /%PDF-1\.4/);
+    assert.equal((await download(otherToken)).status, 404);
+    assert.equal((await download(adminToken)).status, 200);
+    assert.equal((await fetch('http://localhost:' + LEAVE_PORT + uploadedAttachmentUrl)).status, 401);
+  });
+
+  test('Không cho giả mạo tệp PDF và minh chứng không thuộc tài khoản', async () => {
+    const invalid = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-attachments`, {
+      method:'POST', headers:{ Authorization:`Bearer ${employeeToken}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ fileName:'giay-hen.pdf',
+        mediaType:'application/pdf',
+        contentBase64: Buffer.from('<script>alert(1)</script>').toString('base64') })
+    });
+    assert.equal(invalid.status, 400);
+  });
+
   // 7. Nhân viên tạo đơn xin nghỉ phép mới (HTTP 201)
   let createdLeaveId = null;
   test('Nhân viên gửi đơn xin nghỉ phép thành công (HTTP 201)', async () => {
@@ -166,7 +209,7 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
         totalDays: 1.0,
         session: 'FULL_DAY',
         reason: 'Nghỉ giải quyết thủ tục hành chính tại cơ quan địa phương',
-        attachmentUrl: 'giay-hen.pdf'
+        attachmentUrl: uploadedAttachmentUrl
       })
     });
     assert.strictEqual(res.status, 201);
