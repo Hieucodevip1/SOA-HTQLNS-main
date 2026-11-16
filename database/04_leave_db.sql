@@ -60,6 +60,18 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   CONSTRAINT fk_leave_type FOREIGN KEY (leave_type_id) REFERENCES leave_types (id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Minh chứng nghỉ phép lưu trong MySQL, tải qua API yêu cầu JWT; không public tệp.
+CREATE TABLE IF NOT EXISTS leave_attachments (
+  id VARCHAR(36) NOT NULL PRIMARY KEY,
+  emp_id VARCHAR(64) NOT NULL,
+  file_name VARCHAR(120) NOT NULL,
+  mime_type ENUM('application/pdf', 'image/png', 'image/jpeg') NOT NULL,
+  size_bytes INT NOT NULL,
+  content LONGBLOB NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_leave_attachment_owner (emp_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Dữ liệu mẫu
 INSERT INTO leave_types (id, code, name, is_paid, max_days_per_year, require_attachment, status)
 VALUES
