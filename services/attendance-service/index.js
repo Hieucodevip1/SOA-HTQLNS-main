@@ -43,6 +43,12 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
+function validCoordinates(lat, lng) {
+  return lat !== undefined && lat !== null && lat !== '' && lng !== undefined && lng !== null && lng !== '' &&
+    Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) &&
+    Math.abs(Number(lat)) <= 90 && Math.abs(Number(lng)) <= 180;
+}
+
 function getEmpIdFromUser(user) {
   if (!user) return null;
   return user.empId || user.emp_id || user.userId || user.id || user.sub || user.username || null;
@@ -187,7 +193,7 @@ app.delete(LOCATION_ID_PATHS, requireAuth(['ADMIN','HR']), async (req, res, next
 });
 
 // ==============================================================================
-// // 2. CHẤM CÔNG CHECK-IN / CHECK-OUT (SCR_ATT_01)
+// 2. CHẤM CÔNG CHECK-IN / CHECK-OUT (SCR_ATT_01)
 // ==============================================================================
 
 app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAuth(), async (req, res, next) => {
@@ -214,17 +220,19 @@ app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAu
       });
     }
 
-    // Kiểm tra vùng hợp lệ (GPS Geofence hoặc WiFi SSID)
+    // Never trust a client-supplied Wi-Fi SSID alone as proof of physical presence.
+    // GPS location is required even when a client also reports a Wi-Fi SSID.
+    if (!validCoordinates(latitude, longitude) || !['GPS', 'WIFI'].includes(method)) {
+      return res.status(400).json({
+        success: false, code: 'LOCATION_REQUIRED',
+        error: 'Cần tọa độ GPS hợp lệ; tên Wi-Fi do trình duyệt gửi không đủ để xác thực'
+      });
+    }
     const [locations] = await pool.query('SELECT * FROM work_locations WHERE status = "ACTIVE"');
     let matchedLocation = null;
     let minDistance = null;
 
     for (const loc of locations) {
-      if (method === 'WIFI' && wifiSsid && loc.wifi_ssid === wifiSsid) {
-        matchedLocation = loc;
-        minDistance = 0;
-        break;
-      }
       if (latitude !== undefined && longitude !== undefined) {
         const dist = calculateDistanceMeters(Number(latitude), Number(longitude), Number(loc.latitude), Number(loc.longitude));
         if (minDistance === null || dist < minDistance) {
@@ -268,14 +276,14 @@ app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAu
          SET shift_id = ?, location_id = ?, check_in_time = ?, check_in_lat = ?, check_in_lng = ?,
              check_in_distance_m = ?, check_in_method = ?, late_minutes = ?, status = ?
          WHERE id = ?`,
-        [shift?.shift_id || null, matchedLocation?.id || null, now, latitude || null, longitude || null, minDistance, method, lateMinutes, status, id]
+        [shift?.shift_id || null, matchedLocation?.id || null, now, Number(latitude), Number(longitude), minDistance, 'GPS', lateMinutes, status, id]
       );
     } else {
       await pool.query(
         `INSERT INTO attendance_logs
          (id, emp_id, work_date, shift_id, location_id, check_in_time, check_in_lat, check_in_lng, check_in_distance_m, check_in_method, late_minutes, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, empId, workDate, shift?.shift_id || null, matchedLocation?.id || null, now, latitude || null, longitude || null, minDistance, method, lateMinutes, status]
+        [id, empId, workDate, shift?.shift_id || null, matchedLocation?.id || null, now, Number(latitude), Number(longitude), minDistance, 'GPS', lateMinutes, status]
       );
     }
 
@@ -306,6 +314,22 @@ app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], require
   try {
     const empId = getEmpIdFromUser(req.user);
     const { latitude, longitude, method = 'GPS' } = req.body;
+    if (!validCoordinates(latitude, longitude) || !['GPS', 'WIFI'].includes(method)) {
+      return res.status(400).json({ success: false, code: 'LOCATION_REQUIRED', error: 'Check-out yêu cầu tọa độ GPS hợp lệ' });
+    }
+    const [activeLocations] = await pool.query("SELECT * FROM work_locations WHERE status = 'ACTIVE'");
+    const distances = activeLocations.map(l => ({
+      id: l.id,
+      meters: calculateDistanceMeters(Number(latitude), Number(longitude), Number(l.latitude), Number(l.longitude)),
+      radius: Number(l.radius_meters)
+    }));
+    const matched = distances.find(d => d.meters <= d.radius);
+    if (!matched) {
+      return res.status(403).json({
+        success: false, code: 'OUT_OF_RANGE',
+        error: 'Check-out ngoài phạm vi GPS được cấu hình'
+      });
+    }
     const now = new Date();
     const workDate = now.toISOString().slice(0, 10);
 
@@ -318,6 +342,9 @@ app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], require
     }
 
     const record = rows[0];
+    if (record.check_out_time) {
+      return res.status(409).json({ success: false, error: 'Đã Check-out trong ngày' });
+    }
     const checkInTime = new Date(record.check_in_time);
     const workedHours = Math.max(0, Number(((now.getTime() - checkInTime.getTime()) / 3600000).toFixed(2)));
 
@@ -337,10 +364,10 @@ app.post(['/api/v1/attendances/check-out', '/api/attendance/check-out'], require
 
     await pool.query(
       `UPDATE attendance_logs
-       SET check_out_time = ?, check_out_lat = ?, check_out_lng = ?, check_out_method = ?,
+       SET check_out_time = ?, check_out_lat = ?, check_out_lng = ?, check_out_distance_m = ?, check_out_method = ?,
            early_leave_minutes = ?, actual_working_hours = ?, status = ?
        WHERE id = ?`,
-      [now, latitude || null, longitude || null, method, earlyLeaveMinutes, workedHours, status, record.id]
+      [now, Number(latitude), Number(longitude), matched.meters, 'GPS', earlyLeaveMinutes, workedHours, status, record.id]
     );
 
     const [updated] = await pool.query('SELECT * FROM attendance_logs WHERE id = ?', [record.id]);
