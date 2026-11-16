@@ -70,24 +70,7 @@ let state = {
   currentView: 'dashboard'
 };
 
-// Dữ liệu mẫu phong phú
-const MOCK_EMPLOYEES = [
-  { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm SOA', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 2, code: 'NV-002', full_name: 'Huỳnh Gia Kiệt', email: 'kiet.hg@htqlns.com', phone: '0901000002', department_name: 'Phòng Kỹ Thuật', position_title: 'Backend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 3, code: 'NV-003', full_name: 'Nguyễn Gia Hảo', email: 'hao.ng@htqlns.com', phone: '0901000003', department_name: 'Phòng Kỹ Thuật', position_title: 'Frontend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 4, code: 'NV-004', full_name: 'Thầy Lâm (Nguyễn Thanh Lâm)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Kỹ Thuật', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 5, code: 'NV-005', full_name: 'Lê Ngọc Mai', email: 'mai.ln@htqlns.com', phone: '0901000005', department_name: 'Phòng Nhân sự', position_title: 'Chuyên viên C&B', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 6, code: 'NV-006', full_name: 'Phạm Minh Tuân', email: 'tuan.pm@htqlns.com', phone: '0901000006', department_name: 'Phòng Kinh Doanh', position_title: 'Chuyên viên Tư vấn', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 7, code: 'NV-007', full_name: 'Đỗ Thu Hà', email: 'ha.dt@htqlns.com', phone: '0901000007', department_name: 'Phòng Tài Chính - Kế Toán', position_title: 'Kế toán tiền lương', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 8, code: 'NV-008', full_name: 'Trần Hoài An', email: 'an.th@htqlns.com', phone: '0901000008', department_name: 'Phòng Kỹ Thuật', position_title: 'DevOps & QA', contract_type: 'PROBATION', status: 'ACTIVE' }
-];
-
-const MOCK_DEPARTMENTS = [
-  { id: 1, code: 'TECH', name: 'Phòng Kỹ Thuật', manager_name: 'Thầy Lâm', employee_count: 40, description: 'Phát triển kiến trúc SOA Microservices', status: 'ACTIVE' },
-  { id: 2, code: 'HR', name: 'Phòng Nhân sự', manager_name: 'Lê Ngọc Mai', employee_count: 12, description: 'Tuyển dụng, chế độ C&B, quản lý hồ sơ', status: 'ACTIVE' },
-  { id: 3, code: 'FIN', name: 'Phòng Tài Chính - Kế Toán', manager_name: 'Đỗ Thu Hà', employee_count: 15, description: 'Bảng lương, quyết toán tài chính', status: 'ACTIVE' },
-  { id: 4, code: 'BIZ', name: 'Phòng Kinh Doanh', manager_name: 'Phạm Minh Tuân', employee_count: 28, description: 'Kinh doanh và chăm sóc đối tác', status: 'ACTIVE' }
-];
+// Application data is loaded from the API. Never render hard-coded HR records as real data.
 
 // ==============================================================================
 // 3. TOAST THÔNG BÁO
@@ -685,13 +668,9 @@ async function loadRequestsData() {
       typeSelect.innerHTML = typesRes.data.map(t => 
         `<option value="${t.id}">${t.name} (${t.code}${t.is_paid ? ' • Có lương' : ''})</option>`
       ).join('');
-    } else if (typeSelect && !typeSelect.children.length) {
-      typeSelect.innerHTML = `
-        <option value="lt000001-0000-0000-0000-000000000001">Nghỉ phép năm (AL • Có hưởng lương)</option>
-        <option value="lt000001-0000-0000-0000-000000000002">Nghỉ ốm hưởng BHXH (SL)</option>
-        <option value="lt000001-0000-0000-0000-000000000003">Nghỉ không hưởng lương (UL)</option>
-        <option value="lt000001-0000-0000-0000-000000000004">Nghỉ việc riêng (PL • Hiếu/Hỉ)</option>
-      `;
+    } else if (typeSelect) {
+      state.leaveTypes = [];
+      typeSelect.innerHTML = '<option value="">Chưa có danh mục nghỉ phép</option>';
     }
   } catch (err) {
     console.warn('Lỗi nạp leave types:', err);
@@ -700,12 +679,12 @@ async function loadRequestsData() {
   // 2. Nạp số dư quỹ phép năm 2026
   try {
     const balRes = await apiCall('/api/v1/leave-balances').catch(() => null);
-    let total = 12.0;
-    let used = 2.0;
-    let pending = 1.0;
+    let total = 0;
+    let used = 0;
+    let pending = 0;
     if (balRes?.data && balRes.data.length) {
       const b = balRes.data[0];
-      total = Number(b.total_days || 12);
+      total = Number(b.total_days || 0);
       used = Number(b.used_days || 0);
       pending = Number(b.pending_days || 0);
     }
@@ -960,22 +939,8 @@ async function openRequestDetail(requestId) {
   }
 
   if (!req) {
-    req = {
-      id: requestId || 'NP-2026-024',
-      leave_name: 'Nghỉ phép năm',
-      is_paid: 1,
-      emp_name: 'Vũ Đức Hiếu',
-      emp_code: 'NV-001',
-      department_name: 'Phòng Kỹ Thuật',
-      approver_name: 'Nguyễn Thanh Lâm',
-      start_date: '2026-11-02',
-      end_date: '2026-11-02',
-      total_days: 1.0,
-      reason: 'Tôi xin nghỉ phép để giải quyết công việc gia đình. Các hạng mục đang thực hiện đã được bàn giao cho Huỳnh Gia Kiệt trước ngày nghỉ.',
-      attachment_url: 'Bien-ban-ban-giao.pdf',
-      status: 'PENDING',
-      created_at: '2026-10-30T08:15:00'
-    };
+    showToast('Không tìm thấy dữ liệu đơn nghỉ phép từ hệ thống', 'error');
+    return;
   }
 
   // Cập nhật giao diện Figma SCR_REQ_02
@@ -1239,11 +1204,15 @@ async function loadDashboardData() {
 async function loadDepartmentsData() {
   try {
     const res = await apiCall('/api/organization/departments');
-    state.departments = res.data && res.data.length ? res.data : MOCK_DEPARTMENTS;
+    if (!res?.success || !Array.isArray(res.data)) throw new Error('Dữ liệu phòng ban không hợp lệ');
+    state.departments = res.data;
+    renderDepartmentsTable(state.departments);
   } catch (err) {
-    state.departments = MOCK_DEPARTMENTS;
+    state.departments = [];
+    const tbody = document.getElementById('departmentsTableFullBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#dc2626;">Không tải được phòng ban. Kiểm tra kết nối và thử lại.</td></tr>';
+    console.error('Organization API departments:', err);
   }
-  renderDepartmentsTable(state.departments);
 }
 
 function renderDepartmentsTable(list) {
@@ -1282,11 +1251,15 @@ function handleDepartmentFilter() {
 async function loadEmployeesData() {
   try {
     const res = await apiCall('/api/organization/employees');
-    state.employees = res.data && res.data.length ? res.data : MOCK_EMPLOYEES;
+    if (!res?.success || !Array.isArray(res.data)) throw new Error('Dữ liệu nhân viên không hợp lệ');
+    state.employees = res.data;
+    renderEmployeesTable(state.employees);
   } catch (err) {
-    state.employees = MOCK_EMPLOYEES;
+    state.employees = [];
+    const tbody = document.getElementById('employeesTableFullBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#dc2626;">Không tải được danh sách nhân viên. Kiểm tra kết nối và thử lại.</td></tr>';
+    console.error('Organization API employees:', err);
   }
-  renderEmployeesTable(state.employees);
 }
 
 function renderEmployeesTable(list) {
@@ -1363,6 +1336,7 @@ async function loadAttendanceHistoryData() {
   tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b; padding: 20px;">Đang tải dữ liệu từ Attendance Service (:3003)...</td></tr>`;
 
   let records = [];
+  let loadError = null;
   try {
     let queryParams = [];
     if (filterStatus && filterStatus !== 'ALL') queryParams.push(`status=${filterStatus}`);
@@ -1395,20 +1369,13 @@ async function loadAttendanceHistoryData() {
       });
     }
   } catch (err) {
-    console.warn('Lỗi tải dữ liệu attendance toàn công ty, sử dụng fallback demo:', err.message);
+    loadError = err;
+    console.error('Attendance API:', err);
   }
 
-  if (!records.length) {
-    records = [
-      { id: 'att-1', code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-2', code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8 h', status: 'LATE', late_minutes: 12, adj_id: 'adj-02', adj_reason: 'Kẹt xe ngập đường tại giao lộ Nguyễn Tri Phương', adj_status: 'PENDING' },
-      { id: 'att-3', code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0 h', status: 'LATE', late_minutes: 7, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-4', code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-5', code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', dept_code: 'HR', work_date: '2026-10-30', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-6', code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', dept_code: 'BIZ', work_date: '2026-10-30', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-7', code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính - Kế Toán', dept_code: 'FIN', work_date: '2026-10-30', date: '30/10/2026', in: '-', out: '-', hours: '0.0 h', status: 'LEAVE', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-8', code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6 h', status: 'LATE', late_minutes: 21, adj_id: 'adj-08', adj_reason: 'Hỏng xe máy giữa cầu vượt', adj_status: 'PENDING' }
-    ];
+  if (!records.length && loadError) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#dc2626;">Không thể tải dữ liệu chấm công. Vui lòng thử lại.</td></tr>';
+    return;
   }
 
   // Áp dụng bộ lọc chính xác
@@ -1594,19 +1561,14 @@ async function loadRbacUsersData() {
       users = res.data;
     }
   } catch (err) {
-    console.warn('Lỗi lấy danh sách user từ API, sử dụng danh sách tài khoản mặc định:', err.message);
+    console.error('Auth API users:', err);
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#dc2626;">Không tải được danh sách tài khoản. Vui lòng thử lại.</td></tr>';
+    return;
   }
 
-  // Nếu API chưa có dữ liệu hoặc mock fallback
-  if (!users || users.length === 0) {
-    users = [
-      { id: 'usr_admin', username: 'admin', email: 'admin@htqlns.com', emp_id: 'AD-001', role: 'ADMIN', status: 'ACTIVE' },
-      { id: 'usr_manager', username: 'manager', email: 'lam@htqlns.com', emp_id: 'NV-004', role: 'MANAGER', status: 'ACTIVE' },
-      { id: 'usr_hr', username: 'hr_admin', email: 'hr@htqlns.com', emp_id: 'NV-005', role: 'HR', status: 'ACTIVE' },
-      { id: 'usr_emp1', username: 'employee', email: 'hieu.vd@htqlns.com', emp_id: 'NV-001', role: 'EMPLOYEE', status: 'ACTIVE' },
-      { id: 'usr_emp2', username: 'kiet.hg', email: 'kiet.hg@htqlns.com', emp_id: 'NV-002', role: 'EMPLOYEE', status: 'ACTIVE' },
-      { id: 'usr_emp3', username: 'hao.ng', email: 'hao.ng@htqlns.com', emp_id: 'NV-003', role: 'EMPLOYEE', status: 'ACTIVE' }
-    ];
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Chưa có tài khoản người dùng</td></tr>';
+    return;
   }
 
   tbody.innerHTML = users.map(u => {
@@ -2198,22 +2160,7 @@ async function loadEmployeeDashboardData() {
     if (recentAttTbody) {
       const top5 = logs.slice(0, 5);
       if (!top5.length) {
-        recentAttTbody.innerHTML = `
-          <tr>
-            <td>30/10/2026</td>
-            <td>07:58</td>
-            <td>16:30</td>
-            <td><span class="badge-status badge-approved">Đúng giờ</span></td>
-            <td><span style="color:#94a3b8;">-</span></td>
-          </tr>
-          <tr>
-            <td>29/10/2026</td>
-            <td>08:15</td>
-            <td>16:30</td>
-            <td><span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (15p)</span></td>
-            <td><button class="btn-primary-blue" style="padding: 3px 8px; font-size: 11px;" onclick="openSubmitAdjustmentModal('', '29/10/2026', '08:15')">📝 Giải trình</button></td>
-          </tr>
-        `;
+        recentAttTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Chưa có lịch sử chấm công</td></tr>';
       } else {
         recentAttTbody.innerHTML = top5.map(r => {
           const dateStr = r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026';
@@ -2257,14 +2204,7 @@ async function loadEmployeeDashboardData() {
     const reqList = (resLeaves && resLeaves.success && Array.isArray(resLeaves.data)) ? resLeaves.data : [];
     if (recentReqTbody) {
       if (!reqList.length) {
-        recentReqTbody.innerHTML = `
-          <tr>
-            <td><strong>NP-2026-024</strong></td>
-            <td>Nghỉ phép năm</td>
-            <td>02/11/2026</td>
-            <td><span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span></td>
-          </tr>
-        `;
+        recentReqTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">Chưa có đơn nghỉ phép</td></tr>';
       } else {
         recentReqTbody.innerHTML = reqList.slice(0, 5).map(req => {
           let badge = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span>';
@@ -2520,7 +2460,11 @@ async function submitNewDepartment() {
 }
 
 function openAddEmployeeModal() {
-  const deptOptions = (state.departments || MOCK_DEPARTMENTS)
+  if (!state.departments?.length) {
+    showToast('Chưa tải được phòng ban; hãy kiểm tra dữ liệu trước khi tạo nhân viên', 'warning');
+    return;
+  }
+  const deptOptions = state.departments
     .map((d) => `<option value="${d.id || 1}">${d.name}</option>`)
     .join('');
 
@@ -2555,7 +2499,7 @@ async function submitNewEmployee() {
   try {
     await apiCall('/api/organization/employees', {
       method: 'POST',
-      body: JSON.stringify({ code, fullName, email, phone, departmentId })
+      body: JSON.stringify({ code, full_name: fullName, email, phone, department_id: departmentId || null })
     });
     showToast('Tạo hồ sơ nhân viên thành công!', 'success');
     closeModal();
