@@ -685,7 +685,8 @@ async function loadRequestsData() {
 
   // 2. Nạp số dư quỹ phép năm 2026
   try {
-    const balRes = await apiCall('/api/v1/leave-balances').catch(() => null);
+    const balRes = await apiCall('/api/v1/leave-balances');
+    if (!balRes?.success || !Array.isArray(balRes.data)) throw new Error('Không thể tải quỹ phép');
     let total = 0;
     let used = 0;
     let pending = 0;
@@ -707,6 +708,10 @@ async function loadRequestsData() {
     if (elRem) elRem.innerText = remaining.toFixed(1);
   } catch (err) {
     console.warn('Lỗi nạp leave balances:', err);
+    for (const id of ['statLeaveTotal', 'statLeaveUsed', 'statLeavePending', 'statLeaveRemaining']) {
+      const el = document.getElementById(id);
+      if (el) el.innerText = '—';
+    }
   }
 
   // 3. Nạp danh sách đơn từ
@@ -977,16 +982,16 @@ async function openRequestDetail(requestId) {
   if (headerCode) headerCode.innerText = `Mã đơn: ${req.id}`;
   if (title) title.innerText = req.leave_name || 'Đơn xin nghỉ phép';
   if (meta) meta.innerText = `${req.id} • Gửi ngày ${formatLeaveDateTime(req.created_at)}`;
-  if (empName) empName.innerText = `${req.emp_name || 'Vũ Đức Hiếu'} • ${req.emp_code || 'NV-001'}`;
-  if (approverName) approverName.innerText = req.approver_name || 'Nguyễn Thanh Lâm';
-  if (dept) dept.innerText = req.department_name || 'Phòng Kỹ Thuật';
+  if (empName) empName.innerText = `${req.emp_name || 'Nhân viên'} • ${req.emp_code || '-'}`;
+  if (approverName) approverName.innerText = req.approver_name || 'Chưa có người duyệt';
+  if (dept) dept.innerText = req.department_name || 'Chưa phân phòng ban';
   if (leaveType) leaveType.innerText = `${req.leave_name || 'Nghỉ phép năm'} • ${req.is_paid ? 'Có hưởng lương' : 'Không hưởng lương'}`;
   if (startDate) startDate.innerText = `${formatLeaveDate(req.start_date)} • 08:00`;
   if (endDate) endDate.innerText = `${formatLeaveDate(req.end_date)} • 16:00`;
   const daysNum = parseFloat(req.total_days || 1);
   if (duration) duration.innerText = `${daysNum.toFixed(0)} ngày • ${(daysNum * 8).toFixed(0)} giờ`;
-  if (reason) reason.innerText = req.reason || 'Tôi xin nghỉ phép để giải quyết công việc gia đình.';
-  if (attach) attach.innerText = req.attachment_url || 'Bien-ban-ban-giao.pdf';
+  if (reason) reason.innerText = req.reason || '-';
+  if (attach) attach.innerText = req.attachment_url || 'Không có tệp đính kèm';
 
   const role = state.user?.role || 'EMPLOYEE';
   const isApprover = (role === 'ADMIN' || role === 'HR' || role === 'MANAGER');
@@ -1006,7 +1011,7 @@ async function openRequestDetail(requestId) {
       alertIcon.style.color = '#ca8a04';
       alertIcon.innerText = 'ⓘ';
     }
-    if (alertText) alertText.innerText = `Đang chờ ${req.approver_name || 'Nguyễn Thanh Lâm'} phê duyệt`;
+    if (alertText) alertText.innerText = `Đang chờ ${req.approver_name || 'Chưa có người duyệt'} phê duyệt`;
     if (alertSub) alertSub.innerText = 'Đơn đã được gửi đến quản lý trực tiếp. Bạn sẽ nhận được thông báo khi có kết quả.';
 
     if (step2Icon) {
@@ -1024,7 +1029,7 @@ async function openRequestDetail(requestId) {
       step2Badge.innerText = 'Bước hiện tại';
     }
     if (step2Desc) {
-      step2Desc.innerText = `${req.approver_name || 'Nguyễn Thanh Lâm'} • Quản lý ${req.department_name || 'Phòng Kỹ Thuật'}. Chưa có phản hồi từ người duyệt.`;
+      step2Desc.innerText = `${req.approver_name || 'Chưa có người duyệt'} • Quản lý ${req.department_name || 'Chưa phân phòng ban'}. Chưa có phản hồi từ người duyệt.`;
     }
 
     if (adminGroup) {
@@ -1089,7 +1094,7 @@ async function openRequestDetail(requestId) {
       alertIcon.innerText = '✕';
     }
     if (alertText) alertText.innerText = `Đơn đã bị từ chối`;
-    if (alertSub) alertSub.innerText = `Lý do: ${req.reject_reason || 'Không phù hợp kế hoạch công việc dự án'}`;
+    if (alertSub) alertSub.innerText = `Lý do: ${req.reject_reason || 'Không có lý do được ghi nhận'}`;
 
     if (step2Icon) {
       step2Icon.style.background = '#ef4444';
@@ -2142,7 +2147,7 @@ async function loadEmployeeDashboardData() {
 
       if (inTime) {
         if (checkInVal) checkInVal.innerText = inTime;
-        if (checkInNote) checkInNote.innerText = latest.status === 'LATE' ? `Đi muộn ${latest.late_minutes || 15}p` : 'Đúng giờ';
+        if (checkInNote) checkInNote.innerText = latest.status === 'LATE' ? `Đi muộn ${latest.late_minutes || 0}p` : 'Đúng giờ';
         if (checkInNote) checkInNote.style.color = latest.status === 'LATE' ? '#d97706' : '#059669';
         if (todayBadge) {
           todayBadge.innerText = latest.status === 'LATE' ? '⚠️ Đã vào ca (Đi muộn)' : '🟢 Đã vào ca (Đúng giờ)';
@@ -2154,7 +2159,7 @@ async function loadEmployeeDashboardData() {
       if (outTime) {
         if (checkOutVal) checkOutVal.innerText = outTime;
         if (checkOutNote) checkOutNote.innerText = 'Đã hoàn tất ca';
-        if (hoursVal) hoursVal.innerText = `${latest.actual_working_hours || '8.0'} h`;
+        if (hoursVal) hoursVal.innerText = `${Number(latest.actual_working_hours || 0).toFixed(1)} h`;
         if (todayBadge) {
           todayBadge.innerText = '🔵 Hoàn thành ca làm việc';
           todayBadge.style.background = '#dbeafe';
@@ -2172,7 +2177,7 @@ async function loadEmployeeDashboardData() {
         recentAttTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Chưa có lịch sử chấm công</td></tr>';
       } else {
         recentAttTbody.innerHTML = top5.map(r => {
-          const dateStr = r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026';
+          const dateStr = r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '-';
           const inStr = r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-';
           const outStr = r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-';
 
@@ -2219,6 +2224,7 @@ async function loadEmployeeDashboardData() {
           let badge = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Đang chờ</span>';
           if (req.status === 'APPROVED') badge = '<span class="badge-status badge-approved">✓ Đã duyệt</span>';
           if (req.status === 'REJECTED') badge = '<span class="badge-status badge-rejected">✕ Từ chối</span>';
+          if (req.status === 'CANCELLED') badge = '<span class="badge-status badge-rejected">Đã hủy</span>';
 
           return `
             <tr>
