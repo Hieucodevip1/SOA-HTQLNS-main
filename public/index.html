@@ -2642,15 +2642,15 @@ input:checked + .slider:before {
               </div>
               <div style="overflow-x:auto;">
                 <table class="figma-table">
-                  <thead><tr><th>Mã</th><th>Địa điểm</th><th>Tọa độ</th><th>Bán kính</th><th>Trạng thái</th></tr></thead>
+                  <thead><tr><th>Mã</th><th>Địa điểm</th><th>Tọa độ</th><th>Bán kính</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
                   <tbody id="workLocationsTableBody">
-                    <tr><td colspan="5">Đang tải dữ liệu...</td></tr>
+                    <tr><td colspan="6">Đang tải dữ liệu...</td></tr>
                   </tbody>
                 </table>
               </div>
               <p style="font-size:12px;color:#64748b;margin-top:12px;">
                 Các địa điểm đang có được đọc trực tiếp qua <code>GET /api/v1/work-locations</code>.
-                Tính năng chỉnh sửa hoặc vô hiệu hóa cần thêm API quản trị trên Attendance Service.
+                ADMIN/HR có thể sửa và ngừng sử dụng địa điểm qua API. Không xóa dữ liệu chấm công đã ghi.
               </p>
             </div>
           </div>
