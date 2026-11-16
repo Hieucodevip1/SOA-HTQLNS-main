@@ -94,3 +94,43 @@ Các hạng mục đã sửa trực tiếp trong `public/index.html` và `public
 - **Kiểm thử UI contract**: `npm run test:ui` có các assertion ngăn dữ liệu mẫu, xác nhận các API route và khả năng escape HTML.
 
 **Lưu ý nghiệm thu:** CI hiện bao gồm syntax, security, UI-contract test và API E2E xuyên 8 service; đây **không phải** browser E2E thao tác bấm chuột thực. Các luồng SSO, OTP email, WebAuthn, tải tệp minh chứng, điều chỉnh chính sách Wi-Fi và chỉnh sửa địa điểm cần backend riêng, không được đánh dấu là đã hoàn thành.
+
+
+## Đợt bổ sung tiếp theo: Backend còn thiếu và frontend tương ứng
+
+### Attendance: quản lý địa điểm và chặn Wi-Fi giả mạo
+
+- ADMIN/HR: `POST /api/v1/work-locations`, `PUT /api/v1/work-locations/:id`, `DELETE /api/v1/work-locations/:id` (DELETE chỉ chuyển `INACTIVE`; giữ lịch sử và khóa ngoại).
+- Validation mã/tên, tọa độ, bán kính, trạng thái và quyền; không cho bật `requireFaceId` khi chưa có xác thực thật.
+- Check-in/check-out **bắt buộc có tọa độ GPS hợp lệ trong vùng**. SSID được gửi từ client không phải bằng chứng xác thực mạng; chấm công bằng Wi-Fi thuần đã bị chặn. Check-out ngoài vùng và check-out lần hai bị từ chối.
+- UI đã hỗ trợ sửa/ngừng sử dụng địa điểm bằng API. Tọa độ browser vẫn có thể bị giả lập trên thiết bị bị kiểm soát; triển khai xác minh vị trí mức độ cao cần ứng dụng đáng tin cậy/device attestation.
+
+### Leave: lưu và tải minh chứng có bảo mật
+
+- Bảng mới `htqlns_leave.leave_attachments` chứa dữ liệu nhị phân trong MySQL để không phụ thuộc tệp tại ổ đĩa một instance.
+- `POST /api/v1/leave-attachments`: JSON `{fileName, mediaType, contentBase64}`, JWT bắt buộc, tối đa 2 MiB, chỉ PDF/PNG/JPEG, kiểm tra chữ ký định dạng cơ bản.
+- `GET /api/v1/leave-attachments/:id`: chỉ chủ sở hữu hoặc người có thẩm quyền; trả `Content-Disposition: attachment` và `Cache-Control: no-store`. MANAGER chỉ được truy cập minh chứng của người có `manager_id` tương ứng.
+- Khi tạo đơn, `attachmentUrl` phải là URL tệp đã upload, có tồn tại trong MySQL và thuộc về người gửi; tên tệp tự điền không còn được coi là minh chứng.
+- UI cho phép chọn file thực, upload trước khi gửi đơn và tải file có token. Các bản ghi demo cũ chỉ lưu tên tệp không thể tải được cho đến khi chuyển đổi dữ liệu.
+- Nên có chính sách lưu trữ/xóa minh chứng, quét virus và backup MySQL trước khi triển khai thật.
+
+### Auth: OTP email thực khi cấu hình provider
+
+- `POST /api/auth/forgot-password` dùng mã ngẫu nhiên bảo mật, lưu HMAC thay cho OTP thô; gửi trực tiếp tới Resend REST API **chỉ khi** cấu hình `RESEND_API_KEY` và `OTP_SENDER_EMAIL` (email từ tên miền đã xác minh).
+- `POST /api/auth/reset-password`: OTP 6 chữ số, hết hạn 15 phút, giới hạn 5 lần đoán/email trong bộ nhớ mỗi 15 phút, so sánh mã an toàn; thu hồi refresh token sau đổi mật khẩu.
+- Không phát OTP lên Event Bus. Nếu chưa cấu hình email API sẽ trả `503 OTP_EMAIL_NOT_CONFIGURED`, không tuyên bố gửi thành công giả.
+- Cấu hình chỉ ở `.env` cá nhân hoặc secrets của môi trường triển khai. Không commit API key. `OTP_HASH_SECRET` tùy chọn, khuyến khích dùng khóa riêng dài và ngẫu nhiên.
+- Các giới hạn theo IP/email ở cấp Gateway/nhớ tiến trình chưa thay thế được Redis rate limiting khi triển khai nhiều instance; cần bổ sung để đạt bảo mật production.
+
+### Lệnh kiểm thử
+
+```powershell
+npm run db:init
+npm run test:attendance
+npm run test:leave
+npm run test:auth-org
+# npm start trên terminal khác rồi chạy:
+npm run test:e2e
+```
+
+GitHub Actions tự kiểm tra cú pháp, UI/security regression, các API trực tiếp, MySQL nghiệp vụ và E2E qua Gateway. Những chức năng còn cần môi trường thực để nghiệm thu: gửi OTP đến email bên ngoài (cần tài khoản provider), WebAuthn/FaceID (cần HTTPS, RP ID và thiết bị hỗ trợ), kiểm thử trình duyệt tương tác, Wi-Fi BSSID tin cậy và nghiệp vụ Payroll phù hợp chính sách doanh nghiệp/pháp luật.
