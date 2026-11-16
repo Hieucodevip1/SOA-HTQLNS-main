@@ -2815,14 +2815,16 @@ async function markNotificationRead(id) {
 }
 
 // Work location management mirrors Attendance Service's GET and POST endpoints.
+let cachedWorkLocations = [];
 async function loadWorkLocations() {
   const tbody = document.getElementById('workLocationsTableBody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="5">Đang tải các địa điểm...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">Đang tải các địa điểm...</td></tr>';
   try {
     const response = await apiCall('/api/v1/work-locations');
     if (!response?.success || !Array.isArray(response.data)) throw new Error('Dữ liệu địa điểm không hợp lệ');
     const locations = response.data;
+    cachedWorkLocations = locations;
     tbody.innerHTML = locations.length ? locations.map(loc => `<tr>
       <td><strong>${uiEscape(loc.code)}</strong></td>
       <td><strong>${uiEscape(loc.name)}</strong>
@@ -2832,10 +2834,82 @@ async function loadWorkLocations() {
       <td>${Number(loc.latitude)}, ${Number(loc.longitude)}</td>
       <td>${Number(loc.radius_meters)} m</td>
       <td>${uiEscape(loc.status)}</td>
-    </tr>`).join('') : '<tr><td colspan="5">Chưa có địa điểm chấm công được cấu hình.</td></tr>';
+      <td>${['ADMIN','HR'].includes(state.user?.role)
+        ? `<button class="btn-secondary-outline" onclick="openEditWorkLocation('${uiEscape(loc.id)}')">Sửa</button>
+          ${loc.status === 'ACTIVE' ? `<button class="btn-reject-sm" onclick="deactivateWorkLocation('${uiEscape(loc.id)}')">Ngừng dùng</button>` : ''}`
+        : '—'}</td>
+    </tr>`).join('') : '<tr><td colspan="6">Chưa có địa điểm chấm công được cấu hình.</td></tr>';
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;">Không tải được địa điểm: ' + uiEscape(err.message) + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;">Không tải được địa điểm: ' + uiEscape(err.message) + '</td></tr>';
   }
+}
+
+function openEditWorkLocation(id) {
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  const loc = cachedWorkLocations.find(x => String(x.id) === String(id));
+  if (!loc) return showToast('Không tìm thấy địa điểm', 'error');
+  openModal('Chỉnh sửa địa điểm chấm công', `
+    <form onsubmit="handleSaveWorkLocation(event, '${uiEscape(id)}')"
+      style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;">
+      <label for="editLocName">Tên địa điểm</label>
+      <input id="editLocName" class="figma-pill-input" value="${uiEscape(loc.name)}" required>
+      <label for="editLocAddress">Địa chỉ</label>
+      <input id="editLocAddress" class="figma-pill-input" value="${uiEscape(loc.address || '')}">
+      <label for="editLocLat">Vĩ độ</label>
+      <input id="editLocLat" type="number" step="any" min="-90" max="90" class="figma-pill-input"
+        value="${Number(loc.latitude)}" required>
+      <label for="editLocLng">Kinh độ</label>
+      <input id="editLocLng" type="number" step="any" min="-180" max="180" class="figma-pill-input"
+        value="${Number(loc.longitude)}" required>
+      <label for="editLocRadius">Bán kính (mét)</label>
+      <input id="editLocRadius" type="number" min="10" max="5000" class="figma-pill-input"
+        value="${Number(loc.radius_meters)}" required>
+      <label for="editLocSsid">Tên Wi-Fi (metadata, không thay thế GPS)</label>
+      <input id="editLocSsid" class="figma-pill-input" value="${uiEscape(loc.wifi_ssid || '')}">
+      <label for="editLocStatus">Trạng thái</label>
+      <select id="editLocStatus" class="figma-pill-input">
+        <option value="ACTIVE" ${loc.status === 'ACTIVE' ? 'selected' : ''}>Hoạt động</option>
+        <option value="INACTIVE" ${loc.status === 'INACTIVE' ? 'selected' : ''}>Ngừng sử dụng</option>
+      </select>
+      <button type="submit" id="btnSaveLocationEdit" class="btn-primary-blue">Cập nhật địa điểm</button>
+    </form>`);
+}
+
+async function handleSaveWorkLocation(event, id) {
+  event.preventDefault();
+  const value = key => document.getElementById(key)?.value.trim() || '';
+  const name = value('editLocName');
+  const latitude = Number(value('editLocLat')), longitude = Number(value('editLocLng'));
+  const radiusMeters = Number(value('editLocRadius')), status = value('editLocStatus');
+  if (!name || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
+      !Number.isFinite(longitude) || Math.abs(longitude) > 180 ||
+      !Number.isInteger(radiusMeters) || radiusMeters < 10 || radiusMeters > 5000 ||
+      !['ACTIVE','INACTIVE'].includes(status)) return showToast('Thông tin địa điểm không hợp lệ','warning');
+  const btn = document.getElementById('btnSaveLocationEdit');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiCall('/api/v1/work-locations/' + encodeURIComponent(id), {
+      method:'PUT', body:JSON.stringify({name, latitude, longitude, radiusMeters, status,
+        address:value('editLocAddress'), wifiSsid:value('editLocSsid')})
+    });
+    if (!res?.success) throw new Error(res?.error || 'Không cập nhật được địa điểm');
+    closeModal();
+    showToast('Đã cập nhật địa điểm trong Attendance Service', 'success');
+    await loadWorkLocations();
+  } catch(err) { showToast('Không cập nhật được địa điểm: '+err.message,'error'); }
+  finally { if(btn) btn.disabled=false; }
+}
+
+async function deactivateWorkLocation(id) {
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  const loc = cachedWorkLocations.find(x => String(x.id) === String(id));
+  if (!loc || !confirm('Ngừng sử dụng địa điểm "' + loc.name + '"? Lịch sử chấm công vẫn được giữ.')) return;
+  try {
+    const res = await apiCall('/api/v1/work-locations/' + encodeURIComponent(id), {method:'DELETE'});
+    if (!res?.success) throw new Error(res?.error || 'Không vô hiệu hóa được');
+    showToast('Đã ngừng sử dụng địa điểm', 'success');
+    await loadWorkLocations();
+  } catch(err) { showToast('Không thay đổi được trạng thái: '+err.message,'error'); }
 }
 
 async function handleCreateWorkLocation(event) {
