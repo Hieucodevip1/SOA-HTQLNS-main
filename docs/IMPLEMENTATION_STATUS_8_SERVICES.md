@@ -58,3 +58,21 @@ Workflow `.github/workflows/security-and-syntax.yml` chạy kiểm tra cú pháp
 Chỉ commit lên fork `NguyenHao129600/SOA-HTQLNS-main`, nhánh
 `feature/complete-8-microservices`. Không push hay merge vào nhánh `main`
 của nhóm `Hieucodevip1/SOA-HTQLNS-main` nếu chưa thống nhất và duyệt PR.
+
+
+## Kiểm thử tự động đã xác nhận trên GitHub Actions
+
+- `verify`: Node.js syntax checks, JWT security regression, UI regression — **PASS**.
+- `integration`: MySQL 8, tạo 8 database, kiểm thử Leave/Shift, đăng ký tài khoản Auth/Organization — **PASS**.
+- `integration`: khởi chạy Gateway, Registry, Event Bus và đủ 8 Microservices; chạy `npm run test:e2e` qua Gateway — **PASS**.
+- Lần chạy tham chiếu: https://github.com/NguyenHao129600/SOA-HTQLNS-main/actions/runs/43781358793
+
+**Chưa được xác nhận:** trải nghiệm giao diện bằng browser E2E thực tế, giao tiếp Event Bus → Notification theo một phép thử đầu-cuối riêng, các nghiệp vụ tính lương sát luật hiện hành, và khả năng phục hồi khi dịch vụ gặp sự cố.
+
+## Các sửa đổi giao diện và đăng ký tài khoản sau đợt đầu
+
+- Đã bỏ danh sách nhân viên, phòng ban, tài khoản RBAC và bản ghi chấm công giả khỏi các đường fallback quan trọng của `public/js/app.js`.
+- Hiển thị lỗi thật khi dữ liệu chưa tải được, không biến lỗi kết nối thành dữ liệu mẫu; escape một số bảng nhân viên/phòng ban/RBAC trước khi render HTML.
+- Form tạo nhân viên gửi tên trường tương thích Organization API, xóa nhân viên theo quy trình chuyển trạng thái thay vì yêu cầu xóa vĩnh viễn.
+- Auth đăng ký tài khoản và tạo hồ sơ nhân viên bằng MySQL transaction, kiểm tra hồ sơ liên kết và rollback nếu lỗi; không cho bật sinh trắc học chỉ từ flag client.
+- Những màn hình khác vẫn cần rà soát dữ liệu mô phỏng và kiểm thử browser E2E.
