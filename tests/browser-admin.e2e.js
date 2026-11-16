@@ -88,6 +88,17 @@ async function run() {
       await page.locator('#tabBtnShifts').click();
       await page.locator('#tableBodyShiftsList').getByRole('button',{name:'Ngừng dùng'}).first()
         .waitFor({timeout:12000});
+      await page.locator('#nav-profile').click();
+      await page.getByRole('button', {name:'Sửa email'}).click();
+      await page.locator('#profileEditEmail').fill('unverified-browser@example.test');
+      await page.locator('#profileEditCurrentPassword').fill('incorrect-password');
+      const deniedChange = page.waitForResponse(r =>
+        r.url().endsWith('/api/auth/me') && r.request().method() === 'PUT', {timeout:15000});
+      await page.locator('#btnSaveProfileEmail').click();
+      assert.equal((await deniedChange).status(), 401);
+      assert.equal(await page.locator('#portalApp').isVisible(), true,
+        'A wrong current password must not sign the user out');
+
     } finally { await admin.context.close(); }
 
     const hr = await signIn(browser, 'hr_admin');
