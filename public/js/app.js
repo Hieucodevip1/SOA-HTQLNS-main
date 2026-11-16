@@ -2154,74 +2154,98 @@ async function checkTodayAttendanceStatus() {
 // ==============================================================================
 // NẠP VÀ QUẢN LÝ PHÂN QUYỀN (RBAC - CHỈ ADMIN)
 // ==============================================================================
+
+let cachedRbacUsers = [];
+
 async function loadRbacUsersData() {
-  const tbody = document.getElementById('rbacUsersTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Đang kết nối Auth Service (:3001) để lấy danh sách tài khoản...</td></tr>`;
-
-  let users = [];
+  if (state.user?.role !== 'ADMIN') return;
+  const body = document.getElementById('rbacUsersTableBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="7">Đang tải danh sách tài khoản...</td></tr>';
   try {
-    const res = await apiCall('/api/auth/users');
-    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-      users = res.data;
-    }
-  } catch (err) {
-    console.error('Auth API users:', err);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#dc2626;">Không tải được danh sách tài khoản. Vui lòng thử lại.</td></tr>';
-    return;
+    const result = await apiCall('/api/auth/users');
+    if (!result?.success || !Array.isArray(result.data)) throw new Error('Dữ liệu tài khoản không hợp lệ');
+    cachedRbacUsers = result.data;
+    const myId = String(state.user?.id || state.user?.userId || '');
+    body.innerHTML = cachedRbacUsers.length ? cachedRbacUsers.map(user => {
+      const id = String(user.id || '');
+      if (!orgValidId(id)) return '';
+      const self = id === myId;
+      const roleOptions = ['ADMIN','HR','MANAGER','EMPLOYEE'].map(role =>
+        `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('');
+      const statusOptions = ['ACTIVE','INACTIVE','LOCKED'].map(status =>
+        `<option value="${status}" ${user.status === status ? 'selected' : ''}>${status}</option>`).join('');
+      return `<tr>
+        <td><strong>${uiEscape(user.username)}</strong>${self ? ' (Bạn)' : ''}</td>
+        <td>${uiEscape(user.email)}</td>
+        <td><code>${uiEscape(user.emp_id || '-')}</code></td>
+        <td>${uiEscape(user.role)}</td>
+        <td><select id="rbac-role-${id}" class="figma-pill-input" ${self?'disabled':''}>${roleOptions}</select></td>
+        <td><select id="rbac-status-${id}" class="figma-pill-input" ${self?'disabled':''}>${statusOptions}</select></td>
+        <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+          <button type="button" class="btn-primary-blue" ${self?'disabled':''} onclick="saveRbacRole('${id}')">Lưu quyền</button>
+          <button type="button" class="btn-secondary-outline" ${self?'disabled':''} onclick="saveRbacStatus('${id}')">Lưu trạng thái</button>
+          <button type="button" class="btn-reject-sm" ${self?'disabled':''} onclick="deleteAuthUser('${id}')">Xóa</button>
+        </div></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="7">Chưa có tài khoản.</td></tr>';
+  } catch(err) {
+    cachedRbacUsers = [];
+    body.innerHTML = '<tr><td colspan="7" style="color:#dc2626">Không tải được tài khoản: ' + uiEscape(err.message) + '</td></tr>';
   }
-
-  if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Chưa có tài khoản người dùng</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = users.map(u => {
-    let roleBadge = '<span class="badge-status badge-approved">EMPLOYEE</span>';
-    if (u.role === 'ADMIN') roleBadge = '<span class="badge-status badge-rejected">ADMIN</span>';
-    else if (u.role === 'HR') roleBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">HR</span>';
-    else if (u.role === 'MANAGER') roleBadge = '<span class="badge-status" style="background:#fef3c7; color:#d97706;">MANAGER</span>';
-
-    return `
-      <tr>
-        <td><strong>${uiEscape(u.username)}</strong></td>
-        <td>${uiEscape(u.email || '-')}</td>
-        <td><code>${uiEscape(u.emp_id || '-')}</code></td>
-        <td>${roleBadge}</td>
-        <td>
-          <select id="role-select-${u.id}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
-            <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
-            <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
-            <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
-            <option value="EMPLOYEE" ${u.role === 'EMPLOYEE' ? 'selected' : ''}>EMPLOYEE (Nhân viên)</option>
-          </select>
-        </td>
-        <td>
-          <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" onclick="handleUpdateUserRole('${u.id}', '${u.username}')">
-            💾 Lưu quyền
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
 }
 
-async function handleUpdateUserRole(userId, username) {
-  const selectEl = document.getElementById(`role-select-${userId}`);
-  if (!selectEl) return;
-  const newRole = selectEl.value;
+function validRbacTarget(id) {
+  if (state.user?.role !== 'ADMIN' || !orgValidId(id)) return false;
+  if (String(state.user?.id || state.user?.userId || '') === String(id)) return false;
+  return cachedRbacUsers.some(u => String(u.id) === String(id));
+}
 
+async function saveRbacRole(id) {
+  if (!validRbacTarget(id)) return;
+  const role = document.getElementById('rbac-role-' + id)?.value;
+  if (!['ADMIN','HR','MANAGER','EMPLOYEE'].includes(role)) return;
+  const user = cachedRbacUsers.find(u => String(u.id) === id);
+  if (!user || user.role === role) return;
+  if (!confirm('Đổi vai trò tài khoản "' + user.username + '" thành ' + role + '?')) return;
   try {
-    const res = await apiCall(`/api/auth/users/${userId}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({ role: newRole })
+    const result = await apiCall('/api/auth/users/' + encodeURIComponent(id) + '/role', {
+      method:'PUT', body:JSON.stringify({role})
     });
-    showToast(`Đã phân quyền thành công tài khoản "${username}" thành vai trò [${newRole}]!`, 'success');
-    loadRbacUsersData();
-  } catch (err) {
-    showToast(`Lỗi phân quyền: ${err.message}`, 'error');
-  }
+    if (!result?.success) throw new Error(result?.error || 'Không lưu được vai trò');
+    showToast('Đã cập nhật vai trò', 'success');
+    await loadRbacUsersData();
+  } catch(err) { showToast('Không cập nhật được vai trò: '+err.message,'error'); }
+}
+
+async function saveRbacStatus(id) {
+  if (!validRbacTarget(id)) return;
+  const status = document.getElementById('rbac-status-' + id)?.value;
+  if (!['ACTIVE','INACTIVE','LOCKED'].includes(status)) return;
+  const user = cachedRbacUsers.find(u => String(u.id) === id);
+  if (!user || user.status === status) return;
+  if (!confirm('Đổi trạng thái tài khoản "' + user.username + '" thành ' + status + '?')) return;
+  try {
+    const result = await apiCall('/api/auth/users/' + encodeURIComponent(id) + '/status', {
+      method:'PUT',body:JSON.stringify({status})
+    });
+    if (!result?.success) throw new Error(result?.error || 'Không cập nhật được trạng thái');
+    showToast('Đã cập nhật trạng thái tài khoản', 'success');
+    await loadRbacUsersData();
+  } catch(err) { showToast('Không cập nhật được trạng thái: '+err.message,'error'); }
+}
+
+async function deleteAuthUser(id) {
+  if (!validRbacTarget(id)) return;
+  const user = cachedRbacUsers.find(u => String(u.id) === id);
+  if (!user || !confirm('XÓA tài khoản "' + user.username +
+      '" khỏi Auth Service? Không thể hoàn tác. Hồ sơ nhân sự vẫn được giữ.')) return;
+  try {
+    const result = await apiCall('/api/auth/users/' + encodeURIComponent(id), { method:'DELETE' });
+    if (!result?.success) throw new Error(result?.error || 'Xóa tài khoản thất bại');
+    showToast('Đã xóa tài khoản đăng nhập', 'success');
+    await loadRbacUsersData();
+  } catch(err) { showToast('Xóa tài khoản thất bại: '+err.message,'error'); }
 }
 
 // ==============================================================================
