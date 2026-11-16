@@ -76,3 +76,21 @@ của nhóm `Hieucodevip1/SOA-HTQLNS-main` nếu chưa thống nhất và duyệ
 - Form tạo nhân viên gửi tên trường tương thích Organization API, xóa nhân viên theo quy trình chuyển trạng thái thay vì yêu cầu xóa vĩnh viễn.
 - Auth đăng ký tài khoản và tạo hồ sơ nhân viên bằng MySQL transaction, kiểm tra hồ sơ liên kết và rollback nếu lỗi; không cho bật sinh trắc học chỉ từ flag client.
 - Những màn hình khác vẫn cần rà soát dữ liệu mô phỏng và kiểm thử browser E2E.
+
+
+## Đồng bộ frontend với backend (đợt mới nhất)
+
+Các hạng mục đã sửa trực tiếp trong `public/index.html` và `public/js/app.js`:
+
+- **Auth/Profile**: đăng nhập chỉ dùng `user` thực từ Auth API, không tạo phiên giả bằng thanh demo; đăng ký công khai chỉ EMPLOYEE; đổi mật khẩu gửi `POST /api/auth/change-password`, xóa phiên và yêu cầu đăng nhập lại; Profile đọc `GET /api/auth/me`, hồ sơ nhân viên liên kết qua Organization; Logout gọi Auth API.
+- **Notification**: chuông đọc `GET /api/v1/notifications`, cập nhật unread, `PATCH /api/v1/notifications/:id/read` để đánh dấu đã đọc; không còn bản tin giả.
+- **SOA Monitor**: `GET /api/system/services` lấy dữ liệu Registry và trạng thái UP/STALE/UNHEALTHY theo instance thật.
+- **Analytics/Báo cáo**: lựa chọn tháng hiện tại, tháng trước, quý hiện tại; tổng hợp số liệu từ Attendance, Leave, Organization và Analytics; xuất CSV và in/lưu PDF bằng trình duyệt, không thông báo giả đã xuất Excel/PDF.
+- **Dashboard**: KPI cá nhân và quản lý dựa trên API thật, lọc ngày/phòng ban bằng truy vấn, bỏ bộ số mẫu; lưu ý tỷ lệ công chuẩn là ước tính theo ngày làm việc thứ Hai–thứ Sáu.
+- **Attendance**: check-in và check-out lấy GPS trình duyệt, không gắn tọa độ giả; lịch sử cá nhân không còn mock; giải trình dùng enum `OTHER` được DB chấp nhận; xuất CSV từ danh sách đã lọc; cấu hình địa điểm bằng GET/POST `/api/v1/work-locations`. Chỉnh sửa địa điểm, Wi-Fi BSSID/FaceID chưa có API tương ứng.
+- **Organization**: lấy nhân viên/phòng ban/chức vụ từ API; thêm và sửa nhân viên, phòng ban bằng API thật; tạo chức vụ qua API; sử dụng định danh, tên trường và enum hợp lệ; nhân viên nghỉ việc được chuyển trạng thái, không xóa vĩnh viễn bằng UI.
+- **Leave/Shift**: giao diện đã gửi/hủy/duyệt đơn nghỉ phép và đổi ca qua API, không sửa trạng thái giả.
+- **Payroll**: bộ lọc tháng/năm theo thời gian hiện tại, gọi API theo vai trò, form tạo và sửa cấu hình lương, bảng phiếu lương và phát hành kỳ lương qua API. **Thuế/bảo hiểm/tỷ lệ tính lương vẫn là mô hình demo**, chưa đủ đảm bảo đúng pháp luật và tính lương sản xuất.
+- **Kiểm thử UI contract**: `npm run test:ui` có các assertion ngăn dữ liệu mẫu, xác nhận các API route và khả năng escape HTML.
+
+**Lưu ý nghiệm thu:** CI hiện bao gồm syntax, security, UI-contract test và API E2E xuyên 8 service; đây **không phải** browser E2E thao tác bấm chuột thực. Các luồng SSO, OTP email, WebAuthn, tải tệp minh chứng, điều chỉnh chính sách Wi-Fi và chỉnh sửa địa điểm cần backend riêng, không được đánh dấu là đã hoàn thành.
