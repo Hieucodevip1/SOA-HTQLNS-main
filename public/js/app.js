@@ -1818,44 +1818,44 @@ async function handleChangePasswordSubmit(event) {
 async function loadSoaServicesStatus() {
   const tbody = document.getElementById('soaMonitorTableBody');
   if (!tbody) return;
-
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Đang kết nối Service Registry (:3500)...</td></tr>`;
-
+  tbody.innerHTML = '<tr><td colspan="6">Đang đọc dữ liệu Service Registry...</td></tr>';
   try {
-    const serviceList = [
-      { name: 'api-gateway', port: 3000, db: 'N/A (Cổng Gateway & Proxy)', online: true },
-      { name: 'service-registry', port: 3500, db: 'In-Memory (Service Discovery)', online: true },
-      { name: 'event-bus', port: 3600, db: 'Durable Queue (event-bus.json)', online: true },
-      { name: 'auth-service', port: 3001, db: 'htqlns_auth (Cơ sở dữ liệu xác thực)', online: true },
-      { name: 'organization-service', port: 3002, db: 'htqlns_organization (Phòng ban & Nhân sự)', online: true },
-      { name: 'attendance-service', port: 3003, db: 'htqlns_attendance (GPS/WiFi)', online: false },
-      { name: 'leave-service', port: 3004, db: 'htqlns_leave (Quỹ phép & Đơn)', online: false },
-      { name: 'shift-service', port: 3005, db: 'htqlns_shift (Lịch ca & OT)', online: false },
-      { name: 'payroll-service', port: 3006, db: 'htqlns_payroll (Động cơ tính lương)', online: false },
-      { name: 'notification-service', port: 3007, db: 'htqlns_notification (Cảnh báo)', online: false },
-      { name: 'analytics-service', port: 3008, db: 'htqlns_analytics (Báo cáo)', online: false }
+    const response = await apiCall('/api/system/services');
+    const instancesByName = response?.data?.services;
+    if (!response?.success || !instancesByName || typeof instancesByName !== 'object') {
+      throw new Error('Service Registry trả về dữ liệu không hợp lệ');
+    }
+    // Expected services are configuration metadata; status comes ONLY from Registry.
+    const services = [
+      ['api-gateway', 3000, 'API Gateway'],
+      ['auth-service', 3001, 'htqlns_auth'],
+      ['organization-service', 3002, 'htqlns_organization'],
+      ['attendance-service', 3003, 'htqlns_attendance'],
+      ['leave-service', 3004, 'htqlns_leave'],
+      ['shift-service', 3005, 'htqlns_shift'],
+      ['payroll-service', 3006, 'htqlns_payroll'],
+      ['notification-service', 3007, 'htqlns_notification'],
+      ['analytics-service', 3008, 'htqlns_analytics']
     ];
-
-    tbody.innerHTML = serviceList
-      .map((item) => {
-        const statusBadge = item.online
-          ? '<span class="badge-status badge-approved">🟢 ONLINE (UP)</span>'
-          : '<span class="badge-status" style="background:#f1f5f9; color:#94a3b8;">⚪ CHƯA BẬT (OFF)</span>';
-
-        return `
-        <tr>
-          <td><strong>${item.name}</strong></td>
-          <td><code>:${item.port}</code></td>
-          <td>http://localhost:${item.port}</td>
-          <td><a href="http://localhost:${item.port}/health" target="_blank" class="link-action-blue">/health ↗</a></td>
-          <td>${statusBadge}</td>
-          <td><code>${item.db}</code></td>
-        </tr>
-      `;
-      })
-      .join('');
+    tbody.innerHTML = services.map(([name, port, database]) => {
+      const instances = Array.isArray(instancesByName[name]) ? instancesByName[name] : [];
+      const healthy = instances.some(x => x.status === 'UP');
+      const stale = instances.some(x => x.status === 'STALE');
+      const status = healthy ? '🟢 UP' : stale ? '⚠️ STALE' :
+        (instances.length ? '🔴 UNHEALTHY' : '⚪ CHƯA ĐĂNG KÝ');
+      return `<tr>
+        <td><strong>${uiEscape(name)}</strong></td>
+        <td><code>:${port}</code></td>
+        <td><code>http://localhost:${port}</code></td>
+        <td><code>/health</code></td>
+        <td><span class="badge-status ${healthy ? 'badge-approved' : 'badge-rejected'}">${status}</span></td>
+        <td><code>${uiEscape(database)}</code></td>
+      </tr>`;
+    }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color: #dc2626; text-align: center;">Lỗi tải dữ liệu Registry: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#dc2626;">
+      Không lấy được trạng thái Service Registry: ${uiEscape(err.message)}
+    </td></tr>`;
   }
 }
 
@@ -2354,7 +2354,7 @@ async function handleCheckIn() {
     }
     if (checkoutBtn) checkoutBtn.disabled = false;
 
-    showToast(res.message || `Điểm danh vào ca thành công lúc ${timeStr}! (Wi-Fi Công ty hợp lệ)`, 'success');
+    showToast(res.message || `Check-in GPS thành công lúc ${timeStr}`, 'success');
     loadMyAttendanceData();
   } catch (err) {
     if (checkinBtn) {
@@ -2373,12 +2373,17 @@ async function handleCheckOut() {
   }
 
   try {
+    if (!navigator.geolocation) throw new Error('Trình duyệt không hỗ trợ GPS');
+    const position = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true, timeout: 12000, maximumAge: 0
+      }));
     const res = await apiCall('/api/attendance/check-out', {
       method: 'POST',
       body: JSON.stringify({
-        method: 'WIFI',
-        latitude: 13.759142,
-        longitude: 109.218536
+        method: 'GPS',
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
       })
     });
 
@@ -2415,27 +2420,58 @@ function handleTopbarSearch(e) {
   }
 }
 
-function openNotificationsModal() {
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #10b981;">
-        <div style="font-weight: 700; color: #0f172a;">🔔 Chấm công hôm nay</div>
-        <div style="color: #64748b;">Ca sáng 08:00 - 16:00: 34 nhân viên đã điểm danh thành công.</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">15 phút trước</div>
-      </div>
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #f59e0b;">
-        <div style="font-weight: 700; color: #0f172a;">⏰ Đi muộn phát sinh</div>
-        <div style="color: #64748b;">3 nhân viên phòng Kỹ thuật ghi nhận đi trễ từ 7 - 21 phút.</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">45 phút trước</div>
-      </div>
-      <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
-        <div style="font-weight: 700; color: #0f172a;">📄 Đơn xin nghỉ phép mới</div>
-        <div style="color: #64748b;">Vũ Đức Hiếu đã gửi đơn xin nghỉ phép 1 ngày (02/11/2026).</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">1 giờ trước</div>
-      </div>
-    </div>
-  `;
-  openModal('Thông báo hệ thống (3 mới)', html);
+async function refreshUnreadNotifications() {
+  if (!state.token) return;
+  try {
+    const response = await apiCall('/api/v1/notifications');
+    if (!response?.success || !Array.isArray(response.data)) throw new Error('Dữ liệu thông báo không hợp lệ');
+    const dot = document.getElementById('notificationUnreadDot');
+    const count = response.data.filter(n => !Boolean(Number(n.is_read))).length;
+    if (dot) {
+      dot.style.display = count ? 'inline-block' : 'none';
+      dot.title = count + ' thông báo chưa đọc';
+    }
+    return response.data;
+  } catch (err) {
+    console.warn('Notification Service unavailable:', err.message);
+    const dot = document.getElementById('notificationUnreadDot');
+    if (dot) dot.style.display = 'none';
+    throw err;
+  }
+}
+
+async function openNotificationsModal() {
+  openModal('Thông báo hệ thống', '<p>Đang tải thông báo từ Notification Service...</p>');
+  try {
+    const notifications = await refreshUnreadNotifications();
+    const html = notifications.length
+      ? `<div style="display:flex;flex-direction:column;gap:10px;max-height:65vh;overflow:auto;">
+          ${notifications.map(n => {
+            const id = /^[a-fA-F0-9-]{10,64}$/.test(String(n.id)) ? String(n.id) : '';
+            const read = Boolean(Number(n.is_read));
+            return `<div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:${read ? '#fff' : '#eff6ff'}">
+              <div style="font-weight:700;">${uiEscape(n.title || 'Thông báo')}</div>
+              <div style="font-size:12px;color:#475569;margin-top:4px;">${uiEscape(n.content || '')}</div>
+              <div style="font-size:11px;color:#64748b;margin-top:4px;">${uiEscape(n.created_at ? new Date(n.created_at).toLocaleString('vi-VN') : '')}</div>
+              ${!read && id ? `<button class="btn-secondary-outline" style="margin-top:6px;padding:5px 10px;" onclick="markNotificationRead('${id}')">Đánh dấu đã đọc</button>` : ''}
+            </div>`;
+          }).join('')}
+         </div>`
+      : '<p>Hiện chưa có thông báo.</p>';
+    openModal('Thông báo hệ thống', html);
+  } catch (err) {
+    openModal('Thông báo hệ thống', `<p style="color:#dc2626;">Không thể tải thông báo: ${uiEscape(err.message)}</p>`);
+  }
+}
+
+async function markNotificationRead(id) {
+  if (!/^[a-fA-F0-9-]{10,64}$/.test(String(id))) return;
+  try {
+    await apiCall(`/api/v1/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' });
+    await openNotificationsModal();
+  } catch (err) {
+    showToast('Không thể cập nhật thông báo: ' + err.message, 'error');
+  }
 }
 
 // Bật tắt thiết lập phương thức chấm công (Figma Image 4)
@@ -2576,6 +2612,7 @@ function initPortalDashboard(targetView = null) {
   const savedView = targetView || safeGetStorage('htqlns_current_view', 'dashboard');
   navigateToView(savedView);
   checkTodayAttendanceStatus();
+  refreshUnreadNotifications().catch(() => {});
 }
 
 // ==============================================================================
