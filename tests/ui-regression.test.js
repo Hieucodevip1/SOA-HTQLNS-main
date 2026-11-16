@@ -74,3 +74,30 @@ test('registration does not advertise privileged public role or demo bypass', ()
   assert.doesNotMatch(html, /option value="MANAGER"/);
   assert.match(html, /FaceID \/ Vân tay — chưa hỗ trợ/);
 });
+
+
+test('Attendance locations expose edit and deactivate actions with real API calls', () => {
+  assert.match(source, /handleSaveWorkLocation/);
+  assert.match(source, /deactivateWorkLocation/);
+  assert.match(source, /\/api\/v1\/work-locations\/.*encodeURIComponent\(id\)/);
+  assert.match(html, /id="workLocationsTableBody"/);
+  assert.match(html, /<th>Thao tác<\/th>/);
+});
+
+test('Leave evidence uses real file input, authenticated binary upload and gated download', () => {
+  assert.match(html, /type="file" id="leaveFormAttachment"/);
+  assert.match(html, /id="btnDownloadLeaveAttachment"/);
+  assert.match(source, /\/api\/v1\/leave-attachments/);
+  assert.match(source, /FileReader/);
+  assert.match(source, /contentBase64/);
+  assert.match(source, /downloadLeaveAttachment/);
+  assert.doesNotMatch(html, /value="Bien-ban-ban-giao\.pdf"/);
+});
+
+test('Password recovery calls real OTP endpoints and uses password-type inputs', () => {
+  assert.match(source, /handleForgotEmailSubmit/);
+  assert.match(source, /handleResetPasswordSubmit/);
+  assert.match(source, /api\/auth\/forgot-password/);
+  assert.match(source, /api\/auth\/reset-password/);
+  assert.match(source, /id="resetNewPassword" type="password"/);
+});
