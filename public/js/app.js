@@ -551,7 +551,10 @@ function navigateToView(viewName) {
   if (viewName === 'dashboard') loadDashboardData();
   if (viewName === 'requests') loadRequestsData();
   if (viewName === 'employees') loadEmployeesData();
-  if (viewName === 'departments') loadDepartmentsData();
+  if (viewName === 'departments') {
+    loadDepartmentsData();
+    loadPositionsData();
+  }
   if (viewName === 'attendance-history') loadAttendanceHistoryData();
   if (viewName === 'my-attendance') {
     loadMyAttendanceData();
@@ -1415,6 +1418,62 @@ async function handleUpdateDepartmentSubmit(event, id) {
   } finally { if(btn) btn.disabled = false; }
 }
 
+async function loadPositionsData() {
+  const tbody = document.getElementById('positionsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5">Đang tải danh mục chức vụ...</td></tr>';
+  try {
+    const response = await apiCall('/api/organization/positions');
+    if (!Array.isArray(response?.data)) throw new Error('Phản hồi chức vụ không hợp lệ');
+    state.positions = response.data;
+    tbody.innerHTML = response.data.length ? response.data.map(p => `<tr>
+      <td><strong>${uiEscape(p.code)}</strong></td>
+      <td>${uiEscape(p.title)}</td>
+      <td>${uiEscape(p.department_name || 'Chung')}</td>
+      <td>${uiEscape(p.status)}</td>
+      <td>${Number(p.base_salary_min || 0).toLocaleString('vi-VN')} - ${Number(p.base_salary_max || 0).toLocaleString('vi-VN')} đ</td>
+    </tr>`).join('') : '<tr><td colspan="5">Chưa có chức vụ</td></tr>';
+  } catch(err) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;">Không tải được chức vụ: '+uiEscape(err.message)+'</td></tr>';
+  }
+}
+
+function openCreatePositionModal() {
+  if (!['ADMIN','HR'].includes(state.user?.role)) return;
+  const deps = ['<option value="">Chức vụ chung</option>',
+    ...(state.departments || []).map(d => `<option value="${uiEscape(d.id)}">${uiEscape(d.name)}</option>`)].join('');
+  openModal('Thêm chức vụ',`
+    <form onsubmit="handleCreatePositionSubmit(event)" style="display:flex;flex-direction:column;gap:12px;">
+      <label for="newPositionCode">Mã chức vụ</label>
+      <input id="newPositionCode" class="figma-pill-input" required maxlength="50">
+      <label for="newPositionTitle">Tên chức vụ</label>
+      <input id="newPositionTitle" class="figma-pill-input" required maxlength="150">
+      <label for="newPositionDepartment">Phòng ban</label>
+      <select id="newPositionDepartment" class="figma-pill-input">${deps}</select>
+      <button id="btnCreatePosition" type="submit" class="btn-primary-blue">Lưu chức vụ</button>
+    </form>`);
+}
+
+async function handleCreatePositionSubmit(event) {
+  event.preventDefault();
+  const code = document.getElementById('newPositionCode')?.value.trim();
+  const title = document.getElementById('newPositionTitle')?.value.trim();
+  const department_id = document.getElementById('newPositionDepartment')?.value || null;
+  if (!code || !title) return showToast('Mã và tên chức vụ bắt buộc','warning');
+  const btn = document.getElementById('btnCreatePosition');
+  if(btn)btn.disabled=true;
+  try {
+    const result = await apiCall('/api/organization/positions', {
+      method:'POST',body:JSON.stringify({code,title,department_id})
+    });
+    if (!result?.success) throw new Error(result?.error || 'Không thể tạo chức vụ');
+    closeModal();showToast('Đã tạo chức vụ','success');
+    await loadPositionsData();
+  } catch(err) {
+    showToast('Không lưu được chức vụ: '+err.message,'error');
+  } finally {if(btn)btn.disabled=false;}
+}
+
 function handleDepartmentFilter() {
   const kw = document.getElementById('departmentSearchInput')?.value.toLowerCase() || '';
   const filtered = (state.departments || []).filter(
@@ -1503,7 +1562,7 @@ async function openEditEmployeeModal(id) {
         <select id="editEmpPosition" class="figma-pill-input">${opt(positions.data,'title',employee.position_id)}</select>
         <label for="editEmpContract">Hợp đồng</label>
         <select id="editEmpContract" class="figma-pill-input">
-          ${['OFFICIAL','PROBATION','PART_TIME','INTERN'].map(x => `<option ${employee.contract_type === x ? 'selected' : ''}>${x}</option>`).join('')}
+          ${['OFFICIAL','PROBATION','PARTTIME','INTERN'].map(x => `<option ${employee.contract_type === x ? 'selected' : ''}>${x}</option>`).join('')}
         </select>
         <label for="editEmpStatus">Trạng thái</label>
         <select id="editEmpStatus" class="figma-pill-input">
