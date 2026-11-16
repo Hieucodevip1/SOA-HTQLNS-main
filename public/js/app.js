@@ -2946,38 +2946,47 @@ async function submitNewDepartment() {
   }
 }
 
-function openAddEmployeeModal() {
-  if (!state.departments?.length) {
-    showToast('Chưa tải được phòng ban; hãy kiểm tra dữ liệu trước khi tạo nhân viên', 'warning');
-    return;
+async function openAddEmployeeModal() {
+  if (!['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role)) return;
+  try {
+    const [departments, positions] = await Promise.all([
+      apiCall('/api/organization/departments'),
+      apiCall('/api/organization/positions')
+    ]);
+    if (!Array.isArray(departments?.data) || !Array.isArray(positions?.data)) {
+      throw new Error('Danh mục phòng ban/chức vụ không hợp lệ');
+    }
+    state.departments = departments.data;
+    state.positions = positions.data;
+    const depOptions = ['<option value="">Chưa phân phòng ban</option>',
+      ...departments.data.map(d => `<option value="${uiEscape(d.id)}">${uiEscape(d.name)}</option>`)].join('');
+    const posOptions = ['<option value="">Chưa có chức vụ</option>',
+      ...positions.data.map(p => `<option value="${uiEscape(p.id)}">${uiEscape(p.title)}</option>`)].join('');
+    openModal('Thêm mới nhân viên', `
+      <form onsubmit="submitNewEmployee(event)" style="display:flex;flex-direction:column;gap:10px;">
+        <input type="text" id="newEmpCode" class="figma-pill-input" placeholder="Mã nhân viên" required maxlength="50">
+        <input type="text" id="newEmpName" class="figma-pill-input" placeholder="Họ và tên" required maxlength="150">
+        <input type="email" id="newEmpEmail" class="figma-pill-input" placeholder="Email công ty" required>
+        <input type="text" id="newEmpPhone" class="figma-pill-input" placeholder="Số điện thoại">
+        <label for="newEmpDept">Phòng ban</label>
+        <select id="newEmpDept" class="figma-pill-input">${depOptions}</select>
+        <label for="newEmpPosition">Chức vụ</label>
+        <select id="newEmpPosition" class="figma-pill-input">${posOptions}</select>
+        <button id="btnCreateEmp" type="submit" class="btn-primary-blue">Lưu hồ sơ nhân sự</button>
+      </form>`);
+  } catch(err) {
+    showToast('Không thể nạp biểu mẫu nhân viên: '+err.message,'error');
   }
-  const deptOptions = state.departments
-    .map((d) => `<option value="${d.id || 1}">${d.name}</option>`)
-    .join('');
-
-  openModal(
-    'Thêm mới Nhân viên',
-    `
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <input type="text" id="newEmpCode" class="figma-pill-input" placeholder="Mã nhân viên (vd: NV-009)" required>
-      <input type="text" id="newEmpName" class="figma-pill-input" placeholder="Họ và tên" required>
-      <input type="email" id="newEmpEmail" class="figma-pill-input" placeholder="Email công ty" required>
-      <input type="text" id="newEmpPhone" class="figma-pill-input" placeholder="Số điện thoại liên hệ">
-      <select id="newEmpDept" class="figma-pill-input">
-        ${deptOptions}
-      </select>
-      <button class="btn-primary-blue" style="margin-top: 10px;" onclick="submitNewEmployee()">Lưu hồ sơ nhân sự</button>
-    </div>
-  `
-  );
 }
 
-async function submitNewEmployee() {
+async function submitNewEmployee(event) {
+  event?.preventDefault();
   const code = document.getElementById('newEmpCode')?.value.trim();
   const fullName = document.getElementById('newEmpName')?.value.trim();
   const email = document.getElementById('newEmpEmail')?.value.trim();
   const phone = document.getElementById('newEmpPhone')?.value.trim();
   const departmentId = document.getElementById('newEmpDept')?.value;
+  const positionId = document.getElementById('newEmpPosition')?.value || null;
 
   if (!code || !fullName || !email) {
     return showToast('Vui lòng điền đủ mã NV, họ tên và email', 'warning');
@@ -2986,7 +2995,8 @@ async function submitNewEmployee() {
   try {
     await apiCall('/api/organization/employees', {
       method: 'POST',
-      body: JSON.stringify({ code, full_name: fullName, email, phone, department_id: departmentId || null })
+      body: JSON.stringify({ code, full_name: fullName, email, phone,
+        department_id: departmentId || null, position_id: positionId })
     });
     showToast('Tạo hồ sơ nhân viên thành công!', 'success');
     closeModal();
