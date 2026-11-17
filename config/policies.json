@@ -176,7 +176,7 @@
           "roles": ["*"]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": ["POST", "PUT", "PATCH", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR", "MANAGER"]
         }
@@ -257,7 +257,23 @@
           "roles": ["*"]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": ["POST", "PUT", "PATCH", "DELETE"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/v1/employees",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["*"]
+        },
+        {
+          "methods": ["POST", "PUT", "PATCH", "DELETE"],
           "auth": true,
           "roles": ["ADMIN", "HR", "MANAGER"]
         }

@@ -2034,8 +2034,12 @@ async function loadEmployeesData() {
       if (existingIdx >= 0) {
         state.employees[existingIdx].username = regUser.username;
         if (assignment) {
+          if (assignment.code || assignment.employeeCode) {
+            state.employees[existingIdx].code = assignment.code || assignment.employeeCode;
+          }
           state.employees[existingIdx].department_name = assignment.department;
           state.employees[existingIdx].position_title = assignment.position;
+          state.employees[existingIdx].contract_type = 'OFFICIAL';
           state.employees[existingIdx].status = 'ACTIVE';
         }
       } else {
@@ -2043,32 +2047,32 @@ async function loadEmployeesData() {
           state.employees.unshift({
             id: regUser.id,
             username: regUser.username,
-            code: 'EMP_' + regUser.username.toUpperCase(),
+            code: assignment.code || assignment.employeeCode || ('EMP_' + regUser.username.toUpperCase()),
             full_name: regUser.fullName || regUser.username,
             email: regUser.email,
             phone: regUser.phone || '0912345678',
-          department_name: assignment.department,
-          position_title: assignment.position,
-          contract_type: 'OFFICIAL',
-          status: 'ACTIVE'
-        });
-      } else {
-        // Tài khoản đang chờ tiếp nhận
-        state.employees.unshift({
-          id: regUser.id,
-          username: regUser.username,
-          code: 'CHỜ CẤP MÃ',
-          full_name: regUser.fullName || regUser.username,
-          email: regUser.email,
-          phone: regUser.phone || '-',
-          department_name: 'Chưa phân ban phòng (Chờ phê duyệt)',
-          position_title: 'Nhân viên mới (Chờ phân công)',
-          contract_type: 'PENDING',
-          status: 'PENDING_ASSIGNMENT'
-        });
+            department_name: assignment.department,
+            position_title: assignment.position,
+            contract_type: 'OFFICIAL',
+            status: 'ACTIVE'
+          });
+        } else {
+          // Tài khoản đang chờ tiếp nhận
+          state.employees.unshift({
+            id: regUser.id,
+            username: regUser.username,
+            code: 'CHỜ CẤP MÃ',
+            full_name: regUser.fullName || regUser.username,
+            email: regUser.email,
+            phone: regUser.phone || '-',
+            department_name: 'Chưa phân phòng ban (Chờ tiếp nhận)',
+            position_title: 'Nhân viên mới (Chờ phân công)',
+            contract_type: 'PENDING',
+            status: 'PENDING_ASSIGNMENT'
+          });
+        }
       }
-    }
-  });
+    });
   }
 
   renderEmployeesTable(state.employees);
@@ -2093,7 +2097,7 @@ function renderEmployeesTable(list) {
       statusBadge = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span>';
       if (canManage) {
         actionBtn = `
-          <button class="btn-primary-blue" style="padding: 5px 12px; font-size: 11.5px; border-radius: 6px; font-weight: 700;" onclick="openOnboardEmployeeModal('${e.username}', '${e.full_name}', '${e.email}')">
+          <button class="btn-primary-blue" style="padding: 5px 12px; font-size: 11.5px; border-radius: 6px; font-weight: 700;" onclick="openOnboardEmployeeModal('${e.username || ''}', '${e.full_name || ''}', '${e.email || ''}', '${e.id || ''}')">
             ⚡ Tiếp nhận &amp; Phân ca, Lương
           </button>
         `;
@@ -3896,7 +3900,43 @@ async function handleDashboardCheckOut() {
 // ==============================================================================
 // MODAL TIẾP NHẬN NHÂN SỰ & PHÂN BỔ CÔNG VIỆC, CA TRỰC, MỨC LƯƠNG (DÀNH CHO ADMIN / HR)
 // ==============================================================================
-function openOnboardEmployeeModal(username, fullName, email) {
+
+function removeVietnameseTones(str) {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase();
+}
+
+function generateSuggestedEmpCode(fullName, username, list = []) {
+  // Tìm số thứ tự lớn nhất hiện có trong danh sách nhân viên
+  let maxNum = 4;
+  if (Array.isArray(list)) {
+    list.forEach(e => {
+      const code = (e.code || e.employee_code || e.employeeCode || '').toUpperCase();
+      const match = code.match(/(?:EMP|NV)[-_]?0*(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (!isNaN(n) && n > maxNum) maxNum = n;
+      }
+    });
+  }
+  const nextNum = String(maxNum + 1).padStart(3, '0');
+
+  // Gợi ý theo EMP_ + tên không dấu viết hoa nếu có username/fullName hợp lệ
+  const cleanName = removeVietnameseTones(username || fullName);
+  if (cleanName && cleanName.length >= 3 && cleanName.length <= 15 && !['ADMIN', 'HR', 'HRADMIN', 'MANAGER', 'EMPLOYEE'].includes(cleanName)) {
+    return `EMP_${cleanName}`;
+  }
+  return `EMP${nextNum}`;
+}
+
+function openOnboardEmployeeModal(username, fullName, email, id = '') {
+  const suggestedCode = generateSuggestedEmpCode(fullName, username, state.employees);
+
   const html = `
     <div style="padding: 10px 0;">
       <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;">
@@ -3907,7 +3947,26 @@ function openOnboardEmployeeModal(username, fullName, email) {
         </div>
       </div>
 
-      <form id="formOnboardEmployee" onsubmit="handleOnboardSubmit(event, '${username}', '${fullName || username}', '${email}')">
+      <form id="formOnboardEmployee" onsubmit="handleOnboardSubmit(event, '${username}', '${fullName || username}', '${email}', '${id || ''}')">
+        <!-- Nhóm 0: Mã nhân viên (employeeCode) -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+            Mã nhân viên (employeeCode) *
+          </label>
+          <input 
+            type="text" 
+            id="onboardEmpCode" 
+            value="${suggestedCode}" 
+            class="input-filter-select" 
+            style="width: 100%; height: 42px; border-radius: 8px; text-transform: uppercase; font-weight: 700; color: #2563eb; letter-spacing: 0.5px; padding: 0 14px;" 
+            required 
+            placeholder="ví dụ: EMP005 hoặc EMP_DUCHIEU"
+          >
+          <div style="font-size: 11.5px; color: #64748b; margin-top: 3px;">
+            💡 Mã định danh nhân sự chính thức dùng cho Chấm công & Bảng lương (cho phép chỉnh sửa nếu muốn).
+          </div>
+        </div>
+
         <!-- Nhóm 1: Phòng ban & Quản lý trực tiếp -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <div>
@@ -4000,8 +4059,13 @@ function openOnboardEmployeeModal(username, fullName, email) {
   openModal(`Tiếp nhận Nhân sự vào Hệ thống – ${fullName || username}`, html);
 }
 
-function handleOnboardSubmit(e, username, fullName, email) {
+async function handleOnboardSubmit(e, username, fullName, email, empId) {
   if (e && e.preventDefault) e.preventDefault();
+
+  const employeeCode = (document.getElementById('onboardEmpCode')?.value || '').trim().toUpperCase();
+  if (!employeeCode) {
+    return showToast('Vui lòng nhập Mã nhân viên (employeeCode)', 'warning');
+  }
 
   const dept = document.getElementById('onboardDept').value;
   const manager = document.getElementById('onboardManager').value;
@@ -4023,11 +4087,38 @@ function handleOnboardSubmit(e, username, fullName, email) {
   const baseSalary = parseFloat(document.getElementById('onboardSalary').value) || 12000000;
   const allowance = parseFloat(document.getElementById('onboardAllowance').value) || 730000;
 
-  // 1. Lưu quyết định tiếp nhận đầy đủ
+  // 1. Gửi API tiếp nhận sang Backend (organization-service)
+  const targetId = empId || username;
+  try {
+    await apiCall(`/api/v1/employees/${targetId}/onboard`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        employeeCode,
+        code: employeeCode,
+        fullName: fullName || username,
+        email,
+        departmentName: dept,
+        department: dept,
+        positionTitle: pos,
+        position: pos,
+        managerName: manager,
+        managerId: manager,
+        contractType: 'OFFICIAL',
+        status: 'ACTIVE'
+      })
+    });
+  } catch (apiErr) {
+    console.warn('Backend onboard API sync:', apiErr.message);
+  }
+
+  // 2. Lưu quyết định tiếp nhận vào LocalStorage & cập nhật trạng thái
   saveUserAssignment(username, {
+    id: empId || targetId,
     username,
     fullName,
     email,
+    code: employeeCode,
+    employeeCode: employeeCode,
     department: dept,
     managerName: manager,
     position: pos,
@@ -4045,35 +4136,52 @@ function handleOnboardSubmit(e, username, fullName, email) {
     allowance,
     assignedAt: new Date().toISOString(),
     assignedBy: state.user?.fullName || 'HR Admin',
-    status: 'ACTIVE'
+    status: 'ACTIVE',
+    contractType: 'OFFICIAL'
   });
 
-  // 2. Tự động gửi thông báo chúc mừng tới tài khoản của nhân viên
+  // 3. Cập nhật trực tiếp vào state.employees
+  const targetIdx = state.employees.findIndex(emp =>
+    (empId && emp.id === empId) || (username && emp.username === username) || (email && emp.email === email)
+  );
+  if (targetIdx >= 0) {
+    state.employees[targetIdx].code = employeeCode;
+    state.employees[targetIdx].employee_code = employeeCode;
+    state.employees[targetIdx].contract_type = 'OFFICIAL';
+    state.employees[targetIdx].status = 'ACTIVE';
+    state.employees[targetIdx].department_name = dept;
+    state.employees[targetIdx].position_title = pos;
+  }
+
+  // 4. Tự động gửi thông báo chúc mừng tới tài khoản của nhân viên
   const notifKey = `htqlns_notifications_${username}`;
   let empNotifs = [];
   try { empNotifs = JSON.parse(safeGetStorage(notifKey, '[]')); } catch (err) {}
   empNotifs.unshift({
     id: 'notif-onboarded-' + Date.now(),
     title: `🎉 Chúc mừng bạn đã được tiếp nhận vào ${dept}!`,
-    message: `HR đã phê duyệt hồ sơ của bạn. Quản lý trực tiếp: ${manager}. Văn phòng: ${officeName} (GPS hợp lệ). Ca làm việc: ${shiftName} (${shiftStart} - ${shiftEnd}). Nút Chấm công và bảng lương đã được kích hoạt thành công!`,
+    message: `HR đã phê duyệt hồ sơ của bạn với Mã NV: ${employeeCode}. Quản lý trực tiếp: ${manager}. Ca làm việc: ${shiftName} (${shiftStart} - ${shiftEnd}). Nút Chấm công và bảng lương đã được kích hoạt thành công!`,
     type: 'SYSTEM',
     created_at: new Date().toISOString(),
     is_read: false
   });
   safeSetStorage(notifKey, JSON.stringify(empNotifs));
 
-  // 3. Nếu người dùng đang đăng nhập chính là tài khoản này, cập nhật ngay lập tức
+  // 5. Nếu người dùng đang đăng nhập chính là tài khoản này, cập nhật ngay lập tức
   if (state.user && state.user.username === username) {
+    state.user.departmentName = dept;
+    state.user.code = employeeCode;
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
     syncUserOnboardingState();
     loadEmployeeDashboardData();
     loadProfileData();
   }
 
   closeModal();
-  showToast(`Đã tiếp nhận nhân sự ${fullName || username} vào ${dept}, phân ca và mở khóa chấm công thành công!`, 'success');
+  showToast(`Đã tiếp nhận nhân sự ${fullName || username} (Mã: ${employeeCode}) vào ${dept}, phân ca và mở khóa chấm công thành công!`, 'success');
 
   // Nạp lại danh sách nhân sự & dashboard
-  loadEmployeesData();
+  await loadEmployeesData();
   loadDashboardData();
 }
 
