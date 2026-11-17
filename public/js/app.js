@@ -490,6 +490,16 @@ async function handleLoginSubmit(e) {
 async function handleRegisterSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
+  // Đảm bảo xóa sạch toàn bộ cache thông tin user cũ trước khi nạp tài khoản mới
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (clearErr) {
+    safeRemoveStorage('htqlns_token');
+    safeRemoveStorage('htqlns_user');
+    safeRemoveStorage('htqlns_current_view');
+  }
+
   const firstName = document.getElementById('regFirstName').value.trim();
   const lastName = document.getElementById('regLastName').value.trim();
   const email = document.getElementById('regEmail').value.trim();
@@ -556,9 +566,16 @@ function handleLogoutClick() {
 
   state.token = null;
   state.user = null;
-  safeRemoveStorage('htqlns_token');
-  safeRemoveStorage('htqlns_user');
-  safeRemoveStorage('htqlns_current_view');
+
+  // Xóa sạch toàn bộ cache thông tin user cũ trong localStorage & sessionStorage
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (clearErr) {
+    safeRemoveStorage('htqlns_token');
+    safeRemoveStorage('htqlns_user');
+    safeRemoveStorage('htqlns_current_view');
+  }
 
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -660,9 +677,11 @@ function updateTopbarUser() {
     else displayName = state.user.username;
   }
 
+  const deptLabel = state.user.department || state.user.departmentName;
+  const deptSuffix = deptLabel ? ` | ${deptLabel}` : ' | Chưa phân phòng ban (Chờ tiếp nhận)';
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
                       (state.user.role === 'HR' ? 'Phòng Nhân sự' :
-                      (state.user.role === 'MANAGER' ? 'Quản lý | Kỹ thuật' : 'Nhân viên | Kỹ thuật'));
+                      (state.user.role === 'MANAGER' ? `Quản lý${deptSuffix}` : `Nhân viên${deptSuffix}`));
 
   const nameEl = document.getElementById('topbarUserName');
   const roleEl = document.getElementById('topbarUserRole');
@@ -1038,7 +1057,7 @@ function renderRequestsTable(list) {
           <div style="font-weight: 700; color: #1e293b;">${r.emp_name || 'Nhân viên'}</div>
           <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''}</div>
         </td>
-        <td>${r.department_name || 'Phòng Kỹ Thuật'}</td>
+        <td>${r.department_name || '-'}</td>
         <td>${r.leave_name || 'Nghỉ phép năm'}</td>
         <td>${rangeStr}</td>
         <td style="font-weight: 600;">${r.total_days || 1} ngày</td>
@@ -1090,7 +1109,7 @@ async function handleCreateLeaveSubmit(e) {
       username: state.user?.username || 'user',
       emp_name: state.user?.fullName || state.user?.username || 'Nhân viên',
       emp_code: state.user?.empCode || ('EMP_' + (state.user?.username || 'USER').toUpperCase()),
-      department_name: state.user?.department || 'Phòng Kỹ Thuật',
+      department_name: state.user?.department || 'Chưa phân phòng ban',
       leave_name: leaveTypeName,
       type: leaveTypeName,
       start_date: startDate,
@@ -1445,7 +1464,7 @@ function renderRequestsTable(list) {
           <div style="font-weight: 700; color: #1e293b;">${r.emp_name || 'Nhân viên'}</div>
           <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''}</div>
         </td>
-        <td>${r.department_name || 'Phòng Kỹ Thuật'}</td>
+        <td>${r.department_name || '-'}</td>
         <td>${r.leave_name || 'Nghỉ phép năm'}</td>
         <td>${rangeStr}</td>
         <td style="font-weight: 600;">${r.total_days || 1} ngày</td>
@@ -1497,7 +1516,7 @@ async function handleCreateLeaveSubmit(e) {
       username: state.user?.username || 'user',
       emp_name: state.user?.fullName || state.user?.username || 'Nhân viên',
       emp_code: state.user?.empCode || ('EMP_' + (state.user?.username || 'USER').toUpperCase()),
-      department_name: state.user?.department || 'Phòng Kỹ Thuật',
+      department_name: state.user?.department || 'Chưa phân phòng ban',
       leave_name: leaveTypeName,
       type: leaveTypeName,
       start_date: startDate,
@@ -1670,7 +1689,7 @@ async function openRequestDetail(requestId) {
   if (meta) meta.innerText = `${req.id} • Gửi ngày ${formatLeaveDateTime(req.created_at)}`;
   if (empName) empName.innerText = `${req.emp_name || 'Vũ Đức Hiếu'} • ${req.emp_code || 'NV-001'}`;
   if (approverName) approverName.innerText = req.approver_name || 'Nguyễn Thanh Lâm';
-  if (dept) dept.innerText = req.department_name || 'Phòng Kỹ Thuật';
+  if (dept) dept.innerText = req.department_name || '-';
   if (leaveType) leaveType.innerText = `${req.leave_name || 'Nghỉ phép năm'} • ${req.is_paid ? 'Có hưởng lương' : 'Không hưởng lương'}`;
   if (startDate) startDate.innerText = `${formatLeaveDate(req.start_date)} • 08:00`;
   if (endDate) endDate.innerText = `${formatLeaveDate(req.end_date)} • 16:00`;
@@ -1715,7 +1734,7 @@ async function openRequestDetail(requestId) {
       step2Badge.innerText = 'Bước hiện tại';
     }
     if (step2Desc) {
-      step2Desc.innerText = `${req.approver_name || 'Nguyễn Thanh Lâm'} • Quản lý ${req.department_name || 'Phòng Kỹ Thuật'}. Chưa có phản hồi từ người duyệt.`;
+      step2Desc.innerText = `${req.approver_name || 'Quản lý'} • ${req.department_name ? 'Quản lý ' + req.department_name : 'Quản lý trực tiếp'}. Chưa có phản hồi từ người duyệt.`;
     }
 
     if (adminGroup) {
@@ -1860,7 +1879,7 @@ async function loadDashboardPendingRequests() {
                 <div style="font-weight: 700; color: #1e293b;">${r.emp_name || 'Nhân viên'}</div>
                 <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''} • Mã: ${r.id}</div>
               </td>
-              <td>${r.department_name || 'Phòng Kỹ Thuật'}</td>
+              <td>${r.department_name || '-'}</td>
               <td>${r.leave_name || 'Nghỉ phép năm'}</td>
               <td>${rangeStr}</td>
               <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.reason || ''}">
@@ -2136,7 +2155,7 @@ async function loadAttendanceHistoryData() {
           emp_id: r.emp_id,
           code: empCode,
           name: r.emp_name || `Nhân viên (${empCode})`,
-          dept: r.dept_name || 'Phòng Kỹ Thuật',
+          dept: r.dept_name || '-',
           dept_code: r.dept_code || 'TECH',
           work_date: r.work_date ? new Date(r.work_date).toISOString().split('T')[0] : '2026-10-30',
           date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026',
@@ -2650,12 +2669,13 @@ function loadProfileData() {
     roleBadgeEl.innerHTML = roleMap[state.user.role] || '<span class="badge-status">Nhân viên</span>';
   }
 
-  // SỬA TRIỆT ĐỂ LỖI PHÒNG BAN: Nếu chưa được tiếp nhận, hiển thị rõ "Chưa phân ban phòng"
+  // SỬA TRIỆT ĐỂ LỖI PHÒNG BAN: Nếu chưa được tiếp nhận, hiển thị rõ "Chưa phân phòng ban (Chờ tiếp nhận)"
   if (deptEl) {
-    if (isOnboarded && state.user.department) {
-      deptEl.innerHTML = `<span style="color:#059669; font-weight:700;">${state.user.department}</span>`;
+    const userDept = state.user.department || state.user.departmentName;
+    if (userDept) {
+      deptEl.innerHTML = `<span style="color:#059669; font-weight:700;">${userDept}</span>`;
     } else {
-      deptEl.innerHTML = '<span style="color:#d97706; font-weight:700;">Chưa phân ban phòng (Chờ HR tiếp nhận)</span>';
+      deptEl.innerHTML = '<span style="color:#d97706; font-weight:700;">Chưa phân phòng ban (Chờ tiếp nhận)</span>';
     }
   }
 
@@ -2926,7 +2946,7 @@ function openOnTimeDetailModal(name, code, checkinTime, checkoutTime, dept) {
         <strong>✅ Tình trạng:</strong> Chấm công Đúng giờ (Giờ vào: ${checkinTime || '07:55'} - Giờ ra: ${checkoutTime || '16:05'})
       </div>
       <div><strong>Nhân viên:</strong> ${name} (${code})</div>
-      <div><strong>Phòng ban:</strong> ${dept || 'Phòng Kỹ Thuật'}</div>
+      <div><strong>Phòng ban:</strong> ${dept || '-'}</div>
       <div><strong>Phương thức chấm công:</strong> Wi-Fi công ty (HTQLNS-Community-5G) • Tọa độ GPS hợp lệ</div>
       <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
         <button class="btn-figma-dark" style="padding: 8px 20px; font-size: 13px;" onclick="closeModal()">Đóng</button>
@@ -2948,7 +2968,7 @@ function openLateDetailModal(name, code, lateTime, checkinTime, dept, reason, ad
         <strong>⚠️ Tình trạng:</strong> Đi muộn ${lateTime} (Giờ vào: ${checkinTime} - Quy định: 08:00)
       </div>
       <div><strong>Nhân viên:</strong> ${name} (${code})</div>
-      <div><strong>Phòng ban:</strong> ${dept || 'Phòng Kỹ Thuật'}</div>
+      <div><strong>Phòng ban:</strong> ${dept || '-'}</div>
       <div><strong>Trạng thái giải trình:</strong> ${statusBadge}</div>
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
         <div style="font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 600;">LÝ DO GIẢI TRÌNH CỦA NHÂN VIÊN:</div>
@@ -3058,8 +3078,8 @@ async function loadEmployeeDashboardData() {
   const empId = state.user?.empId || state.user?.id || state.user?.username || 'user';
   const displayName = state.user?.fullName || state.user?.username || 'Nhân viên';
   const role = state.user?.role || 'EMPLOYEE';
-  const isOnboarded = Boolean(state.user?.isOnboarded);
-  const deptName = state.user?.department || (isOnboarded ? 'Phòng Kỹ Thuật' : 'Chưa phân ban/phòng');
+  const isOnboarded = Boolean(state.user?.isOnboarded && (state.user?.department || state.user?.departmentName));
+  const deptName = state.user?.department || state.user?.departmentName || 'Chưa phân phòng ban (Chờ tiếp nhận)';
   const positionTitle = state.user?.position || (isOnboarded ? 'Nhân viên' : 'Nhân sự mới (Chờ tiếp nhận)');
   const shiftName = state.user?.shiftName || (isOnboarded ? 'Ca Hành Chính' : 'Chưa phân ca');
   const shiftStart = state.user?.shiftStart || '08:00';
@@ -3450,7 +3470,7 @@ async function handleJoinDepartmentByCode() {
     // Cập nhật trạng thái người dùng
     if (state.user) {
       state.user.isOnboarded = true;
-      state.user.department = res.data?.departmentName || 'Phòng Kỹ Thuật';
+      state.user.department = res.data?.departmentName || res.data?.department?.name || 'Phòng ban mới';
       state.user.departmentId = res.data?.departmentId;
       state.user.managerName = res.data?.managerName || 'Quản lý bộ phận';
       state.user.position = 'Kỹ sư phần mềm';
@@ -3494,7 +3514,7 @@ async function handleAcceptInvitation(invId, inviteCode) {
 
     if (state.user) {
       state.user.isOnboarded = true;
-      state.user.department = res.data?.departmentName || 'Phòng Kỹ Thuật';
+      state.user.department = res.data?.departmentName || res.data?.department?.name || 'Phòng ban mới';
       state.user.departmentId = res.data?.departmentId;
       state.user.managerName = res.data?.managerName || 'Quản lý bộ phận';
       state.user.position = 'Nhân viên chính thức';
@@ -4159,7 +4179,7 @@ async function submitNewEmployee() {
   }
 
   const dept = (state.departments || MOCK_DEPARTMENTS).find(d => String(d.id) === String(departmentId));
-  const deptName = dept?.name || 'Phòng Kỹ Thuật';
+  const deptName = dept?.name || '-';
 
   try {
     await apiCall('/api/organization/employees', {
@@ -4409,7 +4429,7 @@ async function loadShiftAssignments() {
           <td><strong>${wDate}</strong></td>
           <td>${a.emp_code || a.emp_id}</td>
           <td><span style="font-weight: 600; color: #0f172a;">${a.emp_name || 'Nhân viên'}</span></td>
-          <td>${a.department_name || 'Phòng Kỹ Thuật'}</td>
+          <td>${a.department_name || '-'}</td>
           <td><span class="badge-status badge-pending" style="font-weight: 600;">${a.shift_code}</span></td>
           <td>${a.start_time ? a.start_time.slice(0, 5) : ''} - ${a.end_time ? a.end_time.slice(0, 5) : ''}</td>
           <td>${a.working_hours ? Number(a.working_hours).toFixed(1) + 'h' : '8.0h'}</td>
@@ -4496,7 +4516,7 @@ function filterOtTable() {
           <div style="font-weight: 700; color: #0f172a;">${o.emp_name || 'Nhân viên'}</div>
           <div style="font-size: 11px; color: #64748b;">${o.emp_code || o.emp_id}</div>
         </td>
-        <td>${o.department_name || 'Phòng Kỹ Thuật'}</td>
+        <td>${o.department_name || '-'}</td>
         <td><strong>${workDate}</strong></td>
         <td>${startTime} - ${endTime}</td>
         <td><strong style="color: #2563eb;">${Number(o.total_hours).toFixed(1)} giờ</strong></td>
@@ -5004,7 +5024,7 @@ async function loadPayslips() {
         <tr>
           <td><strong>${p.emp_code || p.emp_id}</strong></td>
           <td><span style="font-weight: 600; color: #0f172a;">${p.emp_name || 'Nhân viên'}</span></td>
-          <td>${p.department_name || 'Phòng Kỹ Thuật'}</td>
+          <td>${p.department_name || '-'}</td>
           <td>${formatVND(p.base_salary)}</td>
           <td>${Number(p.actual_work_days).toFixed(1)} / ${Number(p.paid_leave_days).toFixed(1)} ngày</td>
           <td>${Number(p.ot_hours).toFixed(1)}h (${formatVND(p.ot_pay)})</td>

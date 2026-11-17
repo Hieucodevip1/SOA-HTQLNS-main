@@ -47,11 +47,11 @@ const env = {
   PORT: parseInt(process.env.PORT || '3000', 10),
 
   // Cấu hình Cơ sở dữ liệu MySQL
-  DB_HOST: process.env.DB_HOST || 'localhost',
-  DB_PORT: parseInt(process.env.DB_PORT || '3306', 10),
-  DB_USER: process.env.DB_USER || 'root',
-  DB_PASSWORD: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
-  DB_NAME: process.env.DB_NAME || 'htqlns_auth',
+  DB_HOST: process.env.MYSQL_HOST || process.env.DB_HOST || 'localhost',
+  DB_PORT: parseInt(process.env.MYSQL_PORT || process.env.DB_PORT || '3306', 10),
+  DB_USER: process.env.MYSQL_USER || process.env.DB_USER || 'root',
+  DB_PASSWORD: process.env.MYSQL_PASSWORD !== undefined ? process.env.MYSQL_PASSWORD : (process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : ''),
+  DB_NAME: process.env.MYSQL_DATABASE || process.env.DB_NAME || 'htqlns_auth',
   DB_CONNECTION_LIMIT: parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10),
 
   // Cấu hình JWT

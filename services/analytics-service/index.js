@@ -23,8 +23,12 @@ const pool = db.getPool(DB_NAME);
 const app = createServiceApp(SERVICE_NAME, {
   port: PORT,
   checkHealth: async () => {
-    const [rows] = await pool.query('SELECT 1 AS ok');
-    return rows && rows[0]?.ok === 1;
+    try {
+      const [rows] = await pool.query('SELECT 1 AS ok');
+      return rows && rows[0]?.ok === 1;
+    } catch {
+      return false; // In-memory fallback mode
+    }
   }
 });
 

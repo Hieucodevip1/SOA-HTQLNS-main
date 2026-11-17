@@ -1303,8 +1303,8 @@ app.use(
             console.log(`[ORG-SERVICE] Đã tự động gắn emp_id ${matchedEmpId} cho user ${userId}`);
           } else {
             await db.query(
-              `INSERT INTO employees (id, code, full_name, email, phone, status, contract_type)
-               VALUES (?, ?, ?, ?, ?, 'PENDING_ASSIGNMENT', 'PENDING')`,
+              `INSERT INTO employees (id, code, full_name, email, phone, department_id, manager_id, status, contract_type)
+               VALUES (?, ?, ?, ?, ?, NULL, NULL, 'PENDING_ASSIGNMENT', 'PENDING')`,
               [finalId, code, fName, email, '-'],
               DB_NAME
             );
@@ -1326,8 +1326,11 @@ app.use(
             email: email,
             phone: '-',
             department_id: null,
+            departmentName: null,
             position_id: null,
             manager_id: null,
+            office_id: null,
+            shift_id: null,
             contract_type: 'PENDING',
             status: 'PENDING_ASSIGNMENT',
             created_at: new Date().toISOString()

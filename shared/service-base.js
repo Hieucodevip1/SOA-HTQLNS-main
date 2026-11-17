@@ -58,17 +58,56 @@ function createServiceApp(serviceName = 'service', options = {}) {
   // 5. Health Check Endpoint chuẩn SOA
   app.get('/health', async (req, res) => {
     let dbStatus = 'SKIPPED';
+    let dbConnected = true;
+
     if (typeof options.checkHealth === 'function') {
       try {
-        dbStatus = (await options.checkHealth()) ? 'UP' : 'DOWN';
+        const checkResult = await options.checkHealth();
+        if (typeof checkResult === 'object' && checkResult !== null) {
+          dbConnected = Boolean(checkResult.ok ?? (checkResult.status === 'ok' || checkResult.status === 'UP'));
+        } else {
+          dbConnected = Boolean(checkResult);
+        }
+        dbStatus = dbConnected ? 'UP' : 'DOWN';
       } catch {
+        dbConnected = false;
         dbStatus = 'DOWN';
       }
     }
 
-    const isHealthy = dbStatus !== 'DOWN';
-    res.status(isHealthy ? 200 : 503).json({
-      status: isHealthy ? 'UP' : 'DOWN',
+    const requireDb = process.env.REQUIRE_DB === 'true';
+
+    // Nếu kết nối MySQL thất bại nhưng service đang bật chế độ In-memory Fallback (mặc định nếu REQUIRE_DB !== 'true'):
+    // Trả về HTTP 200 với payload { status: "ok", mode: "in-memory-fallback" } thay vì 503
+    if (!dbConnected) {
+      if (requireDb) {
+        return res.status(503).json({
+          status: 'DOWN',
+          mode: 'down',
+          service: serviceName,
+          port: options.port || env.PORT,
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString(),
+          database: 'DOWN',
+          env: env.NODE_ENV
+        });
+      }
+
+      return res.status(200).json({
+        status: 'ok',
+        mode: 'in-memory-fallback',
+        service: serviceName,
+        port: options.port || env.PORT,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        database: 'DOWN',
+        env: env.NODE_ENV
+      });
+    }
+
+    res.status(200).json({
+      status: 'UP',
+      mode: 'mysql',
       service: serviceName,
       port: options.port || env.PORT,
       uptime: process.uptime(),

@@ -157,9 +157,12 @@ async function enrichUserProfile(user, useDb) {
     empCode,
     username: user.username,
     fullName,
-    deptName,
-    departmentId,
-    managerId,
+    deptName: deptName || null,
+    departmentName: deptName || null,
+    departmentId: departmentId || null,
+    managerId: managerId || null,
+    officeId: null,
+    shiftId: null,
     isAssigned,
     email: user.email,
     role: user.role,
@@ -194,9 +197,9 @@ app.use((req, res, next) => {
 });
 
 // ==============================================================================
-// 1. ENDPOINT: Đăng ký tài khoản (POST /api/auth/register)
+// 1. ENDPOINT: Đăng ký tài khoản (POST /api/auth/register & /api/v1/auth/register)
 // ==============================================================================
-app.post('/api/auth/register', async (req, res) => {
+app.post(['/api/auth/register', '/api/v1/auth/register'], async (req, res) => {
   try {
     const { username, email, password, role, emp_id, biometric_enabled, first_name, last_name, phone } = req.body;
 
@@ -240,7 +243,7 @@ app.post('/api/auth/register', async (req, res) => {
     if (useDb) {
       if (!finalEmpId) {
         try {
-          const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1');
+          const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1', [email]);
           if (empRows.length > 0) {
             finalEmpId = empRows[0].id;
             finalFullName = empRows[0].full_name;
@@ -271,6 +274,7 @@ app.post('/api/auth/register', async (req, res) => {
         DB_NAME
       );
     } else {
+      finalEmpId = finalEmpId || crypto.randomUUID();
       memoryUsers.set(userId, {
         id: userId,
         emp_id: finalEmpId,
@@ -280,7 +284,13 @@ app.post('/api/auth/register', async (req, res) => {
         password_hash: passwordHash,
         role: assignedRole,
         biometric_enabled: isBiometric,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        departmentId: null,
+        departmentName: null,
+        managerId: null,
+        officeId: null,
+        shiftId: null,
+        isAssigned: false
       });
     }
 
@@ -297,10 +307,17 @@ app.post('/api/auth/register', async (req, res) => {
     return created(res, {
       id: userId,
       emp_id: finalEmpId,
+      empId: finalEmpId,
       username,
       fullName: finalFullName,
       email,
-      role: assignedRole
+      role: assignedRole,
+      departmentId: null,
+      departmentName: null,
+      managerId: null,
+      officeId: null,
+      shiftId: null,
+      isAssigned: false
     }, 'Đăng ký tài khoản thành công');
   } catch (err) {
     return error(res, 'Lỗi đăng ký tài khoản: ' + err.message);

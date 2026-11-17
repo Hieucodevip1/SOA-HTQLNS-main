@@ -71,7 +71,7 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     const res = await fetch(`http://localhost:${LEAVE_PORT}/health`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.status, 'UP');
+    assert.ok(data.status === 'UP' || data.status === 'ok');
     assert.strictEqual(data.service, 'leave-service');
   });
 

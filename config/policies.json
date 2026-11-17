@@ -43,6 +43,20 @@
       ]
     },
     {
+      "prefix": "/api/v1/auth/register",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["POST"],
+          "auth": false,
+          "rateLimit": {
+            "windowMs": 60000,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
       "prefix": "/api/auth/refresh",
       "service": "auth-service",
       "rules": [
