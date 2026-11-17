@@ -46,6 +46,7 @@ function isTokenValid(token) {
 
 // Làm sạch token demo cũ hoặc không hợp lệ khỏi localStorage khi mở trang
 let storedToken = safeGetStorage('htqlns_token', null);
+let storedRefreshToken = safeGetStorage('htqlns_refresh_token', null);
 let storedUser = null;
 try {
   storedUser = JSON.parse(safeGetStorage('htqlns_user', 'null'));
@@ -59,10 +60,15 @@ if (!isTokenValid(storedToken)) {
   safeRemoveStorage('htqlns_token');
   safeRemoveStorage('htqlns_user');
 }
+if (!isTokenValid(storedRefreshToken)) {
+  storedRefreshToken = null;
+  safeRemoveStorage('htqlns_refresh_token');
+}
 
 // 2. Dữ liệu bộ nhớ ứng dụng (State)
 let state = {
   token: storedToken,
+  refreshToken: storedRefreshToken,
   user: storedUser,
   departments: [],
   positions: [],
@@ -70,24 +76,16 @@ let state = {
   currentView: 'dashboard'
 };
 
-// Dữ liệu mẫu phong phú
-const MOCK_EMPLOYEES = [
-  { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm SOA', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 2, code: 'NV-002', full_name: 'Huỳnh Gia Kiệt', email: 'kiet.hg@htqlns.com', phone: '0901000002', department_name: 'Phòng Kỹ Thuật', position_title: 'Backend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 3, code: 'NV-003', full_name: 'Nguyễn Gia Hảo', email: 'hao.ng@htqlns.com', phone: '0901000003', department_name: 'Phòng Kỹ Thuật', position_title: 'Frontend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 4, code: 'NV-004', full_name: 'Thầy Lâm (Nguyễn Thanh Lâm)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Kỹ Thuật', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 5, code: 'NV-005', full_name: 'Lê Ngọc Mai', email: 'mai.ln@htqlns.com', phone: '0901000005', department_name: 'Phòng Nhân sự', position_title: 'Chuyên viên C&B', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 6, code: 'NV-006', full_name: 'Phạm Minh Tuân', email: 'tuan.pm@htqlns.com', phone: '0901000006', department_name: 'Phòng Kinh Doanh', position_title: 'Chuyên viên Tư vấn', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 7, code: 'NV-007', full_name: 'Đỗ Thu Hà', email: 'ha.dt@htqlns.com', phone: '0901000007', department_name: 'Phòng Tài Chính - Kế Toán', position_title: 'Kế toán tiền lương', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 8, code: 'NV-008', full_name: 'Trần Hoài An', email: 'an.th@htqlns.com', phone: '0901000008', department_name: 'Phòng Kỹ Thuật', position_title: 'DevOps & QA', contract_type: 'PROBATION', status: 'ACTIVE' }
-];
-
-const MOCK_DEPARTMENTS = [
-  { id: 1, code: 'TECH', name: 'Phòng Kỹ Thuật', manager_name: 'Thầy Lâm', employee_count: 40, description: 'Phát triển kiến trúc SOA Microservices', status: 'ACTIVE' },
-  { id: 2, code: 'HR', name: 'Phòng Nhân sự', manager_name: 'Lê Ngọc Mai', employee_count: 12, description: 'Tuyển dụng, chế độ C&B, quản lý hồ sơ', status: 'ACTIVE' },
-  { id: 3, code: 'FIN', name: 'Phòng Tài Chính - Kế Toán', manager_name: 'Đỗ Thu Hà', employee_count: 15, description: 'Bảng lương, quyết toán tài chính', status: 'ACTIVE' },
-  { id: 4, code: 'BIZ', name: 'Phòng Kinh Doanh', manager_name: 'Phạm Minh Tuân', employee_count: 28, description: 'Kinh doanh và chăm sóc đối tác', status: 'ACTIVE' }
-];
+function clearClientSession() {
+  state.token = null;
+  state.refreshToken = null;
+  state.user = null;
+  const passwordInput = document.getElementById('loginPassword');
+  if (passwordInput) passwordInput.value = '';
+  safeRemoveStorage('htqlns_token');
+  safeRemoveStorage('htqlns_refresh_token');
+  safeRemoveStorage('htqlns_user');
+}
 
 // ==============================================================================
 // 3. TOAST THÔNG BÁO
@@ -112,7 +110,28 @@ function showToast(message, type = 'success') {
 // ==============================================================================
 // 4. API CALLER QUA GATEWAY
 // ==============================================================================
-async function apiCall(path, options = {}) {
+async function refreshAccessToken() {
+  if (!state.refreshToken) {
+    throw new Error('Không có refresh token để làm mới phiên');
+  }
+
+  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken: state.refreshToken })
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success || !data.data?.token) {
+    const error = new Error(data?.error || data?.message || `Không thể làm mới phiên (HTTP ${res.status})`);
+    error.status = res.status;
+    throw error;
+  }
+
+  state.token = data.data.token;
+  safeSetStorage('htqlns_token', state.token);
+}
+
+async function apiCall(path, options = {}, canRefresh = true) {
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
@@ -132,16 +151,32 @@ async function apiCall(path, options = {}) {
 
     if (!res.ok) {
       if (res.status === 401 && path !== '/api/auth/login') {
-        state.token = null;
-        state.user = null;
-        safeRemoveStorage('htqlns_token');
-        safeRemoveStorage('htqlns_user');
-        document.getElementById('portalApp').style.display = 'none';
-        document.getElementById('loginScreen').style.display = 'flex';
+        let refreshError = null;
+        if (canRefresh && state.refreshToken) {
+          try {
+            await refreshAccessToken();
+            return apiCall(path, options, false);
+          } catch (err) {
+            refreshError = err;
+          }
+        }
+
+        clearClientSession();
+        const portal = document.getElementById('portalApp');
+        const login = document.getElementById('loginScreen');
+        if (portal) portal.style.display = 'none';
+        if (login) login.style.display = 'flex';
         toggleAuthMode('login');
-        showToast('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại', 'warning');
+        showToast(
+          refreshError
+            ? `Phiên đăng nhập hết hạn và không thể làm mới: ${refreshError.message}`
+            : 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+          'warning'
+        );
       }
-      throw new Error(data?.error || data?.message || `Lỗi HTTP ${res.status}`);
+      const error = new Error(data?.error || data?.message || `Lỗi HTTP ${res.status}`);
+      error.status = res.status;
+      throw error;
     }
 
     return data;
@@ -160,30 +195,18 @@ function toggleAuthMode(mode) {
   if (loginForm) loginForm.style.display = isLogin ? 'block' : 'none';
   if (regForm) regForm.style.display = isLogin ? 'none' : 'block';
 
-  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
-  const targetDemoBtn = document.getElementById(isLogin ? 'btn-demo-login' : 'btn-demo-register');
-  if (targetDemoBtn) targetDemoBtn.classList.add('active-demo');
 }
 
-function togglePasswordVisibility(inputId) {
+function togglePasswordVisibility(inputId, button) {
   const input = document.getElementById(inputId);
   if (input) {
     input.type = input.type === 'password' ? 'text' : 'password';
+    const isVisible = input.type === 'text';
+    if (button) {
+      button.textContent = isVisible ? 'Ẩn' : 'Hiện';
+      button.setAttribute('aria-label', `${isVisible ? 'Ẩn' : 'Hiện'} mật khẩu`);
+    }
   }
-}
-
-// Chọn nhanh tài khoản kiểm thử 1-click
-async function quickFillAuth(role) {
-  const accounts = {
-    admin: { u: 'admin', p: '123456' },
-    manager: { u: 'manager', p: '123456' },
-    hr_admin: { u: 'hr_admin', p: '123456' },
-    employee: { u: 'employee', p: '123456' }
-  };
-  const acc = accounts[role] || { u: role, p: '123456' };
-  document.getElementById('loginUsername').value = acc.u;
-  document.getElementById('loginPassword').value = acc.p;
-  await handleLoginSubmit(new Event('submit'));
 }
 
 async function handleLoginSubmit(e) {
@@ -211,20 +234,19 @@ async function handleLoginSubmit(e) {
     }
 
     state.token = res.data.token;
-    state.user = res.data.user || {
-      username,
-      role: username === 'admin' ? 'ADMIN' : (username === 'manager' ? 'MANAGER' : (username === 'hr_admin' ? 'HR' : 'EMPLOYEE')),
-      fullName: username === 'manager' ? 'Thầy Lâm' : username
-    };
+    state.refreshToken = res.data.refreshToken || null;
+    if (!res.data.user) throw new Error('Dữ liệu tài khoản từ máy chủ không hợp lệ');
+    state.user = res.data.user;
 
     safeSetStorage('htqlns_token', state.token);
+    if (state.refreshToken) safeSetStorage('htqlns_refresh_token', state.refreshToken);
     safeSetStorage('htqlns_user', JSON.stringify(state.user));
 
     showToast(`Đăng nhập thành công! Xin chào ${state.user.fullName || state.user.username}`, 'success');
     initPortalDashboard();
   } catch (err) {
     console.error('Lỗi đăng nhập:', err);
-    showToast(err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác (Mặc định: 123456)', 'error');
+    showToast(err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác', 'error');
   } finally {
     btn.disabled = false;
     btn.innerText = 'Login';
@@ -267,7 +289,7 @@ async function handleRegisterSubmit(e) {
     showToast(`Đăng ký tài khoản ${username} thành công! Mời bạn đăng nhập.`, 'success');
     toggleAuthMode('login');
     document.getElementById('loginUsername').value = username;
-    document.getElementById('loginPassword').value = password;
+    document.getElementById('loginPassword').value = '';
   } catch (err) {
     console.error('Lỗi đăng ký:', err);
     showToast(err.message || 'Đăng ký thất bại, vui lòng thử lại', 'error');
@@ -277,18 +299,62 @@ async function handleRegisterSubmit(e) {
   }
 }
 
-function handleLogoutClick() {
+async function handleLogoutClick() {
   if (!confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) return;
 
-  state.token = null;
-  state.user = null;
-  safeRemoveStorage('htqlns_token');
-  safeRemoveStorage('htqlns_user');
+  let logoutError = null;
+  try {
+    await apiCall('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken: state.refreshToken })
+    });
+  } catch (err) {
+    logoutError = err;
+  }
 
+  clearClientSession();
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   toggleAuthMode('login');
-  showToast('Đã đăng xuất thành công', 'success');
+  showToast(
+    logoutError
+      ? `Đã xóa phiên trên thiết bị nhưng chưa xác nhận thu hồi phiên máy chủ: ${logoutError.message}`
+      : 'Đã đăng xuất thành công',
+    logoutError ? 'warning' : 'success'
+  );
+}
+
+async function handleChangePassword(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  const oldPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmNewPassword').value;
+  const form = document.getElementById('changePasswordForm');
+
+  if (newPassword !== confirmPassword) {
+    showToast('Xác nhận mật khẩu mới không khớp', 'warning');
+    return;
+  }
+
+  try {
+    const res = await apiCall('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword })
+    });
+    if (!res?.success) {
+      throw new Error(res?.error || res?.message || 'Đổi mật khẩu không thành công');
+    }
+
+    clearClientSession();
+    if (form) form.reset();
+    document.getElementById('portalApp').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    toggleAuthMode('login');
+    showToast('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.', 'success');
+  } catch (err) {
+    showToast(`Không thể đổi mật khẩu: ${err.message}`, 'error');
+  }
 }
 
 function handleForgotPasswordClick() {
@@ -301,50 +367,18 @@ function handleForgotPasswordClick() {
 // 6. CHUYỂN ĐỔI GIAO DIỆN & ĐIỀU HƯỚNG
 // ==============================================================================
 function showScreenView(screen) {
-  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
-  const activeBtn = document.getElementById(`btn-demo-${screen}`);
-  if (activeBtn) activeBtn.classList.add('active-demo');
-
-  if (screen === 'login') {
-    document.getElementById('portalApp').style.display = 'none';
-    document.getElementById('loginScreen').style.display = 'flex';
-    toggleAuthMode('login');
-    return;
-  }
-
-  if (screen === 'register') {
-    document.getElementById('portalApp').style.display = 'none';
-    document.getElementById('loginScreen').style.display = 'flex';
-    toggleAuthMode('register');
-    return;
-  }
-
-  // Vào portal
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('portalApp').style.display = 'flex';
-
-  if (!state.user) {
-    state.user = {
-      username: 'manager',
-      role: 'MANAGER',
-      fullName: 'Thầy Lâm',
-      email: 'lam@htqlns.com'
-    };
-  }
-
-  updateTopbarUser();
-  applyRoleBasedUI();
-  navigateToView(screen);
+  const isRegister = screen === 'register';
+  document.getElementById('portalApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  toggleAuthMode(isRegister ? 'register' : 'login');
 }
 
 function updateTopbarUser() {
   if (!state.user) return;
-  const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
-  const isEmployee = state.user.role === 'EMPLOYEE' || state.user.username === 'employee';
-  const displayName = state.user.fullName || (isManager ? 'Thầy Lâm' : (isEmployee ? 'Vũ Đức Hiếu' : state.user.username));
+  const displayName = state.user.fullName || state.user.username || 'Người dùng';
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
                       (state.user.role === 'HR' ? 'Phòng Nhân sự' :
-                      (state.user.role === 'MANAGER' ? 'Quản lý | Kỹ thuật' : 'Nhân viên | Kỹ thuật'));
+                      (state.user.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'));
 
   const nameEl = document.getElementById('topbarUserName');
   const roleEl = document.getElementById('topbarUserRole');
@@ -358,112 +392,36 @@ function updateTopbarUser() {
     avatarEl.innerText = (parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : displayName.slice(0, 2)).toUpperCase();
   }
   if (greetSub) {
-    greetSub.innerText = `Xin chào ${displayName}, đây là tình hình đội nhóm hôm nay.`;
+    greetSub.innerText = `Xin chào ${displayName}, dữ liệu hiển thị theo vai trò và phạm vi được cấp quyền.`;
   }
 }
 
 // Phân quyền giao diện theo vai trò người dùng (RBAC Interface Guard)
 function applyRoleBasedUI() {
   const role = state.user?.role || 'EMPLOYEE';
+  const isEmployee = role === 'EMPLOYEE';
 
-  const navRbac = document.getElementById('nav-rbac');
-  const navSoa = document.getElementById('nav-soa-monitor');
-  const navSettings = document.getElementById('nav-settings');
-  const navDepartments = document.getElementById('nav-departments');
-  const navEmpHistory = document.getElementById('nav-attendance-history');
-  const navEmployees = document.getElementById('nav-employees');
-  const pendingRequestsCard = document.getElementById('dashPendingApprovalCard');
-  const personalRequestsCard = document.getElementById('dashEmployeePersonalRequestsCard');
+  const setDisplay = (id, show, displayValue = 'block') => {
+    const element = document.getElementById(id);
+    if (element) element.style.display = show ? displayValue : 'none';
+  };
 
-  // 1. Quản lý phân quyền: CHỈ ADMIN được hiển thị và thao tác
-  if (navRbac) navRbac.style.display = (role === 'ADMIN') ? 'flex' : 'none';
-
-  // 2. Giám sát hạ tầng SOA: CHỈ ADMIN được xem
-  if (navSoa) navSoa.style.display = (role === 'ADMIN') ? 'flex' : 'none';
-
-  // 3. Thiết lập chấm công (Wi-Fi, GPS): ADMIN hoặc HR
-  if (navSettings) navSettings.style.display = (role === 'ADMIN' || role === 'HR') ? 'flex' : 'none';
-
-  // 4. Cơ cấu phòng ban: ADMIN hoặc HR
-  if (navDepartments) navDepartments.style.display = (role === 'ADMIN' || role === 'HR') ? 'flex' : 'none';
-
-  // 5. Bảng công NV toàn công ty & Danh sách nhân viên: Ẩn với EMPLOYEE
-  if (navEmpHistory) navEmpHistory.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
-  if (navEmployees) navEmployees.style.display = (role !== 'EMPLOYEE') ? 'flex' : 'none';
-
-  // 6. Điều chỉnh nội dung Dashboard & Thống kê cá nhân:
-  const statEmployeePersonalCard = document.getElementById('statEmployeePersonalCard');
-  if (statEmployeePersonalCard) {
-    statEmployeePersonalCard.style.display = (role === 'EMPLOYEE') ? 'block' : 'none';
-  }
-
-  if (role === 'EMPLOYEE') {
-    // Nhân viên không thể duyệt đơn của đồng nghiệp khác
-    if (pendingRequestsCard) pendingRequestsCard.style.display = 'none';
-    if (personalRequestsCard) personalRequestsCard.style.display = 'block';
-
-    // Đổi thẻ KPI Dashboard thành KPI cá nhân của nhân viên
-    const lbl1 = document.getElementById('dashMetricLbl1');
-    const val1 = document.getElementById('dashMetricVal1');
-    const sub1 = document.getElementById('dashMetricSub1');
-    const lbl2 = document.getElementById('dashMetricLbl2');
-    const val2 = document.getElementById('dashMetricVal2');
-    const sub2 = document.getElementById('dashMetricSub2');
-    const lbl3 = document.getElementById('dashMetricLbl3');
-    const val3 = document.getElementById('dashMetricVal3');
-    const sub3 = document.getElementById('dashMetricSub3');
-    const lbl4 = document.getElementById('dashMetricLbl4');
-    const val4 = document.getElementById('dashMetricVal4');
-    const sub4 = document.getElementById('dashMetricSub4');
-
-    if (lbl1) lbl1.innerText = 'Chấm công tháng';
-    if (val1) val1.innerText = '22 / 22';
-    if (sub1) sub1.innerText = 'Đạt 100% ngày công chuẩn →';
-
-    if (lbl2) lbl2.innerText = 'Quỹ phép còn';
-    if (val2) val2.innerText = '10 / 12';
-    if (sub2) sub2.innerText = 'Đã nghỉ 2 ngày phép năm →';
-
-    if (lbl3) lbl3.innerText = 'Đi muộn tháng';
-    if (val3) val3.innerText = '00';
-    if (sub3) sub3.innerText = 'Chuyên cần tốt, không bị trừ thưởng';
-
-    if (lbl4) lbl4.innerText = 'Đơn đang chờ';
-    if (val4) val4.innerText = '01';
-    if (sub4) sub4.innerText = 'Nghỉ phép năm ngày 02/11/2026 →';
-  } else {
-    if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
-    if (personalRequestsCard) personalRequestsCard.style.display = 'none';
-
-    const lbl1 = document.getElementById('dashMetricLbl1');
-    const val1 = document.getElementById('dashMetricVal1');
-    const sub1 = document.getElementById('dashMetricSub1');
-    const lbl2 = document.getElementById('dashMetricLbl2');
-    const val2 = document.getElementById('dashMetricVal2');
-    const sub2 = document.getElementById('dashMetricSub2');
-    const lbl3 = document.getElementById('dashMetricLbl3');
-    const val3 = document.getElementById('dashMetricVal3');
-    const sub3 = document.getElementById('dashMetricSub3');
-    const lbl4 = document.getElementById('dashMetricLbl4');
-    const val4 = document.getElementById('dashMetricVal4');
-    const sub4 = document.getElementById('dashMetricSub4');
-
-    if (lbl1) lbl1.innerText = 'Đã đi làm';
-    if (val1) val1.innerText = '34 / 40';
-    if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
-
-    if (lbl2) lbl2.innerText = 'Nghỉ phép';
-    if (val2) val2.innerText = '04';
-    if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-
-    if (lbl3) lbl3.innerText = 'Đi muộn';
-    if (val3) val3.innerText = '03';
-    if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
-
-    if (lbl4) lbl4.innerText = 'Đơn chờ duyệt';
-    if (val4) val4.innerText = '07';
-    if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-  }
+  setDisplay('nav-rbac', role === 'ADMIN', 'flex');
+  setDisplay('nav-soa-monitor', role === 'ADMIN', 'flex');
+  setDisplay('nav-settings', role === 'ADMIN' || role === 'HR', 'flex');
+  setDisplay('nav-departments', role === 'ADMIN' || role === 'HR', 'flex');
+  setDisplay('nav-attendance-history', !isEmployee, 'flex');
+  setDisplay('nav-employees', !isEmployee, 'flex');
+  setDisplay('dashOrgMetrics', !isEmployee);
+  setDisplay('dashOrgDataState', !isEmployee);
+  setDisplay('dashOrgDetails', !isEmployee);
+  setDisplay('dashPendingApprovalCard', !isEmployee);
+  setDisplay('dashPersonalMetrics', isEmployee);
+  setDisplay('statEmployeePersonalCard', isEmployee);
+  setDisplay('statPeriodFilters', !isEmployee, 'flex');
+  setDisplay('statOrgMetrics', !isEmployee);
+  setDisplay('statDepartmentReport', !isEmployee);
+  setDisplay('statAlertsReport', !isEmployee);
 }
 
 function navigateToView(viewName) {
@@ -539,17 +497,335 @@ function openRequestDetail(requestId) {
 // 7. NẠP DỮ LIỆU CÁC DỊCH VỤ & GIAO DIỆN
 // ==============================================================================
 async function loadDashboardData() {
-  await Promise.all([loadDepartmentsData(), loadEmployeesData()]);
+  if (state.user?.role === 'EMPLOYEE') {
+    return loadPersonalDashboardData();
+  }
+  return loadManagementDashboardData(new Date());
+}
+
+function setElementText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
+function formatMetric(value, maximumFractionDigits = 0) {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return number.toLocaleString('vi-VN', { maximumFractionDigits });
+}
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getApiArray(response, resourceName) {
+  if (!response?.success || !Array.isArray(response.data)) {
+    throw new Error(`Dữ liệu ${resourceName} từ máy chủ không hợp lệ`);
+  }
+  return response.data;
+}
+
+async function fetchOrgAnalytics(date) {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  const response = await apiCall(`/api/analytics/dashboard?month=${month}&year=${year}`);
+  const data = response?.data;
+  const requiredMetrics = [
+    'totalWorkDays', 'totalOnTimeDays', 'totalLateDays', 'totalAbsentDays',
+    'totalLateMinutes', 'totalLeaveDays', 'totalOtHours', 'activeHeadcount'
+  ];
+  if (
+    !response?.success ||
+    !data?.period ||
+    !Number.isInteger(Number(data.period.month)) ||
+    !Number.isInteger(Number(data.period.year)) ||
+    !data.kpis ||
+    requiredMetrics.some((metric) => data.kpis[metric] === null || data.kpis[metric] === undefined || !Number.isFinite(Number(data.kpis[metric]))) ||
+    !Array.isArray(data.lateEmployees) ||
+    !Array.isArray(data.alerts)
+  ) {
+    throw new Error(response?.error || 'Analytics Service trả về dữ liệu không hợp lệ');
+  }
+  return data;
+}
+
+function renderOrgDashboard(data) {
+  const kpis = data.kpis;
+  setElementText('dashMetricVal1', formatMetric(kpis.totalWorkDays));
+  setElementText('dashMetricVal2', formatMetric(kpis.totalLeaveDays));
+  setElementText('dashMetricVal3', formatMetric(kpis.totalLateMinutes));
+  setElementText('dashMetricVal4', formatMetric(kpis.totalOtHours, 2));
+  setElementText('dashOrgDataState', `Số liệu thực tế tháng ${data.period.month}/${data.period.year}.`);
+
+  const categories = [
+    { count: Number(kpis.totalOnTimeDays), circle: 'dashCircleOnTime', legend: 'dashLegendOnTime' },
+    { count: Number(kpis.totalLateDays), circle: 'dashCircleLate', legend: 'dashLegendLate' },
+    { count: Number(kpis.totalLeaveDays), circle: 'dashCircleLeave', legend: 'dashLegendLeave' },
+    { count: Number(kpis.totalAbsentDays), circle: 'dashCircleAbsent', legend: 'dashLegendAbsent' }
+  ];
+  const total = categories.reduce((sum, item) => sum + item.count, 0);
+  let offset = 0;
+  categories.forEach((item) => {
+    const circle = document.getElementById(item.circle);
+    const percentage = total ? (item.count / total) * 100 : 0;
+    if (circle) {
+      circle.setAttribute('stroke-dasharray', `${percentage} ${100 - percentage}`);
+      circle.setAttribute('stroke-dashoffset', String(-offset));
+    }
+    setElementText(item.legend, formatMetric(item.count));
+    offset += percentage;
+  });
+  setElementText('dashDonutTotal', formatMetric(total));
+
+  const lateBody = document.getElementById('dashLateEmployeesBody');
+  if (lateBody) {
+    const lateEmployees = Array.isArray(data.lateEmployees) ? data.lateEmployees : [];
+    setElementText('dashLateCountBadge', `${lateEmployees.length} nhân sự`);
+    lateBody.innerHTML = lateEmployees.length
+      ? lateEmployees.map((employee) => `
+        <tr>
+          <td><strong>${escapeHtml(employee.empId || '—')}</strong></td>
+          <td>${formatMetric(employee.lateDays)} ngày</td>
+          <td>${formatMetric(employee.lateMinutes)} phút</td>
+          <td>Trong tháng</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="4" style="text-align: center; color: #64748b;">Không có ngày đi muộn trong kỳ này.</td></tr>';
+  }
+}
+
+async function loadManagementDashboardData(date) {
+  const pendingBody = document.getElementById('dashPendingLeavesBody');
+  const pendingState = document.getElementById('dashOrgDataState');
+  const monthLabel = `Tháng ${date.getMonth() + 1}/${date.getFullYear()}`;
+  setElementText('currentDatePillText', monthLabel);
+  setElementText('currentDeptPillText', state.user?.role === 'MANAGER' ? 'Nhóm được phân quyền' : 'Toàn tổ chức');
+  setElementText('dashUpdateTime', `Cập nhật lúc ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`);
+  setElementText('dashGreetingSub', `Dữ liệu tổng hợp ${monthLabel}, theo phạm vi được cấp quyền.`);
+  setElementText('dashOrgDataState', `Đang tải dashboard ${monthLabel}...`);
+  ['dashMetricVal1', 'dashMetricVal2', 'dashMetricVal3', 'dashMetricVal4', 'dashDonutTotal',
+    'dashLegendOnTime', 'dashLegendLate', 'dashLegendLeave', 'dashLegendAbsent']
+    .forEach((id) => setElementText(id, '—'));
+  setElementText('dashPendingLeaveCount', '—');
+  if (pendingBody) {
+    pendingBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b;">Đang tải danh sách đơn...</td></tr>';
+  }
+  const lateBody = document.getElementById('dashLateEmployeesBody');
+  if (lateBody) lateBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #64748b;">Đang tải dữ liệu...</td></tr>';
+  if (pendingState) pendingState.style.color = '#64748b';
+
+  try {
+    const data = await fetchOrgAnalytics(date);
+    renderOrgDashboard(data);
+  } catch (err) {
+    setElementText('dashOrgDataState', `Không thể tải dashboard: ${err.message}`);
+    ['dashMetricVal1', 'dashMetricVal2', 'dashMetricVal3', 'dashMetricVal4', 'dashDonutTotal',
+      'dashLegendOnTime', 'dashLegendLate', 'dashLegendLeave', 'dashLegendAbsent']
+      .forEach((id) => setElementText(id, '—'));
+    ['dashCircleOnTime', 'dashCircleLate', 'dashCircleLeave', 'dashCircleAbsent'].forEach((id) => {
+      const circle = document.getElementById(id);
+      if (circle) circle.setAttribute('stroke-dasharray', '0 100');
+    });
+    const lateBody = document.getElementById('dashLateEmployeesBody');
+    if (lateBody) lateBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #b91c1c;">Không thể tải dữ liệu: ${escapeHtml(err.message)}</td></tr>`;
+    setElementText('dashLateCountBadge', '—');
+    if (pendingState) pendingState.style.color = '#b91c1c';
+  }
+
+  try {
+    const approvalQueue = state.user?.role === 'MANAGER' ? '&approvalQueue=true' : '';
+    const response = await apiCall(`/api/leaves?status=PENDING${approvalQueue}`);
+    const requests = getApiArray(response, 'đơn nghỉ phép');
+    setElementText('dashPendingLeaveCount', formatMetric(requests.length));
+    if (pendingBody) {
+      pendingBody.innerHTML = requests.length
+        ? requests.map((request) => `
+          <tr>
+            <td><strong>${escapeHtml(request.emp_id || '—')}</strong></td>
+            <td>${escapeHtml(request.leave_name || request.leave_code || 'Đơn nghỉ phép')}</td>
+            <td>${escapeHtml(request.start_date || '—')} – ${escapeHtml(request.end_date || '—')} (${formatMetric(request.total_days)} ngày)</td>
+            <td>${escapeHtml(request.created_at || '—')}</td>
+            <td>Đang chờ xử lý</td>
+          </tr>
+        `).join('')
+        : '<tr><td colspan="5" style="text-align: center; color: #64748b;">Không có đơn nghỉ phép chờ duyệt.</td></tr>';
+    }
+  } catch (err) {
+    setElementText('dashPendingLeaveCount', '—');
+    if (pendingBody) {
+      pendingBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #b91c1c;">Không thể tải đơn chờ duyệt: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+}
+
+function renderPersonalDashboard(data) {
+  const values = {
+    dashPersonalWorkDays: `${formatMetric(data.workDays)} ngày`,
+    dashPersonalWorkHours: `Tổng giờ làm ${formatMetric(data.workHours, 2)}`,
+    dashPersonalLeaveDays: formatMetric(data.leaveDays, 2),
+    dashPersonalLateDays: `${formatMetric(data.lateDays)} ngày`,
+    dashPersonalLateMinutes: `Tổng phút đi muộn ${formatMetric(data.lateMinutes)}`,
+    dashPersonalPending: formatMetric(data.pendingRequests),
+    statPersonalWorkDays: `${formatMetric(data.workDays)} ngày`,
+    statPersonalWorkHours: `Tổng giờ làm ${formatMetric(data.workHours, 2)}`,
+    statPersonalLeaveDays: formatMetric(data.leaveDays, 2),
+    statPersonalLateDays: `${formatMetric(data.lateDays)} ngày`,
+    statPersonalLateMinutes: `Tổng phút đi muộn ${formatMetric(data.lateMinutes)}`,
+    statPersonalPending: formatMetric(data.pendingRequests),
+    myAttendanceWorkDays: `${formatMetric(data.workDays)} ngày`,
+    myAttendanceWorkHours: `Tổng giờ làm: ${formatMetric(data.workHours, 2)}`,
+    myAttendanceLateDays: `${formatMetric(data.lateDays)} lần`,
+    myAttendanceLateMinutes: `Tổng thời gian trễ: ${formatMetric(data.lateMinutes)} phút`,
+    myAttendanceLeaveDays: `${formatMetric(data.leaveDays, 2)} ngày`
+  };
+  Object.entries(values).forEach(([id, value]) => setElementText(id, value));
+}
+
+function renderPersonalAttendanceTable(attendance) {
+  const tbody = document.getElementById('myAttendanceTableBody');
+  if (!tbody) return;
+  if (!attendance.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b;">Chưa có dữ liệu chấm công trong tháng này.</td></tr>';
+    return;
+  }
+
+  const statusLabels = {
+    ON_TIME: 'Đúng giờ',
+    LATE: 'Đi muộn',
+    EARLY_LEAVE: 'Về sớm',
+    LATE_AND_EARLY: 'Đi muộn và về sớm',
+    ABSENT: 'Vắng mặt',
+    ON_LEAVE: 'Nghỉ phép'
+  };
+  tbody.innerHTML = attendance.map((row) => {
+    const status = String(row.status || '').toUpperCase();
+    const tone = ['LATE', 'LATE_AND_EARLY'].includes(status)
+      ? 'style="background:#fef3c7; color:#d97706;"'
+      : status === 'ON_TIME'
+        ? 'class="badge-status badge-approved"'
+        : 'class="badge-status"';
+    const checkIn = row.check_in_time ? String(row.check_in_time).slice(11, 16) : '—';
+    const checkOut = row.check_out_time ? String(row.check_out_time).slice(11, 16) : '—';
+    return `
+      <tr>
+        <td><strong>${escapeHtml(row.work_date || '—')}</strong></td>
+        <td>${escapeHtml(checkIn)}</td>
+        <td>${escapeHtml(checkOut)}</td>
+        <td>${formatMetric(row.actual_working_hours, 2)} giờ</td>
+        <td>${escapeHtml(row.check_in_method || row.location_name || '—')}</td>
+        <td><span ${tone}>${escapeHtml(statusLabels[status] || status || 'Chưa xác định')}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadPersonalDashboardData() {
+  const status = document.getElementById('dashPersonalDataState');
+  const attendanceStatus = document.getElementById('myAttendanceDataState');
+  const now = new Date();
+  setElementText('currentDatePillText', `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`);
+  setElementText('currentDeptPillText', 'Hồ sơ cá nhân');
+  setElementText('dashUpdateTime', `Cập nhật lúc ${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`);
+  setElementText('dashGreetingSub', `Số liệu chấm công và đơn từ cá nhân tháng ${now.getMonth() + 1}/${now.getFullYear()}.`);
+  if (status) {
+    status.style.color = '#64748b';
+    status.textContent = 'Đang tải số liệu cá nhân...';
+  }
+  if (attendanceStatus) {
+    attendanceStatus.style.color = '#64748b';
+    attendanceStatus.textContent = 'Đang tải dữ liệu cá nhân...';
+  }
+  ['dashPersonalWorkDays', 'dashPersonalWorkHours', 'dashPersonalLeaveDays', 'dashPersonalLateDays', 'dashPersonalLateMinutes', 'dashPersonalPending',
+    'statPersonalWorkDays', 'statPersonalWorkHours', 'statPersonalLeaveDays', 'statPersonalLateDays', 'statPersonalLateMinutes', 'statPersonalPending',
+    'myAttendanceWorkDays', 'myAttendanceWorkHours', 'myAttendanceLateDays', 'myAttendanceLateMinutes', 'myAttendanceLeaveDays']
+    .forEach((id) => setElementText(id, '—'));
+
+  try {
+    if (!state.user?.empId) {
+      const profile = await apiCall('/api/organization/employees/me/profile');
+      if (!profile?.success || !profile.data?.id) {
+        throw new Error('Tài khoản chưa liên kết hồ sơ nhân sự; vui lòng liên hệ HR.');
+      }
+      state.user.empId = profile.data.id;
+    }
+
+    const fromDate = localDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
+    const toDate = localDateKey(now);
+    const year = now.getFullYear();
+    const [attendanceRes, balanceRes, leaveRes, otRes] = await Promise.all([
+      apiCall(`/api/attendance?fromDate=${fromDate}&toDate=${toDate}`),
+      apiCall(`/api/leaves/balances?year=${year}`),
+      apiCall('/api/leaves?status=PENDING'),
+      apiCall('/api/ot?status=PENDING')
+    ]);
+
+    const attendance = getApiArray(attendanceRes, 'chấm công');
+    const balances = getApiArray(balanceRes, 'quỹ phép');
+    const leaves = getApiArray(leaveRes, 'đơn nghỉ phép');
+    const overtime = getApiArray(otRes, 'đơn OT');
+    const data = {
+      workDays: attendance.filter((row) => !['ABSENT', 'ON_LEAVE'].includes(row.status)).length,
+      workHours: attendance.reduce((sum, row) => sum + Number(row.actual_working_hours || 0), 0),
+      leaveDays: balances.reduce((sum, row) => sum + Number(row.remaining_days ?? (Number(row.total_days || 0) - Number(row.used_days || 0) - Number(row.pending_days || 0))), 0),
+      lateDays: attendance.filter((row) => Number(row.late_minutes || 0) > 0 || ['LATE', 'LATE_AND_EARLY'].includes(row.status)).length,
+      lateMinutes: attendance.reduce((sum, row) => sum + Number(row.late_minutes || 0), 0),
+      pendingRequests: leaves.length + overtime.length
+    };
+    renderPersonalDashboard(data);
+    renderPersonalAttendanceTable(attendance);
+    if (status) status.textContent = `Số liệu cá nhân thực tế tháng ${now.getMonth() + 1}/${year}.`;
+    if (attendanceStatus) attendanceStatus.textContent = `Dữ liệu chấm công thực tế tháng ${now.getMonth() + 1}/${year}.`;
+    const statsStatus = document.getElementById('statPersonalDataState');
+    if (statsStatus) statsStatus.textContent = `Số liệu cá nhân thực tế tháng ${now.getMonth() + 1}/${year}.`;
+  } catch (err) {
+    ['dashPersonalWorkDays', 'dashPersonalWorkHours', 'dashPersonalLeaveDays', 'dashPersonalLateDays', 'dashPersonalLateMinutes', 'dashPersonalPending',
+      'statPersonalWorkDays', 'statPersonalWorkHours', 'statPersonalLeaveDays', 'statPersonalLateDays', 'statPersonalLateMinutes', 'statPersonalPending',
+      'myAttendanceWorkDays', 'myAttendanceWorkHours', 'myAttendanceLateDays', 'myAttendanceLateMinutes', 'myAttendanceLeaveDays']
+      .forEach((id) => setElementText(id, '—'));
+    const message = `Không thể tải số liệu cá nhân: ${err.message}`;
+    if (status) {
+      status.style.color = '#b91c1c';
+      status.textContent = message;
+    }
+    if (attendanceStatus) {
+      attendanceStatus.style.color = '#b91c1c';
+      attendanceStatus.textContent = message;
+    }
+    const attendanceBody = document.getElementById('myAttendanceTableBody');
+    if (attendanceBody) attendanceBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #b91c1c;">${escapeHtml(message)}</td></tr>`;
+    const statsStatus = document.getElementById('statPersonalDataState');
+    if (statsStatus) {
+      statsStatus.style.color = '#b91c1c';
+      statsStatus.textContent = message;
+    }
+  }
 }
 
 async function loadDepartmentsData() {
+  const tbody = document.getElementById('departmentsTableFullBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b;">Đang tải dữ liệu...</td></tr>';
   try {
     const res = await apiCall('/api/organization/departments');
-    state.departments = res.data && res.data.length ? res.data : MOCK_DEPARTMENTS;
+    state.departments = getApiArray(res, 'phòng ban');
+    renderDepartmentsTable(state.departments);
   } catch (err) {
-    state.departments = MOCK_DEPARTMENTS;
+    state.departments = [];
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #b91c1c;">Không thể tải phòng ban: ${escapeHtml(err.message)}</td></tr>`;
   }
-  renderDepartmentsTable(state.departments);
 }
 
 function renderDepartmentsTable(list) {
@@ -586,13 +862,16 @@ function handleDepartmentFilter() {
 }
 
 async function loadEmployeesData() {
+  const tbody = document.getElementById('employeesTableFullBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #64748b;">Đang tải dữ liệu...</td></tr>';
   try {
     const res = await apiCall('/api/organization/employees');
-    state.employees = res.data && res.data.length ? res.data : MOCK_EMPLOYEES;
+    state.employees = getApiArray(res, 'nhân sự');
+    renderEmployeesTable(state.employees);
   } catch (err) {
-    state.employees = MOCK_EMPLOYEES;
+    state.employees = [];
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #b91c1c;">Không thể tải nhân sự: ${escapeHtml(err.message)}</td></tr>`;
   }
-  renderEmployeesTable(state.employees);
 }
 
 function renderEmployeesTable(list) {
@@ -633,67 +912,61 @@ function handleEmployeeFilter() {
   renderEmployeesTable(filtered);
 }
 
-// Nạp lịch sử chấm công toàn bộ nhân viên
-function loadAttendanceHistoryData() {
+// Nạp lịch sử chấm công trong phạm vi được cấp quyền
+async function loadAttendanceHistoryData() {
   const tbody = document.getElementById('attendanceHistoryTableBody');
   if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #64748b;">Đang tải dữ liệu...</td></tr>';
 
-  const records = [
-    { code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1', status: 'ON_TIME' },
-    { code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8', status: 'LATE' },
-    { code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0', status: 'LATE' },
-    { code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2', status: 'ON_TIME' },
-    { code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1', status: 'ON_TIME' },
-    { code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5', status: 'ON_TIME' },
-    { code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính', date: '30/10/2026', in: '-', out: '-', hours: '0.0', status: 'LEAVE' },
-    { code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6', status: 'LATE' }
-  ];
+  const dateInput = document.getElementById('attendanceHistoryDate');
+  if (dateInput && !dateInput.value) dateInput.value = localDateKey(new Date());
+  const selectedDate = dateInput?.value || localDateKey(new Date());
+  try {
+    const [attendanceRes, employeesRes] = await Promise.all([
+      apiCall(`/api/attendance?fromDate=${encodeURIComponent(selectedDate)}&toDate=${encodeURIComponent(selectedDate)}`),
+      apiCall('/api/organization/employees')
+    ]);
+    const records = getApiArray(attendanceRes, 'chấm công');
+    const employees = getApiArray(employeesRes, 'nhân sự');
+    const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+    const statusLabels = {
+      ON_TIME: 'Đúng giờ',
+      LATE: 'Đi muộn',
+      EARLY_LEAVE: 'Về sớm',
+      LATE_AND_EARLY: 'Đi muộn và về sớm',
+      ABSENT: 'Vắng mặt',
+      ON_LEAVE: 'Nghỉ phép'
+    };
 
-  tbody.innerHTML = records.map(r => {
-    let badge = '<span class="badge-status badge-approved">Đúng giờ</span>';
-    if (r.status === 'LATE') badge = '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn</span>';
-    if (r.status === 'LEAVE') badge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
-
-    return `
-      <tr>
-        <td><strong>${r.code}</strong></td>
-        <td><strong>${r.name}</strong></td>
-        <td>${r.dept}</td>
-        <td>${r.date}</td>
-        <td>${r.in}</td>
-        <td>${r.out}</td>
-        <td><strong>${r.hours} h</strong></td>
-        <td>${badge}</td>
-        <td><a class="link-action-blue" onclick="openLateDetailModal('${r.name}', '${r.code}', '15 phút', '${r.in}')">Chi tiết</a></td>
-      </tr>
-    `;
-  }).join('');
+    tbody.innerHTML = records.length
+      ? records.map((record) => {
+        const employee = employeeById.get(record.emp_id);
+        const status = String(record.status || '').toUpperCase();
+        const badgeClass = status === 'ON_TIME' ? 'badge-approved' : '';
+        const badgeStyle = badgeClass ? '' : ' style="background:#f1f5f9; color:#475569;"';
+        return `
+          <tr>
+            <td><strong>${escapeHtml(employee?.code || record.emp_id)}</strong></td>
+            <td><strong>${escapeHtml(employee?.full_name || 'Không tìm thấy hồ sơ')}</strong></td>
+            <td>${escapeHtml(employee?.department_name || '—')}</td>
+            <td>${escapeHtml(record.work_date || selectedDate)}</td>
+            <td>${escapeHtml(record.check_in_time ? String(record.check_in_time).slice(11, 16) : '—')}</td>
+            <td>${escapeHtml(record.check_out_time ? String(record.check_out_time).slice(11, 16) : '—')}</td>
+            <td><strong>${formatMetric(record.actual_working_hours, 2)} h</strong></td>
+            <td><span class="badge-status ${badgeClass}"${badgeStyle}>${escapeHtml(statusLabels[status] || status || 'Chưa xác định')}</span></td>
+            <td>${escapeHtml(record.check_in_method || record.location_name || '—')}</td>
+          </tr>
+        `;
+      }).join('')
+      : '<tr><td colspan="9" style="text-align: center; color: #64748b;">Không có dữ liệu chấm công trong ngày đã chọn.</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #b91c1c;">Không thể tải lịch sử chấm công: ${escapeHtml(err.message)}</td></tr>`;
+  }
 }
 
 // Nạp lịch sử chấm công cá nhân
 function loadMyAttendanceData() {
-  const tbody = document.getElementById('myAttendanceTableBody');
-  if (!tbody) return;
-
-  const records = [
-    { date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE' },
-    { date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME' },
-    { date: '25/10/2026', in: '08:02', out: '16:00', duration: '7h 58m', type: 'Wi-Fi Office', status: 'ON_TIME' }
-  ];
-
-  tbody.innerHTML = records.map(r => `
-    <tr>
-      <td><strong>${r.date}</strong></td>
-      <td>${r.in}</td>
-      <td>${r.out}</td>
-      <td>${r.duration}</td>
-      <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${r.type}</span></td>
-      <td>${r.status === 'ON_TIME' ? '<span class="badge-status badge-approved">Đúng giờ</span>' : '<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (12p)</span>'}</td>
-    </tr>
-  `).join('');
+  return loadPersonalDashboardData();
 }
 
 // ==============================================================================
@@ -705,29 +978,21 @@ async function loadRbacUsersData() {
 
   tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Đang kết nối Auth Service (:3001) để lấy danh sách tài khoản...</td></tr>`;
 
-  let users = [];
+  let users;
   try {
     const res = await apiCall('/api/auth/users');
-    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-      users = res.data;
-    }
+    users = getApiArray(res, 'tài khoản');
   } catch (err) {
-    console.warn('Lỗi lấy danh sách user từ API, sử dụng danh sách tài khoản mặc định:', err.message);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #b91c1c; padding: 20px;">Không thể tải danh sách tài khoản: ${escapeHtml(err.message)}</td></tr>`;
+    return;
   }
 
-  // Nếu API chưa có dữ liệu hoặc mock fallback
-  if (!users || users.length === 0) {
-    users = [
-      { id: 'usr_admin', username: 'admin', email: 'admin@htqlns.com', emp_id: 'AD-001', role: 'ADMIN', status: 'ACTIVE' },
-      { id: 'usr_manager', username: 'manager', email: 'lam@htqlns.com', emp_id: 'NV-004', role: 'MANAGER', status: 'ACTIVE' },
-      { id: 'usr_hr', username: 'hr_admin', email: 'hr@htqlns.com', emp_id: 'NV-005', role: 'HR', status: 'ACTIVE' },
-      { id: 'usr_emp1', username: 'employee', email: 'hieu.vd@htqlns.com', emp_id: 'NV-001', role: 'EMPLOYEE', status: 'ACTIVE' },
-      { id: 'usr_emp2', username: 'kiet.hg', email: 'kiet.hg@htqlns.com', emp_id: 'NV-002', role: 'EMPLOYEE', status: 'ACTIVE' },
-      { id: 'usr_emp3', username: 'hao.ng', email: 'hao.ng@htqlns.com', emp_id: 'NV-003', role: 'EMPLOYEE', status: 'ACTIVE' }
-    ];
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Chưa có tài khoản để hiển thị.</td></tr>';
+    return;
   }
 
-  tbody.innerHTML = users.map(u => {
+  tbody.innerHTML = users.map((u) => {
     let roleBadge = '<span class="badge-status badge-approved">EMPLOYEE</span>';
     if (u.role === 'ADMIN') roleBadge = '<span class="badge-status badge-rejected">ADMIN</span>';
     else if (u.role === 'HR') roleBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">HR</span>';
@@ -735,12 +1000,12 @@ async function loadRbacUsersData() {
 
     return `
       <tr>
-        <td><strong>${u.username}</strong></td>
-        <td>${u.email || '-'}</td>
-        <td><code>${u.emp_id || '-'}</code></td>
+        <td><strong>${escapeHtml(u.username)}</strong></td>
+        <td>${escapeHtml(u.email || '-')}</td>
+        <td><code>${escapeHtml(u.emp_id || '-')}</code></td>
         <td>${roleBadge}</td>
         <td>
-          <select id="role-select-${u.id}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
+          <select id="role-select-${escapeHtml(u.id)}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
             <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
             <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
             <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
@@ -748,13 +1013,16 @@ async function loadRbacUsersData() {
           </select>
         </td>
         <td>
-          <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" onclick="handleUpdateUserRole('${u.id}', '${u.username}')">
-            💾 Lưu quyền
+          <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" data-user-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}">
+            Lưu quyền
           </button>
         </td>
       </tr>
     `;
   }).join('');
+  tbody.querySelectorAll('[data-user-id]').forEach((button) => {
+    button.addEventListener('click', () => handleUpdateUserRole(button.dataset.userId, button.dataset.username));
+  });
 }
 
 async function handleUpdateUserRole(userId, username) {
@@ -778,126 +1046,91 @@ async function handleUpdateUserRole(userId, username) {
 // NẠP VÀ ĐIỀU KHIỂN BÁO CÁO THỐNG KÊ (ANALYTICS & ATTENDANCE)
 // ==============================================================================
 function loadStatsData() {
-  // Đồng bộ giao diện báo cáo với chu kỳ mặc định Tháng 10/2026
-  changeStatPeriod('2026-10');
+  if (state.user?.role === 'EMPLOYEE') {
+    return loadPersonalDashboardData();
+  }
+  return changeStatPeriod(0);
 }
 
-function changeStatPeriod(period) {
-  // Đặt lại style các nút chọn chu kỳ
-  ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3'].forEach(id => {
+async function changeStatPeriod(monthOffset = 0) {
+  const offset = Number.isInteger(Number(monthOffset)) ? Math.min(2, Math.max(0, Number(monthOffset))) : 0;
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - offset);
+
+  ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3'].forEach((id, index) => {
     const btn = document.getElementById(id);
     if (btn) {
-      btn.className = 'btn-figma-dark';
-      btn.style.background = '#f8fafc';
-      btn.style.color = '#1e293b';
-      btn.style.border = '1px solid #e2e8f0';
+      const selected = index === offset;
+      btn.textContent = `${index === 0 ? 'Tháng này' : index === 1 ? 'Tháng trước' : '2 tháng trước'} (${dateLabelForOffset(index)})`;
+      btn.style.background = selected ? 'var(--mint-green)' : '';
+      btn.style.color = selected ? 'var(--mint-green-text)' : '';
+      btn.style.border = selected ? 'none' : '';
     }
   });
 
-  let activeBtnId = 'statPeriodBtn1';
-  let periodLabel = 'Tháng 10/2026';
-  let kpiRate = '97.9%';
-  let kpiHours = '16,368 h';
-  let kpiLate = '15';
-  let kpiLeave = '30';
-  let footStandard = '2,090 công';
-  let footActual = '2,046 công';
-  let footLate = '15 lượt';
-  let footLeave = '30 ngày';
-  let footRate = '97.9%';
+  const tbody = document.getElementById('statAlertsBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b;">Đang tải dữ liệu analytics...</td></tr>';
+  ['statMetricOnTime', 'statMetricLate', 'statMetricLeave', 'statMetricHours', 'statFootEmployees',
+    'statFootStandardDays', 'statFootActualDays', 'statFootLateCount', 'statFootLeaveDays', 'statFootRate']
+    .forEach((id) => setElementText(id, '—'));
+  setElementText('statAlertCount', 'Đang tải...');
 
-  let deptsData = [
-    { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 864, late: 5, leave: 11, rate: '98.2%' },
-    { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 602, late: 6, leave: 8, rate: '97.7%' },
-    { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 325, late: 1, leave: 4, rate: '98.5%' },
-    { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 255, late: 3, leave: 7, rate: '96.6%' }
-  ];
+  try {
+    const data = await fetchOrgAnalytics(date);
+    const kpis = data.kpis;
+    setElementText('statMetricOnTime', formatMetric(kpis.totalWorkDays));
+    setElementText('statMetricLate', formatMetric(kpis.totalLateDays));
+    setElementText('statMetricLeave', formatMetric(kpis.totalLeaveDays));
+    setElementText('statMetricHours', `${formatMetric(kpis.totalOtHours, 2)} h`);
+    setElementText('statMetricOnTimeSub', `Tháng ${data.period.month}/${data.period.year}`);
+    setElementText('statMetricLateSub', `${formatMetric(kpis.totalLateMinutes)} phút đi muộn`);
+    setElementText('statMetricLeaveSub', 'Đã được duyệt trong kỳ');
+    setElementText('statMetricHoursSub', 'Giờ OT đã duyệt trong kỳ');
+    setElementText('statFootEmployees', formatMetric(kpis.activeHeadcount));
+    setElementText('statFootActualDays', `${formatMetric(kpis.totalWorkDays)} công`);
+    setElementText('statFootLateCount', `${formatMetric(kpis.totalLateDays)} ngày`);
+    setElementText('statFootLeaveDays', `${formatMetric(kpis.totalLeaveDays)} ngày`);
 
-  if (period === '2026-09') {
-    activeBtnId = 'statPeriodBtn2';
-    periodLabel = 'Tháng 09/2026';
-    kpiRate = '97.1%';
-    kpiHours = '16,020 h';
-    kpiLate = '22';
-    kpiLeave = '38';
-    footStandard = '2,090 công';
-    footActual = '2,029 công';
-    footLate = '22 lượt';
-    footLeave = '38 ngày';
-    footRate = '97.1%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 858, late: 8, leave: 14, rate: '97.5%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 595, late: 9, leave: 12, rate: '96.6%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 324, late: 2, leave: 4, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 252, late: 3, leave: 8, rate: '95.5%' }
-    ];
-  } else if (period === '2026-Q3') {
-    activeBtnId = 'statPeriodBtn3';
-    periodLabel = 'Quý 3/2026';
-    kpiRate = '96.8%';
-    kpiHours = '48,150 h';
-    kpiLate = '68';
-    kpiLeave = '112';
-    footStandard = '6,270 công';
-    footActual = '6,070 công';
-    footLate = '68 lượt';
-    footLeave = '112 ngày';
-    footRate = '96.8%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 2640, act: 2560, late: 25, leave: 42, rate: '97.0%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 1848, act: 1780, late: 28, leave: 36, rate: '96.3%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 990, act: 972, late: 6, leave: 12, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 792, act: 758, late: 9, leave: 22, rate: '95.7%' }
-    ];
+    if (tbody) {
+      const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+      tbody.innerHTML = alerts.length
+        ? alerts.map((alert) => `
+          <tr>
+            <td><strong>${escapeHtml(alert.type || 'ALERT')}</strong></td>
+            <td>${escapeHtml(alert.message || 'Cảnh báo analytics')}</td>
+            <td>${formatMetric(alert.value, 2)}</td>
+            <td>Ngưỡng cấu hình</td>
+            <td><span class="badge-status badge-rejected">CẢNH BÁO</span></td>
+            <td>1</td>
+            <td>Đang theo dõi</td>
+          </tr>
+        `).join('')
+        : '<tr><td colspan="7" style="text-align: center; color: #64748b;">Không có cảnh báo trong kỳ này.</td></tr>';
+      setElementText('statAlertCount', `${alerts.length} cảnh báo`);
+    }
+
+    const deptBody = document.getElementById('statDeptTableBody');
+    if (deptBody) {
+      deptBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b;">Analytics Service hiện chưa cung cấp số liệu phân tách theo phòng ban.</td></tr>';
+    }
+  } catch (err) {
+    ['statMetricOnTime', 'statMetricLate', 'statMetricLeave', 'statMetricHours', 'statFootEmployees',
+      'statFootStandardDays', 'statFootActualDays', 'statFootLateCount', 'statFootLeaveDays', 'statFootRate']
+      .forEach((id) => setElementText(id, '—'));
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #b91c1c;">Không thể tải cảnh báo: ${escapeHtml(err.message)}</td></tr>`;
+    setElementText('statAlertCount', 'Không tải được');
+    const deptBody = document.getElementById('statDeptTableBody');
+    if (deptBody) deptBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #b91c1c;">Không thể tải báo cáo: ${escapeHtml(err.message)}</td></tr>`;
+    showToast(`Không thể tải báo cáo analytics: ${err.message}`, 'error');
   }
+}
 
-  const activeBtn = document.getElementById(activeBtnId);
-  if (activeBtn) {
-    activeBtn.className = 'btn-primary-blue';
-    activeBtn.style.background = '#2563eb';
-    activeBtn.style.color = '#ffffff';
-    activeBtn.style.border = 'none';
-  }
-
-  // Cập nhật số liệu các thẻ KPI báo cáo
-  const rEl = document.getElementById('statMetricRateVal');
-  const hEl = document.getElementById('statMetricHoursVal');
-  const lEl = document.getElementById('statMetricLateVal');
-  const lvEl = document.getElementById('statMetricLeaveVal');
-  if (rEl) rEl.innerText = kpiRate;
-  if (hEl) hEl.innerText = kpiHours;
-  if (lEl) lEl.innerText = kpiLate;
-  if (lvEl) lvEl.innerText = kpiLeave;
-
-  // Cập nhật bảng chi tiết phòng ban
-  const tbody = document.getElementById('statDeptTableBody');
-  if (tbody) {
-    tbody.innerHTML = deptsData.map(d => `
-      <tr>
-        <td><strong>${d.name}</strong></td>
-        <td>${d.emp}</td>
-        <td>${d.std.toLocaleString('vi-VN')} công</td>
-        <td><strong>${d.act.toLocaleString('vi-VN')} công</strong></td>
-        <td><span class="badge-status" style="background: ${d.late > 5 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.late} lượt</span></td>
-        <td>${d.leave} ngày</td>
-        <td><span class="badge-status badge-approved">${d.rate}</span></td>
-      </tr>
-    `).join('');
-  }
-
-  // Cập nhật footer tổng kết bảng
-  const fStd = document.getElementById('statFootStandardDays');
-  const fAct = document.getElementById('statFootActualDays');
-  const fLate = document.getElementById('statFootLateCount');
-  const fLeave = document.getElementById('statFootLeaveDays');
-  const fRate = document.getElementById('statFootRate');
-  if (fStd) fStd.innerText = footStandard;
-  if (fAct) fAct.innerText = footActual;
-  if (fLate) fLate.innerText = footLate;
-  if (fLeave) fLeave.innerText = footLeave;
-  if (fRate) fRate.innerText = footRate;
-
-  showToast(`Đã chuyển đổi số liệu thống kê sang: ${periodLabel}`, 'success');
+function dateLabelForOffset(offset) {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - offset);
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
 // Nạp dữ liệu hồ sơ cá nhân
@@ -942,15 +1175,15 @@ async function loadSoaServicesStatus() {
     tbody.innerHTML = serviceList
       .map((item) => {
         const statusBadge = item.online
-          ? '<span class="badge-status badge-approved">🟢 ONLINE (UP)</span>'
-          : '<span class="badge-status" style="background:#f1f5f9; color:#94a3b8;">⚪ CHƯA BẬT (OFF)</span>';
+          ? '<span class="badge-status badge-approved">ONLINE (UP)</span>'
+          : '<span class="badge-status" style="background:#f1f5f9; color:#94a3b8;">CHƯA BẬT (OFF)</span>';
 
         return `
         <tr>
           <td><strong>${item.name}</strong></td>
           <td><code>:${item.port}</code></td>
           <td>http://localhost:${item.port}</td>
-          <td><a href="http://localhost:${item.port}/health" target="_blank" class="link-action-blue">/health ↗</a></td>
+          <td><a href="http://localhost:${item.port}/health" target="_blank" class="link-action-blue">/health</a></td>
           <td>${statusBadge}</td>
           <td><code>${item.db}</code></td>
         </tr>
@@ -975,175 +1208,11 @@ function scrollToLateTable() {
   }
 }
 
-function openDateFilterModal() {
-  const options = [
-    { label: '📅 Hôm nay (30/10/2026)', value: '30/10/2026 • Hôm nay' },
-    { label: '📅 Hôm qua (29/10/2026)', value: '29/10/2026 • Hôm qua' },
-    { label: '📅 7 ngày qua (24/10 - 30/10)', value: '7 ngày qua' },
-    { label: '📅 Tháng này (10/2026)', value: 'Tháng 10/2026' }
-  ];
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn khoảng thời gian theo dõi dữ liệu:</p>
-      ${options.map(opt => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600;" onclick="selectDateFilter('${opt.value}')">
-          ${opt.label}
-        </button>
-      `).join('')}
-    </div>
-  `;
-  openModal('Lọc dữ liệu theo thời gian', html);
-}
-
-function selectDateFilter(val) {
-  const el = document.getElementById('currentDatePillText');
-  if (el) el.innerText = val;
-  closeModal();
-  showToast(`Đã lọc dữ liệu theo: ${val}`, 'success');
-}
-
-function openDeptFilterModal() {
-  const depts = [
-    { name: 'Toàn cơ quan', count: 95 },
-    { name: 'Phòng Kỹ Thuật', count: 40 },
-    { name: 'Phòng Nhân sự', count: 12 },
-    { name: 'Phòng Tài Chính - Kế Toán', count: 15 },
-    { name: 'Phòng Kinh Doanh', count: 28 }
-  ];
-  const html = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn đơn vị / phòng ban để xem thống kê:</p>
-      ${depts.map(d => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between;" onclick="selectDeptFilter('${d.name}', ${d.count})">
-          <span>🏢 ${d.name}</span>
-          <span style="color: #64748b; font-size: 12px;">${d.count} người</span>
-        </button>
-      `).join('')}
-    </div>
-  `;
-  openModal('Lọc theo Phòng ban', html);
-}
-
-function selectDeptFilter(name, count) {
-  const el = document.getElementById('currentDeptPillText');
-  if (el) el.innerText = `🏢 ${name} • ${count} người`;
-  closeModal();
-
-  // Cập nhật các chỉ số KPI Dashboard theo phòng ban đã chọn
-  const role = state.user?.role || 'EMPLOYEE';
-  if (role !== 'EMPLOYEE') {
-    const val1 = document.getElementById('dashMetricVal1');
-    const sub1 = document.getElementById('dashMetricSub1');
-    const val2 = document.getElementById('dashMetricVal2');
-    const sub2 = document.getElementById('dashMetricSub2');
-    const val3 = document.getElementById('dashMetricVal3');
-    const sub3 = document.getElementById('dashMetricSub3');
-    const val4 = document.getElementById('dashMetricVal4');
-    const sub4 = document.getElementById('dashMetricSub4');
-
-    const donutNum = document.getElementById('donutCenterNumber');
-    const legOntime = document.getElementById('donutLegendOntime');
-    const legLate = document.getElementById('donutLegendLate');
-    const legLeave = document.getElementById('donutLegendLeave');
-    const legAbsent = document.getElementById('donutLegendAbsent');
-    const donutFoot = document.getElementById('donutSummaryFoot');
-
-    if (count === 95) {
-      // Toàn cơ quan (95 người)
-      if (val1) val1.innerText = '82 / 95';
-      if (sub1) sub1.innerText = '86.3% nhân sự • Gồm 6 người đi muộn';
-      if (val2) val2.innerText = '08';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '06';
-      if (sub3) sub3.innerText = 'Là một phần trong 82 người đi làm';
-      if (val4) val4.innerText = '12';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '95';
-      if (legOntime) legOntime.innerText = '76';
-      if (legLate) legLate.innerText = '06';
-      if (legLeave) legLeave.innerText = '08';
-      if (legAbsent) legAbsent.innerText = '05';
-      if (donutFoot) donutFoot.innerText = '76 đúng giờ + 6 đi muộn + 8 nghỉ phép + 5 chưa chấm công = 95 nhân viên';
-    } else if (count === 28) {
-      // Phòng Kinh Doanh (28 người)
-      if (val1) val1.innerText = '24 / 28';
-      if (sub1) sub1.innerText = '85.7% nhân sự • Gồm 2 người đi muộn';
-      if (val2) val2.innerText = '02';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '02';
-      if (sub3) sub3.innerText = 'Là một phần trong 24 người đi làm';
-      if (val4) val4.innerText = '03';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '28';
-      if (legOntime) legOntime.innerText = '22';
-      if (legLate) legLate.innerText = '02';
-      if (legLeave) legLeave.innerText = '02';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '22 đúng giờ + 2 đi muộn + 2 nghỉ phép + 2 chưa chấm công = 28 nhân viên';
-    } else if (count === 15) {
-      // Phòng Tài Chính (15 người)
-      if (val1) val1.innerText = '14 / 15';
-      if (sub1) sub1.innerText = '93.3% nhân sự • Đúng giờ';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '00';
-      if (sub3) sub3.innerText = 'Không có nhân sự đi muộn';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '15';
-      if (legOntime) legOntime.innerText = '14';
-      if (legLate) legLate.innerText = '00';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '00';
-      if (donutFoot) donutFoot.innerText = '14 đúng giờ + 0 đi muộn + 1 nghỉ phép + 0 chưa chấm công = 15 nhân viên';
-    } else if (count === 12) {
-      // Phòng Nhân Sự (12 người)
-      if (val1) val1.innerText = '10 / 12';
-      if (sub1) sub1.innerText = '83.3% nhân sự • Gồm 1 người đi muộn';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '01';
-      if (sub3) sub3.innerText = 'Là một phần trong 10 người đi làm';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '12';
-      if (legOntime) legOntime.innerText = '09';
-      if (legLate) legLate.innerText = '01';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '01';
-      if (donutFoot) donutFoot.innerText = '9 đúng giờ + 1 đi muộn + 1 nghỉ phép + 1 chưa chấm công = 12 nhân viên';
-    } else {
-      // Mặc định: Phòng Kỹ Thuật (40 người)
-      if (val1) val1.innerText = '34 / 40';
-      if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
-      if (val2) val2.innerText = '04';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '03';
-      if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
-      if (val4) val4.innerText = '07';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '40';
-      if (legOntime) legOntime.innerText = '31';
-      if (legLate) legLate.innerText = '03';
-      if (legLeave) legLeave.innerText = '04';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên';
-    }
-  }
-
-  showToast(`Đã lọc dữ liệu theo: ${name} (${count} nhân sự)`, 'success');
-}
-
 function openLateDetailModal(name, code, lateTime, checkinTime) {
   const html = `
     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
       <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px; padding: 12px; color: #92400e;">
-        <strong>⚠️ Tình trạng:</strong> Đi muộn ${lateTime} (Giờ vào: ${checkinTime} - Quy định: 08:00)
+        <strong>Tình trạng:</strong> Đi muộn ${lateTime} (Giờ vào: ${checkinTime} - Quy định: 08:00)
       </div>
       <div><strong>Nhân viên:</strong> ${name} (${code})</div>
       <div><strong>Phòng ban:</strong> Phòng Kỹ Thuật</div>
@@ -1170,7 +1239,7 @@ function openApproveRequestModal(id, name, type, time) {
   const html = `
     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
       <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; color: #1e40af;">
-        <strong>📄 Mã yêu cầu:</strong> ${id}
+        <strong>Mã yêu cầu:</strong> ${id}
       </div>
       <div><strong>Người làm đơn:</strong> ${name}</div>
       <div><strong>Loại yêu cầu:</strong> ${type}</div>
@@ -1249,17 +1318,17 @@ function openNotificationsModal() {
   const html = `
     <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
       <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #10b981;">
-        <div style="font-weight: 700; color: #0f172a;">🔔 Chấm công hôm nay</div>
+        <div style="font-weight: 700; color: #0f172a;">Chấm công hôm nay</div>
         <div style="color: #64748b;">Ca sáng 08:00 - 16:00: 34 nhân viên đã điểm danh thành công.</div>
         <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">15 phút trước</div>
       </div>
       <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #f59e0b;">
-        <div style="font-weight: 700; color: #0f172a;">⏰ Đi muộn phát sinh</div>
+        <div style="font-weight: 700; color: #0f172a;">Đi muộn phát sinh</div>
         <div style="color: #64748b;">3 nhân viên phòng Kỹ thuật ghi nhận đi trễ từ 7 - 21 phút.</div>
         <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">45 phút trước</div>
       </div>
       <div style="padding: 10px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
-        <div style="font-weight: 700; color: #0f172a;">📄 Đơn xin nghỉ phép mới</div>
+        <div style="font-weight: 700; color: #0f172a;">Đơn xin nghỉ phép mới</div>
         <div style="color: #64748b;">Vũ Đức Hiếu đã gửi đơn xin nghỉ phép 1 ngày (02/11/2026).</div>
         <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">1 giờ trước</div>
       </div>
@@ -1343,9 +1412,10 @@ async function submitNewDepartment() {
   }
 }
 
-function openAddEmployeeModal() {
-  const deptOptions = (state.departments || MOCK_DEPARTMENTS)
-    .map((d) => `<option value="${d.id || 1}">${d.name}</option>`)
+async function openAddEmployeeModal() {
+  if (!state.departments.length) await loadDepartmentsData();
+  const deptOptions = state.departments
+    .map((department) => `<option value="${escapeHtml(department.id)}">${escapeHtml(department.name)}</option>`)
     .join('');
 
   openModal(
@@ -1357,7 +1427,7 @@ function openAddEmployeeModal() {
       <input type="email" id="newEmpEmail" class="figma-pill-input" placeholder="Email công ty" required>
       <input type="text" id="newEmpPhone" class="figma-pill-input" placeholder="Số điện thoại liên hệ">
       <select id="newEmpDept" class="figma-pill-input">
-        ${deptOptions}
+        ${deptOptions || '<option value="">Không có phòng ban để chọn</option>'}
       </select>
       <button class="btn-primary-blue" style="margin-top: 10px;" onclick="submitNewEmployee()">Lưu hồ sơ nhân sự</button>
     </div>
@@ -1404,7 +1474,7 @@ function initPortalDashboard() {
 // ==============================================================================
 // 11. KHỞI CHẠY ỨNG DỤNG (WINDOW LOAD)
 // ==============================================================================
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // Đồng hồ số thời gian thực cho view chấm công cá nhân
   setInterval(() => {
     const clock = document.getElementById('liveClockText');
@@ -1413,7 +1483,25 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
-  // MẶC ĐỊNH KHI MỞ TRANG: LUÔN HIỂN THỊ GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ
-  // Người dùng đăng nhập hoặc chọn 1-Click tài khoản để vào Dashboard
-  showScreenView('login');
+  if (!state.token && !state.refreshToken) {
+    showScreenView('login');
+    return;
+  }
+
+  try {
+    if (!isTokenValid(state.token)) await refreshAccessToken();
+    const res = await apiCall('/api/auth/me');
+    if (!res?.success || !res.data || res.data.status !== 'ACTIVE') {
+      throw new Error('Tài khoản không còn hoạt động');
+    }
+    state.user = res.data;
+    safeSetStorage('htqlns_user', JSON.stringify(state.user));
+    initPortalDashboard();
+  } catch (err) {
+    if (err.status === 401 || !state.token) clearClientSession();
+    showScreenView('login');
+    if (state.token || state.refreshToken) {
+      showToast(`Không thể khôi phục phiên đăng nhập: ${err.message}`, 'warning');
+    }
+  }
 });

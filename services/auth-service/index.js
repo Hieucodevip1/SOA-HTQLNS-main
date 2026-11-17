@@ -144,7 +144,7 @@ app.use((req, res, next) => {
 // ==============================================================================
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, role, emp_id, biometric_enabled } = req.body;
+    const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
       return badRequest(res, 'Vui lòng cung cấp đầy đủ: username, email và password');
@@ -158,13 +158,7 @@ app.post('/api/auth/register', async (req, res) => {
       return badRequest(res, 'Mật khẩu phải có độ dài tối thiểu 6 ký tự');
     }
 
-    // Bảo mật: Đăng ký công khai không thể tự cấp quyền ADMIN
-    let assignedRole = 'EMPLOYEE';
-    if (req.user && ['ADMIN', 'HR'].includes(req.user.role)) {
-      assignedRole = role || 'EMPLOYEE';
-    } else if (role && role !== 'ADMIN') {
-      assignedRole = role;
-    }
+    const assignedRole = 'EMPLOYEE';
 
     const existingUser = await findUserByLogin(username);
     if (existingUser) {
@@ -178,8 +172,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
-    const empId = emp_id || null;
-    const isBiometric = Boolean(biometric_enabled);
+    const empId = null;
+    const isBiometric = false;
 
     const useDb = await isDbAvailable();
     if (useDb) {
@@ -478,6 +472,9 @@ app.post('/api/auth/change-password', async (req, res) => {
       await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [userId], DB_NAME);
     } else {
       user.password_hash = newHash;
+      for (const token of memoryRefreshTokens.values()) {
+        if (token.user_id === userId) token.revoked_at = new Date();
+      }
     }
 
     return success(res, null, 200, 'Đổi mật khẩu thành công');
@@ -555,10 +552,14 @@ app.post('/api/auth/reset-password', async (req, res) => {
         [newHash, user.id],
         DB_NAME
       );
+      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [user.id], DB_NAME);
     } else {
       user.password_hash = newHash;
       user.otp_code = null;
       user.otp_expires_at = null;
+      for (const token of memoryRefreshTokens.values()) {
+        if (token.user_id === user.id) token.revoked_at = new Date();
+      }
     }
 
     return success(res, null, 200, 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.');
@@ -576,11 +577,40 @@ app.post('/api/auth/logout', async (req, res) => {
     const currentUser = req.user;
 
     const useDb = await isDbAvailable();
-    if (refreshToken && useDb) {
-      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = ?', [refreshToken], DB_NAME);
-    } else if (currentUser && useDb) {
+    if (refreshToken) {
+      let decoded;
+      try {
+        decoded = jwt.verifyToken(refreshToken);
+      } catch {
+        return unauthorized(res, 'Refresh token không hợp lệ hoặc đã hết hạn');
+      }
+
+      const currentUserId = currentUser && (currentUser.userId || currentUser.id);
+      if (currentUserId && currentUserId !== decoded.userId) {
+        return forbidden(res, 'Refresh token không thuộc phiên đăng nhập hiện tại');
+      }
+
+      if (useDb) {
+        await db.query(
+          'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = ? AND user_id = ? AND revoked_at IS NULL',
+          [refreshToken, decoded.userId],
+          DB_NAME
+        );
+      } else {
+        const entry = memoryRefreshTokens.get(refreshToken);
+        if (entry && entry.user_id === decoded.userId) entry.revoked_at = new Date();
+      }
+    } else if (currentUser) {
       const uid = currentUser.userId || currentUser.id;
-      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [uid], DB_NAME);
+      if (useDb) {
+        await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [uid], DB_NAME);
+      } else {
+        for (const token of memoryRefreshTokens.values()) {
+          if (token.user_id === uid) token.revoked_at = new Date();
+        }
+      }
+    } else {
+      return unauthorized(res, 'Yêu cầu đăng nhập để đăng xuất');
     }
 
     return success(res, null, 200, 'Đăng xuất thành công');

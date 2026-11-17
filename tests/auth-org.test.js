@@ -52,6 +52,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     let adminToken = null;
     let employeeToken = null;
     let refreshToken = null;
+    let employeeRefreshToken = null;
     const testUsername = `user_${Date.now()}`;
     const testEmail = `${testUsername}@htqlns.com`;
 
@@ -110,6 +111,26 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(data.data.role, 'EMPLOYEE');
     });
 
+    test('Đăng ký công khai bỏ qua role đặc quyền và liên kết nhân sự do người dùng gửi lên', async () => {
+      const username = `role_escalation_${Date.now()}`;
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          email: `${username}@htqlns.com`,
+          password: 'password123',
+          role: 'HR',
+          emp_id: 'e0000001-0000-0000-0000-000000000001',
+          biometric_enabled: true
+        })
+      });
+      assert.strictEqual(res.status, 201);
+      const data = await res.json();
+      assert.strictEqual(data.data.role, 'EMPLOYEE');
+      assert.strictEqual(data.data.emp_id, null);
+    });
+
     test('Từ chối đăng ký tài khoản trùng lặp username (HTTP 409)', async () => {
       const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/register`, {
         method: 'POST',
@@ -134,6 +155,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(loginRes.status, 200);
       const loginData = await loginRes.json();
       employeeToken = loginData.data.token;
+      employeeRefreshToken = loginData.data.refreshToken;
 
       const meRes = await fetch(`http://localhost:${AUTH_PORT}/api/auth/me`, {
         headers: {
@@ -145,6 +167,39 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       const meData = await meRes.json();
       assert.strictEqual(meData.data.username, testUsername);
       assert.strictEqual(meData.data.email, testEmail);
+    });
+
+    test('Đổi mật khẩu yêu cầu mật khẩu hiện tại và thu hồi refresh token cũ', async () => {
+      const currentUser = jwt.verifyToken(employeeToken);
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+          'x-user': Buffer.from(JSON.stringify(currentUser)).toString('base64')
+        },
+        body: JSON.stringify({ oldPassword: 'password123', newPassword: 'new_password123' })
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+
+      const refreshRes = await fetch(`http://localhost:${AUTH_PORT}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: employeeRefreshToken })
+      });
+      assert.strictEqual(refreshRes.status, 401);
+
+      const loginRes = await fetch(`http://localhost:${AUTH_PORT}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: testUsername, password: 'new_password123' })
+      });
+      assert.strictEqual(loginRes.status, 200);
+      const loginData = await loginRes.json();
+      employeeToken = loginData.data.token;
+      employeeRefreshToken = loginData.data.refreshToken;
     });
 
     test('Làm mới Access Token thông qua /api/auth/refresh', async () => {
@@ -191,6 +246,25 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
         }
       });
       assert.strictEqual(res.status, 403);
+    });
+
+    test('Đăng xuất thu hồi refresh token hiện tại', async () => {
+      const res = await fetch(`http://localhost:${AUTH_PORT}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`
+        },
+        body: JSON.stringify({ refreshToken: employeeRefreshToken })
+      });
+      assert.strictEqual(res.status, 200);
+
+      const refreshRes = await fetch(`http://localhost:${AUTH_PORT}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: employeeRefreshToken })
+      });
+      assert.strictEqual(refreshRes.status, 401);
     });
   });
 
@@ -247,12 +321,73 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     });
 
     test('Lấy danh sách hồ sơ nhân sự /api/organization/employees', async () => {
-      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`);
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`, {
+        headers: adminHeaders
+      });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.data));
       assert.ok(data.data.length >= 4);
       assert.ok(data.data.some((e) => e.code === 'EMP001'));
+    });
+
+    test('Manager chỉ xem nhân viên thuộc nhóm và không xem identity_card', async () => {
+      const managerHeaders = {
+        'x-user': Buffer.from(JSON.stringify({
+          userId: 'manager-user',
+          role: 'MANAGER',
+          empId: 'e0000001-0000-0000-0000-000000000003'
+        })).toString('base64')
+      };
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`, {
+        headers: managerHeaders
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.deepStrictEqual(data.data.map((employee) => employee.code).sort(), ['EMP003', 'EMP004']);
+      assert.ok(data.data.every((employee) => !Object.hasOwn(employee, 'identity_card')));
+
+      const forbiddenProfile = await fetch(
+        `http://localhost:${ORG_PORT}/api/organization/employees/e0000001-0000-0000-0000-000000000002`,
+        { headers: managerHeaders }
+      );
+      assert.strictEqual(forbiddenProfile.status, 403);
+    });
+
+    test('Nhân viên không được xem danh sách toàn bộ hồ sơ nhân sự', async () => {
+      const employeeHeaders = {
+        'x-user': Buffer.from(JSON.stringify({
+          userId: 'employee-user',
+          role: 'EMPLOYEE',
+          empId: 'e0000001-0000-0000-0000-000000000004'
+        })).toString('base64')
+      };
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`, {
+        headers: employeeHeaders
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    test('Nhân viên chỉ xem được hồ sơ cá nhân, không truy cập hồ sơ người khác', async () => {
+      const employeeHeaders = {
+        'x-user': Buffer.from(JSON.stringify({
+          userId: 'employee-user',
+          role: 'EMPLOYEE',
+          empId: 'e0000001-0000-0000-0000-000000000004'
+        })).toString('base64')
+      };
+      const ownProfile = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/me/profile`, {
+        headers: employeeHeaders
+      });
+      assert.strictEqual(ownProfile.status, 200);
+      const ownData = await ownProfile.json();
+      assert.strictEqual(ownData.data.id, 'e0000001-0000-0000-0000-000000000004');
+
+      const otherProfile = await fetch(
+        `http://localhost:${ORG_PORT}/api/organization/employees/e0000001-0000-0000-0000-000000000003`,
+        { headers: employeeHeaders }
+      );
+      assert.strictEqual(otherProfile.status, 403);
     });
 
     test('Tạo mới hồ sơ nhân sự /api/organization/employees (HTTP 201)', async () => {

@@ -10,6 +10,7 @@ const db = require('../../shared/db');
 const registrar = require('../../shared/registrar');
 const events = require('../../shared/events');
 const env = require('../../shared/env');
+const { addEmployeeScope, getVisibleEmployeeIds, isDirectReport } = require('../../shared/employee-scope');
 
 const SERVICE_NAME = 'attendance-service';
 const PORT = Number(process.env.ATTENDANCE_SERVICE_PORT || 3003);
@@ -288,9 +289,14 @@ app.get(['/api/v1/attendances', '/api/attendance'], requireAuth(), async (req, r
   try {
     const { empId, fromDate, toDate, status } = req.query;
     const targetEmpId = req.user.role === 'EMPLOYEE' ? req.user.empId : empId;
+    if (req.user.role === 'EMPLOYEE' && !targetEmpId) {
+      return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+    }
 
     const conditions = [];
     const params = [];
+    const employeeScope = await getVisibleEmployeeIds(req.user);
+    addEmployeeScope(conditions, params, employeeScope, 'a.emp_id');
 
     if (targetEmpId) {
       conditions.push('a.emp_id = ?');
@@ -369,6 +375,9 @@ app.patch('/api/v1/attendance-adjustments/:id/decision', requireAuth(['ADMIN', '
     if (adj.status !== 'PENDING') {
       return res.status(400).json({ success: false, error: 'Đơn giải trình đã được xử lý' });
     }
+    if (req.user.role === 'MANAGER' && !await isDirectReport(req.user.empId || req.user.emp_id, adj.emp_id)) {
+      return res.status(403).json({ success: false, error: 'Bạn chỉ được xử lý giải trình của nhân viên thuộc nhóm quản lý' });
+    }
 
     const approverId = req.user.empId || req.user.userId;
     await pool.query(
@@ -414,18 +423,27 @@ app.patch('/api/v1/attendance-adjustments/:id/decision', requireAuth(['ADMIN', '
 app.get('/internal/attendances/monthly-summary', requireInternalKey, async (req, res, next) => {
   try {
     const { month, year } = req.query;
+    const employeeScope = req.query.managerId
+      ? await getVisibleEmployeeIds({ role: 'MANAGER', empId: req.query.managerId })
+      : null;
+    const conditions = ['MONTH(work_date) = ?', 'YEAR(work_date) = ?'];
+    const params = [Number(month), Number(year)];
+    addEmployeeScope(conditions, params, employeeScope, 'emp_id');
     const [rows] = await pool.query(
       `SELECT emp_id,
               COUNT(*) AS total_logged_days,
               SUM(CASE WHEN status IN ('ON_TIME', 'LATE', 'EARLY_LEAVE', 'LATE_AND_EARLY') THEN 1 ELSE 0 END) AS actual_work_days,
+              SUM(CASE WHEN status = 'ON_TIME' THEN 1 ELSE 0 END) AS on_time_days,
+              SUM(CASE WHEN status IN ('LATE', 'LATE_AND_EARLY') THEN 1 ELSE 0 END) AS late_days,
+              SUM(CASE WHEN status = 'ABSENT' THEN 1 ELSE 0 END) AS absent_days,
               SUM(CASE WHEN status = 'ON_LEAVE' THEN 1 ELSE 0 END) AS paid_leave_days,
               SUM(late_minutes) AS total_late_minutes,
               SUM(early_leave_minutes) AS total_early_leave_minutes,
               SUM(actual_working_hours) AS total_working_hours
        FROM attendance_logs
-       WHERE MONTH(work_date) = ? AND YEAR(work_date) = ?
+       WHERE ${conditions.join(' AND ')}
        GROUP BY emp_id`,
-      [Number(month), Number(year)]
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {

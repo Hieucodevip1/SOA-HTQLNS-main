@@ -9,6 +9,7 @@ const { createServiceApp, requireAuth, requireInternalKey } = require('../../sha
 const db = require('../../shared/db');
 const registrar = require('../../shared/registrar');
 const events = require('../../shared/events');
+const { addEmployeeScope, getVisibleEmployeeIds, isDirectReport } = require('../../shared/employee-scope');
 
 const SERVICE_NAME = 'shift-service';
 const PORT = Number(process.env.SHIFT_SERVICE_PORT || 3005);
@@ -129,9 +130,14 @@ app.get(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/ass
   try {
     const { empId, fromDate, toDate } = req.query;
     const targetEmpId = req.user.role === 'EMPLOYEE' ? req.user.empId : empId;
+    if (req.user.role === 'EMPLOYEE' && !targetEmpId) {
+      return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+    }
 
     const conditions = [];
     const params = [];
+    const employeeScope = await getVisibleEmployeeIds(req.user);
+    addEmployeeScope(conditions, params, employeeScope, 'sa.emp_id');
 
     if (targetEmpId) {
       conditions.push('sa.emp_id = ?');
@@ -173,6 +179,12 @@ app.post(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/as
         error: 'Yêu cầu danh sách empIds, shiftId và danh sách workDates'
       });
     }
+    if (req.user.role === 'MANAGER') {
+      const visibleEmployeeIds = await getVisibleEmployeeIds(req.user);
+      if (empIds.some((empId) => !visibleEmployeeIds.includes(empId))) {
+        return res.status(403).json({ success: false, error: 'Bạn chỉ được phân ca cho chính mình hoặc nhân viên thuộc nhóm quản lý' });
+      }
+    }
 
     const [shifts] = await pool.query('SELECT id FROM shifts WHERE id = ? AND status = "ACTIVE"', [shiftId]);
     if (!shifts.length) {
@@ -212,8 +224,13 @@ app.get(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, next
     const { status, empId } = req.query;
     const conditions = [];
     const params = [];
+    const employeeScope = await getVisibleEmployeeIds(req.user);
+    addEmployeeScope(conditions, params, employeeScope, 'emp_id');
 
     if (req.user.role === 'EMPLOYEE') {
+      if (!req.user.empId) {
+        return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+      }
       conditions.push('emp_id = ?');
       params.push(req.user.empId);
     } else if (empId) {
@@ -292,6 +309,9 @@ app.patch('/api/v1/ot-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MANAG
     if (rows[0].status !== 'PENDING') {
       return res.status(400).json({ success: false, error: 'Đơn đã được xử lý trước đó' });
     }
+    if (req.user.role === 'MANAGER' && !await isDirectReport(req.user.empId || req.user.emp_id, rows[0].emp_id)) {
+      return res.status(403).json({ success: false, error: 'Bạn chỉ được xử lý đơn OT của nhân viên thuộc nhóm quản lý' });
+    }
 
     const approverId = req.user.empId || req.user.userId;
     await pool.query(
@@ -366,12 +386,18 @@ app.get('/internal/shifts/schedule', requireInternalKey, async (req, res, next) 
 app.get('/internal/ot/summary', requireInternalKey, async (req, res, next) => {
   try {
     const { month, year } = req.query;
+    const employeeScope = req.query.managerId
+      ? await getVisibleEmployeeIds({ role: 'MANAGER', empId: req.query.managerId })
+      : null;
+    const conditions = ['status = ?', 'MONTH(work_date) = ?', 'YEAR(work_date) = ?'];
+    const params = ['APPROVED', Number(month), Number(year)];
+    addEmployeeScope(conditions, params, employeeScope, 'emp_id');
     const [rows] = await pool.query(
       `SELECT emp_id, ot_type, SUM(total_hours) AS total_ot_hours
        FROM ot_requests
-       WHERE status = 'APPROVED' AND MONTH(work_date) = ? AND YEAR(work_date) = ?
+       WHERE ${conditions.join(' AND ')}
        GROUP BY emp_id, ot_type`,
-      [Number(month), Number(year)]
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {
