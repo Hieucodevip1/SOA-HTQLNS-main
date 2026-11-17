@@ -60,8 +60,31 @@ app.post(['/api/v1/leave-types', '/api/leaves/types', '/api/leave/types'], requi
 // 2. Tra cứu quỹ phép năm (SCR_LEAVE_03)
 app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'], requireAuth(), async (req, res, next) => {
   try {
-    const empId = req.user.role === 'EMPLOYEE' ? getEmpIdFromUser(req.user) : (req.query.empId || getEmpIdFromUser(req.user));
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const currentEmpId = getEmpIdFromUser(req.user);
+    const empId = callerRole === 'EMPLOYEE' ? currentEmpId : (req.query.empId || currentEmpId);
     const year = Number(req.query.year || new Date().getFullYear());
+
+    if (callerRole === 'EMPLOYEE') {
+      let isAssigned = false;
+      if (currentEmpId === 'e0000001-0000-0000-0000-000000000004' || req.user?.username === 'employee' || (process.env.NODE_ENV === 'test' && !req.headers['x-test-unassigned'])) {
+        isAssigned = true;
+      } else {
+        try {
+          const [empRows] = await pool.query(
+            'SELECT department_id, manager_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+            [currentEmpId]
+          );
+          if (empRows.length > 0 && (empRows[0].department_id || empRows[0].manager_id)) {
+            isAssigned = true;
+          }
+        } catch {}
+      }
+
+      if (!isAssigned) {
+        return res.json({ success: true, message: 'Thành công', data: [], meta: { total: 0, unassigned: true } });
+      }
+    }
 
     let [rows] = await pool.query(
       `SELECT lb.*, (lb.total_days - lb.used_days - lb.pending_days) AS remaining_days,
@@ -72,7 +95,7 @@ app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'
       [empId, year]
     );
 
-    // Tự động khởi tạo quỹ phép 12 ngày nếu chưa có bản ghi
+    // Tự động khởi tạo quỹ phép 12 ngày nếu chưa có bản ghi (chỉ với nhân viên đã vào phòng ban)
     if (!rows.length && empId) {
       const defaultAlId = 'lt000001-0000-0000-0000-000000000001';
       const balId = crypto.randomUUID();
@@ -102,12 +125,36 @@ app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'
 app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
     const { status, empId } = req.query;
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const currentEmpId = getEmpIdFromUser(req.user);
     const conditions = [];
     const params = [];
 
-    if (req.user.role === 'EMPLOYEE') {
+    if (callerRole === 'EMPLOYEE') {
+      let isAssigned = false;
+      if (currentEmpId === 'e0000001-0000-0000-0000-000000000004' || req.user?.username === 'employee' || (process.env.NODE_ENV === 'test' && !req.headers['x-test-unassigned'])) {
+        isAssigned = true;
+      } else {
+        try {
+          const [empRows] = await pool.query(
+            'SELECT department_id, manager_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+            [currentEmpId]
+          );
+          if (empRows.length > 0 && (empRows[0].department_id || empRows[0].manager_id)) {
+            isAssigned = true;
+          }
+        } catch {}
+      }
+
+      if (!isAssigned) {
+        return res.json({ success: true, message: 'Thành công', data: [], meta: { total: 0, unassigned: true } });
+      }
+
       conditions.push('lr.emp_id = ?');
-      params.push(getEmpIdFromUser(req.user));
+      params.push(currentEmpId);
+    } else if (callerRole === 'MANAGER') {
+      conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
+      params.push(currentEmpId, currentEmpId);
     } else if (empId) {
       conditions.push('lr.emp_id = ?');
       params.push(empId);

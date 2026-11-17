@@ -714,10 +714,16 @@ function applyRoleBasedUI() {
     if (adminSection) adminSection.style.display = 'none';
     if (empSection) empSection.style.display = 'block';
     if (pendingRequestsCard) pendingRequestsCard.style.display = 'none';
+    if (!state.user?.isOnboarded) {
+      loadPendingInvitationsForEmp();
+    }
   } else {
     if (adminSection) adminSection.style.display = 'block';
     if (empSection) empSection.style.display = 'none';
     if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
+    if (role === 'MANAGER') {
+      loadManagerTeamInfo();
+    }
   }
 
   // 2. Tùy biến Sidebar theo vai trò:
@@ -1956,11 +1962,21 @@ function handleDepartmentFilter() {
 }
 
 async function loadEmployeesData() {
+  const isDemo = ['admin', 'manager', 'hr_admin', 'employee'].includes(state.user?.username);
+  const isManager = state.user?.role === 'MANAGER';
+  const isEmployee = state.user?.role === 'EMPLOYEE';
+
   try {
     const res = await apiCall('/api/organization/employees').catch(() => null);
-    state.employees = res?.data && res.data.length ? [...res.data] : [...MOCK_EMPLOYEES];
+    if (res && Array.isArray(res.data)) {
+      state.employees = [...res.data];
+    } else if (isDemo) {
+      state.employees = [...MOCK_EMPLOYEES];
+    } else {
+      state.employees = [];
+    }
   } catch (err) {
-    state.employees = [...MOCK_EMPLOYEES];
+    state.employees = isDemo ? [...MOCK_EMPLOYEES] : [];
   }
 
   // 1. Đồng bộ người dùng đăng ký từ auth-service (:3001) nếu người dùng có quyền quản trị
@@ -1969,7 +1985,6 @@ async function loadEmployeesData() {
       const authUsersRes = await apiCall('/api/auth/users').catch(() => null);
       if (authUsersRes && authUsersRes.success && Array.isArray(authUsersRes.data)) {
         authUsersRes.data.forEach(u => {
-          // Bỏ qua các tài khoản hệ thống mặc định nếu đã có sẵn trong danh sách
           if (['admin', 'hr_admin', 'manager', 'employee'].includes(u.username)) return;
           saveRegisteredUser({
             id: u.id,
@@ -1986,32 +2001,33 @@ async function loadEmployeesData() {
     }
   }
 
-  // 2. Kết hợp các tài khoản tự đăng ký vào bảng nhân sự
-  const registeredUsers = getRegisteredUsersList();
-  registeredUsers.forEach(regUser => {
-    const assignment = getUserAssignment(regUser.username, regUser.id);
-    const existingIdx = state.employees.findIndex(e => 
-      (e.email && regUser.email && e.email.toLowerCase() === regUser.email.toLowerCase()) || 
-      (e.username && e.username === regUser.username) ||
-      (e.code && (e.code === regUser.username || e.code === 'EMP_' + regUser.username.toUpperCase()))
-    );
-    
-    if (existingIdx >= 0) {
-      state.employees[existingIdx].username = regUser.username;
-      if (assignment) {
-        state.employees[existingIdx].department_name = assignment.department;
-        state.employees[existingIdx].position_title = assignment.position;
-        state.employees[existingIdx].status = 'ACTIVE';
-      }
-    } else {
-      if (assignment) {
-        state.employees.unshift({
-          id: regUser.id,
-          username: regUser.username,
-          code: 'EMP_' + regUser.username.toUpperCase(),
-          full_name: regUser.fullName || regUser.username,
-          email: regUser.email,
-          phone: regUser.phone || '0912345678',
+  // 2. Kết hợp các tài khoản tự đăng ký vào bảng nhân sự (chỉ dành cho ADMIN, HR)
+  if (['ADMIN', 'HR'].includes(state.user?.role)) {
+    const registeredUsers = getRegisteredUsersList();
+    registeredUsers.forEach(regUser => {
+      const assignment = getUserAssignment(regUser.username, regUser.id);
+      const existingIdx = state.employees.findIndex(e => 
+        (e.email && regUser.email && e.email.toLowerCase() === regUser.email.toLowerCase()) || 
+        (e.username && e.username === regUser.username) ||
+        (e.code && (e.code === regUser.username || e.code === 'EMP_' + regUser.username.toUpperCase()))
+      );
+      
+      if (existingIdx >= 0) {
+        state.employees[existingIdx].username = regUser.username;
+        if (assignment) {
+          state.employees[existingIdx].department_name = assignment.department;
+          state.employees[existingIdx].position_title = assignment.position;
+          state.employees[existingIdx].status = 'ACTIVE';
+        }
+      } else {
+        if (assignment) {
+          state.employees.unshift({
+            id: regUser.id,
+            username: regUser.username,
+            code: 'EMP_' + regUser.username.toUpperCase(),
+            full_name: regUser.fullName || regUser.username,
+            email: regUser.email,
+            phone: regUser.phone || '0912345678',
           department_name: assignment.department,
           position_title: assignment.position,
           contract_type: 'OFFICIAL',
@@ -3295,6 +3311,350 @@ async function loadEmployeeDashboardData() {
         `;
       }).join('');
     }
+  }
+}
+
+// ==============================================================================
+// 8B. CƠ CHẾ MỜI / THAM GIA PHÒNG BAN & LIÊN KẾT QUẢN LÝ - NHÂN VIÊN
+// ==============================================================================
+
+// 1. Phía Nhân viên: Tải các lời mời đang chờ phản hồi
+async function loadPendingInvitationsForEmp() {
+  const container = document.getElementById('empPendingInvitationsSection');
+  const listEl = document.getElementById('empPendingInvitationsList');
+  if (!container || !listEl) return;
+
+  try {
+    const res = await apiCall('/api/organization/invitations/my-pending');
+    const invites = res?.data || [];
+
+    if (!invites.length) {
+      container.style.display = 'none';
+      return;
+    }
+
+    container.style.display = 'block';
+    listEl.innerHTML = invites.map(inv => `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 14px; margin-top: 6px;">
+        <div>
+          <div style="font-weight: 700; color: #1e293b; font-size: 13.5px;">🏢 ${inv.department_name || 'Phòng ban làm việc'}</div>
+          <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+            Người mời: <strong>${inv.manager_name || 'Quản lý'}</strong> • Mã mời: <code style="font-weight:700; color:#2563eb;">${inv.invite_code}</code>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn-primary-blue" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;" onclick="handleAcceptInvitation('${inv.id}', '${inv.invite_code}')">
+            ✓ Tham gia
+          </button>
+          <button type="button" class="btn-reject-sm" style="padding: 6px 10px; font-size: 12px; border-radius: 6px;" onclick="handleRejectInvitation('${inv.id}')">
+            ✕ Từ chối
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.style.display = 'none';
+  }
+}
+
+// 2. Phía Nhân viên: Nhập inviteCode để tham gia phòng ban
+async function handleJoinDepartmentByCode() {
+  const input = document.getElementById('inputJoinInviteCode');
+  const code = (input?.value || '').trim().toUpperCase();
+
+  if (!code) {
+    return showToast('Vui lòng nhập mã mời phòng ban (ví dụ: TEAM-TECH)', 'warning');
+  }
+
+  try {
+    const res = await apiCall('/api/organization/join-department', {
+      method: 'POST',
+      body: JSON.stringify({ inviteCode: code })
+    });
+
+    showToast(res?.message || `Tham gia phòng ban thành công!`, 'success');
+
+    // Cập nhật trạng thái người dùng
+    if (state.user) {
+      state.user.isOnboarded = true;
+      state.user.department = res.data?.departmentName || 'Phòng Kỹ Thuật';
+      state.user.departmentId = res.data?.departmentId;
+      state.user.managerName = res.data?.managerName || 'Quản lý bộ phận';
+      state.user.position = 'Kỹ sư phần mềm';
+      state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+      state.user.shiftName = 'Ca Hành Chính';
+      state.user.shiftStart = '08:00';
+      state.user.shiftEnd = '17:30';
+      state.user.leaveBalance = 12.0;
+
+      safeSetStorage('htqlns_user', JSON.stringify(state.user));
+      saveUserAssignment(state.user.username, {
+        status: 'ACTIVE',
+        department: state.user.department,
+        position: state.user.position,
+        managerName: state.user.managerName,
+        officeLocation: state.user.officeLocation,
+        shiftName: state.user.shiftName,
+        shiftStart: state.user.shiftStart,
+        shiftEnd: state.user.shiftEnd,
+        leaveBalance: state.user.leaveBalance
+      });
+    }
+
+    if (input) input.value = '';
+    initPortalDashboard('dashboard');
+  } catch (err) {
+    console.error('Lỗi tham gia phòng ban:', err);
+    showToast(err.message || 'Mã mời không hợp lệ hoặc phòng ban không tồn tại', 'error');
+  }
+}
+
+// 3. Phía Nhân viên: Chấp nhận lời mời trực tiếp
+async function handleAcceptInvitation(invId, inviteCode) {
+  try {
+    const res = await apiCall('/api/organization/join-department', {
+      method: 'POST',
+      body: JSON.stringify({ invitationId: invId, inviteCode })
+    });
+
+    showToast(res?.message || 'Đã chấp nhận lời mời tham gia phòng ban!', 'success');
+
+    if (state.user) {
+      state.user.isOnboarded = true;
+      state.user.department = res.data?.departmentName || 'Phòng Kỹ Thuật';
+      state.user.departmentId = res.data?.departmentId;
+      state.user.managerName = res.data?.managerName || 'Quản lý bộ phận';
+      state.user.position = 'Nhân viên chính thức';
+      state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+      state.user.shiftName = 'Ca Hành Chính';
+      state.user.shiftStart = '08:00';
+      state.user.shiftEnd = '17:30';
+      state.user.leaveBalance = 12.0;
+
+      safeSetStorage('htqlns_user', JSON.stringify(state.user));
+      saveUserAssignment(state.user.username, {
+        status: 'ACTIVE',
+        department: state.user.department,
+        position: state.user.position,
+        managerName: state.user.managerName,
+        officeLocation: state.user.officeLocation,
+        shiftName: state.user.shiftName,
+        shiftStart: state.user.shiftStart,
+        shiftEnd: state.user.shiftEnd,
+        leaveBalance: state.user.leaveBalance
+      });
+    }
+
+    initPortalDashboard('dashboard');
+  } catch (err) {
+    showToast(err.message || 'Lỗi khi chấp nhận lời mời', 'error');
+  }
+}
+
+// 4. Phía Nhân viên: Từ chối lời mời
+async function handleRejectInvitation(invId) {
+  if (!confirm('Bạn có chắc muốn từ chối lời mời này?')) return;
+  try {
+    await apiCall(`/api/organization/invitations/${invId}/reject`, { method: 'POST' });
+    showToast('Đã từ chối lời mời tham gia phòng ban', 'info');
+    loadPendingInvitationsForEmp();
+  } catch (err) {
+    showToast(err.message || 'Lỗi từ chối lời mời', 'error');
+  }
+}
+
+// 5. Phía Quản lý: Tải thông tin phòng ban & Mã mời của Quản lý
+async function loadManagerTeamInfo() {
+  const card = document.getElementById('managerTeamManagementCard');
+  if (!card) return;
+
+  const role = state.user?.role;
+  if (role !== 'MANAGER' && role !== 'ADMIN') {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+  const deptTitle = document.getElementById('mgrDeptNameTitle');
+  const inviteVal = document.getElementById('mgrInviteCodeVal');
+
+  try {
+    const res = await apiCall('/api/organization/departments');
+    const depts = res?.data || [];
+    const myDept = depts.find(d => d.manager_id === state.user?.empId || d.manager_id === state.user?.id) || depts[0];
+
+    if (myDept) {
+      if (deptTitle) deptTitle.innerText = `Phòng ban phụ trách: ${myDept.name}`;
+      if (inviteVal) inviteVal.innerText = myDept.invite_code || `TEAM-${myDept.code.replace(/^PB-/, '')}`;
+    } else {
+      if (deptTitle) deptTitle.innerText = 'Chưa có phòng ban phụ trách (Nhấn Tạo phòng ban)';
+      if (inviteVal) inviteVal.innerText = 'TEAM-NEW';
+    }
+  } catch (err) {
+    if (inviteVal) inviteVal.innerText = 'TEAM-TECH';
+  }
+}
+
+// 6. Phía Quản lý: Sao chép mã mời phòng ban
+function copyManagerInviteCode() {
+  const codeEl = document.getElementById('mgrInviteCodeVal');
+  const code = codeEl?.innerText || 'TEAM-TECH';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => {
+      showToast(`Đã sao chép mã mời "${code}" vào clipboard! Hãy gửi mã này cho nhân viên.`, 'success');
+    }).catch(() => {
+      prompt('Mã mời của bạn là (nhấn Ctrl+C để sao chép):', code);
+    });
+  } else {
+    prompt('Mã mời của bạn là (nhấn Ctrl+C để sao chép):', code);
+  }
+}
+
+// 7. Phía Quản lý: Mở Modal Mời nhân viên qua email
+function openManagerInviteModal() {
+  const currentCode = document.getElementById('mgrInviteCodeVal')?.innerText || 'TEAM-TECH';
+  openModal(
+    'Mời nhân viên tham gia phòng ban',
+    `
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 0;">
+        Nhập địa chỉ email của nhân viên. Hệ thống sẽ tạo thư mời với mã phòng ban <strong style="color: #2563eb;">${currentCode}</strong>, ca làm việc chuẩn và vị trí chấm công GPS.
+      </p>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Email nhân viên:</label>
+        <input type="email" id="modalInviteEmail" class="figma-pill-input" placeholder="nhanvien@htqlns.com" required>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Ca làm việc phân bổ:</label>
+        <select id="modalInviteShift" class="figma-pill-input" style="cursor: pointer; appearance: auto;">
+          <option value="shift-standard">Ca Hành Chính (08:00 - 17:30 • 8.0 giờ chuẩn)</option>
+          <option value="shift-morning">Ca Sáng (06:00 - 14:00)</option>
+          <option value="shift-afternoon">Ca Chiều (14:00 - 22:00)</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Tọa độ GPS văn phòng làm việc:</label>
+        <input type="text" id="modalInviteOffice" class="figma-pill-input" value="13.7587, 109.2190 (Văn phòng Quy Nhơn - 170 An Dương Vương)" readonly style="background: #f8fafc; color: #64748b;">
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Lời nhắn / Ghi chú:</label>
+        <input type="text" id="modalInviteNote" class="figma-pill-input" placeholder="Chào mừng bạn đến với nhóm làm việc!">
+      </div>
+
+      <button class="btn-primary-blue" style="margin-top: 8px; padding: 10px; font-size: 13.5px;" onclick="submitManagerInvite()">
+        ✉️ Gửi lời mời nhân viên
+      </button>
+    </div>
+    `
+  );
+}
+
+// 8. Phía Quản lý: Gửi API mời nhân viên
+async function submitManagerInvite() {
+  const emailInput = document.getElementById('modalInviteEmail');
+  const email = (emailInput?.value || '').trim();
+  const shiftId = document.getElementById('modalInviteShift')?.value || 'shift-standard';
+  const note = document.getElementById('modalInviteNote')?.value || '';
+
+  if (!email) {
+    return showToast('Vui lòng nhập email nhân viên', 'warning');
+  }
+
+  try {
+    const res = await apiCall('/api/organization/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email, shiftId, note })
+    });
+
+    closeModal();
+    showToast(res?.message || `Đã gửi lời mời thành công tới ${email}!`, 'success');
+  } catch (err) {
+    console.error('Lỗi gửi lời mời:', err);
+    showToast(err.message || 'Lỗi gửi lời mời nhân viên', 'error');
+  }
+}
+
+// 9. Phía Quản lý: Mở Modal Tạo Phòng ban / Nhóm mới
+function openCreateTeamModal() {
+  const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+  openModal(
+    'Tạo Phòng ban / Nhóm làm việc mới',
+    `
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Tên phòng ban / Nhóm:</label>
+        <input type="text" id="modalNewTeamName" class="figma-pill-input" placeholder="vd: Nhóm Dự Án Alpha" required>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Mã phòng ban (Tự sinh):</label>
+        <input type="text" id="modalNewTeamCode" class="figma-pill-input" value="PB-TEAM-${randomSuffix}" style="text-transform: uppercase;">
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Mã mời tham gia (Invite Code cho nhân viên):</label>
+        <input type="text" id="modalNewTeamInviteCode" class="figma-pill-input" value="TEAM-${randomSuffix}" style="text-transform: uppercase; font-weight: 700; color: #2563eb;">
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Ca làm việc mặc định:</label>
+        <select id="modalNewTeamShift" class="figma-pill-input" style="cursor: pointer; appearance: auto;">
+          <option value="shift-standard">Ca Hành Chính (08:00 - 17:30)</option>
+          <option value="shift-morning">Ca Sáng (06:00 - 14:00)</option>
+          <option value="shift-flexible">Ca Linh Hoạt</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Mô tả chức năng nhiệm vụ:</label>
+        <textarea id="modalNewTeamDesc" class="figma-pill-input" style="border-radius: 12px; height: 60px;" placeholder="Mô tả nhóm làm việc..."></textarea>
+      </div>
+
+      <button class="btn-primary-blue" style="margin-top: 8px; padding: 10px; font-size: 13.5px;" onclick="submitCreateTeam()">
+        🏢 Khởi tạo phòng ban & Nhận mã mời
+      </button>
+    </div>
+    `
+  );
+}
+
+// 10. Phía Quản lý: Gửi API Tạo phòng ban
+async function submitCreateTeam() {
+  const name = (document.getElementById('modalNewTeamName')?.value || '').trim();
+  const code = (document.getElementById('modalNewTeamCode')?.value || '').trim().toUpperCase();
+  const inviteCode = (document.getElementById('modalNewTeamInviteCode')?.value || '').trim().toUpperCase();
+  const shiftId = document.getElementById('modalNewTeamShift')?.value || 'shift-standard';
+  const desc = document.getElementById('modalNewTeamDesc')?.value || '';
+
+  if (!name || !code) {
+    return showToast('Vui lòng nhập tên và mã phòng ban', 'warning');
+  }
+
+  try {
+    const res = await apiCall('/api/organization/departments', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        code,
+        inviteCode,
+        description: desc,
+        default_shift_id: shiftId
+      })
+    });
+
+    closeModal();
+    const finalInvite = res.data?.inviteCode || inviteCode;
+    showToast(`Tạo phòng ban "${name}" thành công! Mã mời của nhóm là: ${finalInvite}`, 'success');
+
+    // Tải lại thông tin phòng ban trên giao diện quản lý
+    loadManagerTeamInfo();
+  } catch (err) {
+    console.error('Lỗi tạo phòng ban:', err);
+    showToast(err.message || 'Lỗi tạo phòng ban mới', 'error');
   }
 }
 

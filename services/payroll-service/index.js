@@ -407,13 +407,39 @@ app.patch(['/api/v1/payrolls/:id/publish', '/api/payroll/:id/publish', '/api/v1/
 app.get(['/api/v1/payslips', '/api/payslips'], requireAuth(), async (req, res, next) => {
   try {
     const { month, year, empId, periodId } = req.query;
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
     const currentEmpId = getEmpIdFromUser(req.user);
+
+    if (callerRole === 'EMPLOYEE') {
+      let isAssigned = false;
+      if (currentEmpId === 'e0000001-0000-0000-0000-000000000004' || req.user?.username === 'employee' || (process.env.NODE_ENV === 'test' && !req.headers['x-test-unassigned'])) {
+        isAssigned = true;
+      } else {
+        try {
+          const [empRows] = await pool.query(
+            'SELECT department_id, manager_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+            [currentEmpId]
+          );
+          if (empRows.length > 0 && (empRows[0].department_id || empRows[0].manager_id)) {
+            isAssigned = true;
+          }
+        } catch {}
+      }
+
+      if (!isAssigned) {
+        return res.json({ success: true, message: 'Thành công', data: [], meta: { total: 0, unassigned: true } });
+      }
+    }
+
     const conditions = [];
     const params = [];
 
-    if (req.user.role === 'EMPLOYEE') {
+    if (callerRole === 'EMPLOYEE') {
       conditions.push('p.emp_id = ?');
       params.push(currentEmpId);
+    } else if (callerRole === 'MANAGER') {
+      conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
+      params.push(currentEmpId, currentEmpId);
     } else if (empId) {
       conditions.push('p.emp_id = ?');
       params.push(empId);

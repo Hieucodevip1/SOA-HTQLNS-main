@@ -1597,8 +1597,8 @@ input:checked + .slider:before {
             <div class="figma-input-wrapper">
               <label style="display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; padding-left: 12px; font-weight: 500;">Vai trò tài khoản:</label>
               <select id="regRole" class="figma-pill-input" style="cursor: pointer; appearance: auto; -webkit-appearance: menulist; padding-top: 10px; padding-bottom: 10px;">
-                <option value="EMPLOYEE">👨‍💻 Nhân viên (Employee)</option>
-                <option value="MANAGER">👨‍💼 Quản lý bộ phận (Manager)</option>
+                <option value="EMPLOYEE">Nhân viên (EMPLOYEE)</option>
+                <option value="MANAGER">Quản lý (MANAGER)</option>
               </select>
             </div>
 
@@ -1754,6 +1754,31 @@ input:checked + .slider:before {
                 <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px; border-radius: 8px;" onclick="navigateToView('employees')">
                   ⚡ Xem &amp; Tiếp nhận nhân sự →
                 </button>
+              </div>
+            </div>
+
+            <!-- KHU VỰC QUẢN LÝ PHÒNG BAN & MÃ MỜI (DÀNH CHO QUẢN LÝ / MANAGER) -->
+            <div id="managerTeamManagementCard" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <div style="font-size: 15px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                    <span>🏢</span> <span id="mgrDeptNameTitle">Phòng ban phụ trách</span>
+                    <span class="badge-status badge-approved" id="mgrInviteCodeBadge" style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: #2563eb; cursor: pointer; padding: 4px 10px; border-radius: 6px;" onclick="copyManagerInviteCode()" title="Bấm để sao chép mã mời">
+                      Mã mời: <strong id="mgrInviteCodeVal">TEAM-TECH</strong> 📋
+                    </span>
+                  </div>
+                  <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;" id="mgrTeamSubtitle">
+                    Gửi mã mời hoặc nhập email nhân viên để họ tham gia vào đội ngũ của bạn.
+                  </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button type="button" class="btn-primary-blue" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px;" onclick="openManagerInviteModal()">
+                    ✉️ Mời nhân viên qua email
+                  </button>
+                  <button type="button" class="btn-figma-dark" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px;" onclick="openCreateTeamModal()">
+                    ➕ Tạo Phòng ban / Nhóm mới
+                  </button>
+                </div>
               </div>
             </div>
             <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
@@ -1974,21 +1999,36 @@ input:checked + .slider:before {
           <!-- ==================== KHU VỰC DASHBOARD CHO NHÂN VIÊN (EMPLOYEE) ==================== -->
           <div id="dashEmployeeOverviewSection" style="display: none;">
 
-            <!-- Banner Thông Báo Hồ Sơ Chờ Tiếp Nhận Vào Ban/Phòng -->
-            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+            <!-- Sảnh chờ Tham gia Phòng ban & Thông Báo Hồ Sơ Chờ Tiếp Nhận -->
+            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 14px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(245,158,11,0.08);">
               <div style="display: flex; gap: 16px; align-items: flex-start;">
                 <div style="font-size: 32px; line-height: 1;">⏳</div>
                 <div style="flex: 1;">
-                  <div style="font-size: 15.5px; font-weight: 700; color: #92400e;">
-                    Tài khoản chưa được phân bổ vào phòng ban, vui lòng liên hệ HR (Nút chấm công tạm khóa)
+                  <div style="font-size: 16px; font-weight: 700; color: #92400e;">
+                    Bạn chưa gia nhập phòng ban/nhóm làm việc (Nút chấm công tạm khóa)
                   </div>
                   <div style="font-size: 13px; color: #b45309; margin-top: 6px; line-height: 1.55;">
-                    Chào mừng bạn đến với hệ thống HTQLNS! Tài khoản của bạn đã được khởi tạo thành công trên hệ thống. 
-                    <br>Hiện tại bạn đang ở trạng thái <strong>Chờ tiếp nhận</strong>. Quản trị viên (Admin) hoặc Phòng Nhân sự (HR) sẽ sớm phân bổ bạn vào phòng ban phù hợp, xếp lịch ca làm việc và kích hoạt bảng lương. Khi đó toàn bộ dữ liệu việc làm và quyền chấm công sẽ chính thức kích hoạt.
+                    Chào mừng bạn đến với hệ thống HTQLNS! Để bắt đầu chấm công và gửi đơn từ, bạn cần thuộc một phòng ban.
+                    <br>Vui lòng <strong>nhập mã mời (Invite Code)</strong> từ Quản lý của bạn (ví dụ: <code style="background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:700;">TEAM-TECH</code>) hoặc bấm <strong>Tham gia</strong> nếu có thư mời đang chờ dưới đây:
                   </div>
-                  <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 700; font-size: 11.5px; padding: 4px 10px;">🟡 Chờ tiếp nhận ban/phòng</span>
-                    <span style="font-size: 12px; color: #78350f;">• Mọi thao tác công việc sẽ được ghi nhận độc lập theo mã nhân sự của bạn</span>
+
+                  <!-- Form nhập mã mời phòng ban -->
+                  <div style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="inputJoinInviteCode" class="figma-pill-input" placeholder="Nhập mã mời (ví dụ: TEAM-TECH)..." style="max-width: 320px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                    <button type="button" class="btn-figma-dark" style="padding: 10px 20px; font-size: 13px; border-radius: 20px;" onclick="handleJoinDepartmentByCode()">
+                      🚀 Tham gia phòng ban
+                    </button>
+                  </div>
+
+                  <!-- Khối hiển thị lời mời đang chờ gửi tới nhân viên này -->
+                  <div id="empPendingInvitationsSection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px dashed #fde68a;">
+                    <div style="font-size: 13px; font-weight: 700; color: #78350f; margin-bottom: 8px;">📬 Lời mời phòng ban đang chờ bạn:</div>
+                    <div id="empPendingInvitationsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                  </div>
+
+                  <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 700; font-size: 11.5px; padding: 4px 10px;">🟡 Chờ tham gia ban/phòng</span>
+                    <span style="font-size: 12px; color: #78350f;">• Mọi dữ liệu ca trực, quỹ phép, chấm công và phiếu lương sẽ kích hoạt ngay khi tham gia</span>
                   </div>
                 </div>
               </div>

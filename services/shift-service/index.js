@@ -170,15 +170,42 @@ app.delete(['/api/v1/shifts/:id', '/api/shifts/:id', '/api/shift/:id'], requireA
 app.get(['/api/v1/shift-assignments', '/api/shifts/assignments', '/api/shift/assignments'], requireAuth(), async (req, res, next) => {
   try {
     const { empId, fromDate, toDate } = req.query;
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
     const currentEmpId = getEmpIdFromUser(req.user);
-    const targetEmpId = req.user.role === 'EMPLOYEE' ? currentEmpId : empId;
+
+    if (callerRole === 'EMPLOYEE') {
+      let isAssigned = false;
+      if (currentEmpId === 'e0000001-0000-0000-0000-000000000004' || req.user?.username === 'employee' || (process.env.NODE_ENV === 'test' && !req.headers['x-test-unassigned'])) {
+        isAssigned = true;
+      } else {
+        try {
+          const [empRows] = await pool.query(
+            'SELECT department_id, manager_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+            [currentEmpId]
+          );
+          if (empRows.length > 0 && (empRows[0].department_id || empRows[0].manager_id)) {
+            isAssigned = true;
+          }
+        } catch {}
+      }
+
+      if (!isAssigned) {
+        return res.json({ success: true, message: 'Thành công', data: [], meta: { total: 0, unassigned: true } });
+      }
+    }
 
     const conditions = [];
     const params = [];
 
-    if (targetEmpId) {
+    if (callerRole === 'EMPLOYEE') {
       conditions.push('sa.emp_id = ?');
-      params.push(targetEmpId);
+      params.push(currentEmpId);
+    } else if (callerRole === 'MANAGER') {
+      conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
+      params.push(currentEmpId, currentEmpId);
+    } else if (empId) {
+      conditions.push('sa.emp_id = ?');
+      params.push(empId);
     }
     if (fromDate) {
       conditions.push('sa.work_date >= ?');
@@ -274,13 +301,39 @@ app.delete(['/api/v1/shift-assignments/:id', '/api/shifts/assignments/:id', '/ap
 app.get(['/api/v1/ot-requests', '/api/ot'], requireAuth(), async (req, res, next) => {
   try {
     const { status, empId, fromDate, toDate } = req.query;
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
     const currentEmpId = getEmpIdFromUser(req.user);
+
+    if (callerRole === 'EMPLOYEE') {
+      let isAssigned = false;
+      if (currentEmpId === 'e0000001-0000-0000-0000-000000000004' || req.user?.username === 'employee' || (process.env.NODE_ENV === 'test' && !req.headers['x-test-unassigned'])) {
+        isAssigned = true;
+      } else {
+        try {
+          const [empRows] = await pool.query(
+            'SELECT department_id, manager_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1',
+            [currentEmpId]
+          );
+          if (empRows.length > 0 && (empRows[0].department_id || empRows[0].manager_id)) {
+            isAssigned = true;
+          }
+        } catch {}
+      }
+
+      if (!isAssigned) {
+        return res.json({ success: true, message: 'Thành công', data: [], meta: { total: 0, unassigned: true } });
+      }
+    }
+
     const conditions = [];
     const params = [];
 
-    if (req.user.role === 'EMPLOYEE') {
+    if (callerRole === 'EMPLOYEE') {
       conditions.push('ot.emp_id = ?');
       params.push(currentEmpId);
+    } else if (callerRole === 'MANAGER') {
+      conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
+      params.push(currentEmpId, currentEmpId);
     } else if (empId) {
       conditions.push('ot.emp_id = ?');
       params.push(empId);

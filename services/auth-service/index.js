@@ -120,11 +120,13 @@ async function enrichUserProfile(user, useDb) {
   let fullName = user.full_name || user.fullName || user.username;
   let empCode = null;
   let deptName = null;
+  let departmentId = null;
+  let managerId = null;
 
   if (useDb && user.emp_id) {
     try {
       const empRows = await db.query(
-        `SELECT e.code, e.full_name, d.name AS dept_name 
+        `SELECT e.code, e.full_name, e.department_id, e.manager_id, d.name AS dept_name 
          FROM htqlns_organization.employees e 
          LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id 
          WHERE e.id = ? LIMIT 1`,
@@ -134,16 +136,20 @@ async function enrichUserProfile(user, useDb) {
         fullName = empRows[0].full_name;
         empCode = empRows[0].code;
         deptName = empRows[0].dept_name;
+        departmentId = empRows[0].department_id || null;
+        managerId = empRows[0].manager_id || null;
       }
     } catch (e) {}
   }
 
   if (!empCode) {
-    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; }
-    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; }
-    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; }
-    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Nhân sự'; }
+    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; departmentId = 'd0000001-0000-0000-0000-000000000001'; }
+    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; }
+    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; managerId = 'e0000001-0000-0000-0000-000000000003'; }
+    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; }
   }
+
+  const isAssigned = Boolean(departmentId || managerId);
 
   return {
     id: user.id,
@@ -152,6 +158,9 @@ async function enrichUserProfile(user, useDb) {
     username: user.username,
     fullName,
     deptName,
+    departmentId,
+    managerId,
+    isAssigned,
     email: user.email,
     role: user.role,
     biometricEnabled: Boolean(user.biometric_enabled),
@@ -242,17 +251,12 @@ app.post('/api/auth/register', async (req, res) => {
             finalFullName = `${fName} ${lName}`.trim();
             const empCode = 'EMP_' + Math.floor(10000 + Math.random() * 90000);
 
-            let deptId = null;
-            try {
-              const deptRows = await db.query('SELECT id FROM htqlns_organization.departments LIMIT 1');
-              deptId = deptRows[0]?.id || null;
-            } catch {}
-
+            // Mặc định ban đầu khi đăng ký: KHÔNG thuộc phòng ban/quản lý nào (department_id = NULL, manager_id = NULL)
             await db.query(
               `INSERT INTO htqlns_organization.employees 
-               (id, code, full_name, email, phone, department_id, join_date, contract_type, status)
-               VALUES (?, ?, ?, ?, ?, ?, CURDATE(), 'OFFICIAL', 'ACTIVE')`,
-              [finalEmpId, empCode, finalFullName, email, phone || '0911223344', deptId]
+               (id, code, full_name, email, phone, department_id, manager_id, join_date, contract_type, status)
+               VALUES (?, ?, ?, ?, ?, NULL, NULL, CURDATE(), 'PROBATION', 'PENDING_ASSIGNMENT')`,
+              [finalEmpId, empCode, finalFullName, email, phone || '0911223344']
             );
           }
         } catch (e) {

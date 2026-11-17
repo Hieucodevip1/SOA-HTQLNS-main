@@ -169,6 +169,28 @@
       ]
     },
     {
+      "prefix": "/api/organization/join-department",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["*"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization/invitations",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET", "POST", "PUT", "PATCH"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
       "prefix": "/api/organization",
       "service": "organization-service",
       "rules": [
