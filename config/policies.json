@@ -551,6 +551,14 @@
       ]
     },
     {
+      "prefix": "/api/v1/overtime-requests",
+      "service": "shift-service",
+      "rules": [
+        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+      ]
+    },
+    {
       "prefix": "/api/v1/payroll-configs",
       "service": "payroll-service",
       "rules": [
@@ -561,7 +569,8 @@
       "prefix": "/api/v1/payrolls",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET", "POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        { "methods": ["GET"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] },
+        { "methods": ["POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
       ]
     },
     {
