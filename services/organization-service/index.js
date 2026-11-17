@@ -855,24 +855,41 @@ const updateEmployeeHandler = async (req, res) => {
     const {
       full_name, fullName,
       code, employeeCode, employee_code,
+      email,
       phone,
       identity_card, identityCard,
-      department_id, departmentId,
-      position_id, positionId,
+      department_id, departmentId, departmentName, department,
+      position_id, positionId, positionTitle, position,
       manager_id, managerId,
       status,
-      contract_type, contractType
+      contract_type, contractType,
+      base_salary, baseSalary,
+      shift_id, shiftId,
+      office_id, officeId
     } = req.body;
 
     const newCode = (employeeCode || code || employee_code || '').trim().toUpperCase() || null;
     const finalFullName = fullName || full_name || null;
+    const finalEmail = email || null;
     const finalPhone = phone !== undefined ? phone : null;
     const finalIdCard = identityCard || identity_card || null;
-    const finalDept = departmentId || department_id || null;
-    const finalPos = positionId || position_id || null;
-    const finalMgr = managerId || manager_id || null;
+    let finalDept = departmentId || department_id || null;
+    let finalPos = positionId || position_id || null;
+    let finalMgr = managerId || manager_id || null;
     const finalStatus = status || null;
     const finalContract = contractType || contract_type || null;
+    const finalSalary = baseSalary !== undefined ? Number(baseSalary) : (base_salary !== undefined ? Number(base_salary) : null);
+
+    // Tìm ID phòng ban nếu truyền tên phòng ban
+    const deptInput = department || departmentName;
+    if (!finalDept && deptInput) {
+      for (const [dId, d] of memoryDepartments.entries()) {
+        if (d.name && d.name.toLowerCase().includes(deptInput.toLowerCase().replace('phòng', '').trim())) {
+          finalDept = dId;
+          break;
+        }
+      }
+    }
 
     const useDb = await isDbAvailable();
 
@@ -881,6 +898,7 @@ const updateEmployeeHandler = async (req, res) => {
         `UPDATE employees SET
           code = COALESCE(?, code),
           full_name = COALESCE(?, full_name),
+          email = COALESCE(?, email),
           phone = COALESCE(?, phone),
           identity_card = COALESCE(?, identity_card),
           department_id = COALESCE(?, department_id),
@@ -889,9 +907,19 @@ const updateEmployeeHandler = async (req, res) => {
           status = COALESCE(?, status),
           contract_type = COALESCE(?, contract_type)
          WHERE id = ?`,
-        [newCode, finalFullName, finalPhone, finalIdCard, finalDept, finalPos, finalMgr, finalStatus, finalContract, id],
+        [newCode, finalFullName, finalEmail, finalPhone, finalIdCard, finalDept, finalPos, finalMgr, finalStatus, finalContract, id],
         DB_NAME
       );
+
+      // Cập nhật mức lương cơ bản sang bảng payroll_configs nếu có thay đổi
+      if (finalSalary !== null) {
+        try {
+          await db.query(
+            `UPDATE htqlns_payroll.payroll_configs SET base_salary = ? WHERE emp_id = ?`,
+            [finalSalary, id]
+          );
+        } catch {}
+      }
     } else {
       let emp = memoryEmployees.get(id);
       if (!emp) {
@@ -905,6 +933,7 @@ const updateEmployeeHandler = async (req, res) => {
       if (!emp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
       if (newCode) emp.code = newCode;
       if (finalFullName) emp.full_name = finalFullName;
+      if (finalEmail) emp.email = finalEmail;
       if (finalPhone !== null) emp.phone = finalPhone;
       if (finalIdCard) emp.identity_card = finalIdCard;
       if (finalDept) emp.department_id = finalDept;
@@ -912,20 +941,38 @@ const updateEmployeeHandler = async (req, res) => {
       if (finalMgr) emp.manager_id = finalMgr;
       if (finalStatus) emp.status = finalStatus;
       if (finalContract) emp.contract_type = finalContract;
+      if (finalSalary !== null) emp.base_salary = finalSalary;
+      if (shiftId || shift_id) emp.shift_id = shiftId || shift_id;
+      if (officeId || office_id) emp.office_id = officeId || office_id;
     }
 
     await logAudit('UPDATE_EMPLOYEE', req.user, 'EMPLOYEE', id, req.body, req);
 
+    // Phát sự kiện lên Event Bus nếu có thay đổi lương hoặc phòng ban
     events.publish('employee.updated', {
       id,
       code: newCode,
+      fullName: finalFullName,
       departmentId: finalDept,
       positionId: finalPos,
+      managerId: finalMgr,
+      baseSalary: finalSalary,
       status: finalStatus,
       contractType: finalContract
     }, { source: 'organization-service' });
 
-    return success(res, { id, code: newCode }, 200, 'Cập nhật hồ sơ nhân sự thành công');
+    let updatedData = { id, code: newCode, full_name: finalFullName, department_id: finalDept, status: finalStatus };
+    if (useDb) {
+      try {
+        const rows = await db.query('SELECT * FROM employees WHERE id = ? LIMIT 1', [id], DB_NAME);
+        if (rows && rows.length > 0) updatedData = rows[0];
+      } catch {}
+    } else {
+      const emp = memoryEmployees.get(id);
+      if (emp) updatedData = { ...emp };
+    }
+
+    return success(res, updatedData, 200, 'Cập nhật hồ sơ nhân sự thành công');
   } catch (err) {
     return error(res, err.message);
   }

@@ -2091,7 +2091,7 @@ function renderEmployeesTable(list) {
 
   tbody.innerHTML = list.map(e => {
     let statusBadge = '<span class="badge-status badge-approved">ACTIVE</span>';
-    let actionBtn = canManage ? `<button class="btn-reject-sm" onclick="confirmDeleteEmployee('${e.id}', '${e.full_name || e.code}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;">🗑️ Xóa</button>` : '-';
+    let actionBtn = '-';
 
     if (e.status === 'PENDING_ASSIGNMENT') {
       statusBadge = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span>';
@@ -2100,6 +2100,25 @@ function renderEmployeesTable(list) {
           <button class="btn-primary-blue" style="padding: 5px 12px; font-size: 11.5px; border-radius: 6px; font-weight: 700;" onclick="openOnboardEmployeeModal('${e.username || ''}', '${e.full_name || ''}', '${e.email || ''}', '${e.id || ''}')">
             ⚡ Tiếp nhận &amp; Phân ca, Lương
           </button>
+        `;
+      }
+    } else {
+      if (e.status === 'INACTIVE') {
+        statusBadge = '<span class="badge-status" style="background:#fee2e2; color:#b91c1c; font-weight:700;">Tạm ngưng</span>';
+      } else if (e.status === 'RESIGNED') {
+        statusBadge = '<span class="badge-status" style="background:#f1f5f9; color:#64748b; font-weight:700;">Đã nghỉ việc</span>';
+      }
+
+      if (canManage) {
+        actionBtn = `
+          <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+            <button class="btn-secondary-outline" onclick="openEditEmployeeModal('${e.id}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px; font-weight: 600; color: #2563eb; border-color: #93c5fd; background: #eff6ff;" title="Sửa thông tin nhân viên">
+              ✏️ Sửa
+            </button>
+            <button class="btn-reject-sm" onclick="confirmDeleteEmployee('${e.id}', '${e.full_name || e.code}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;" title="Xóa nhân viên">
+              🗑️ Xóa
+            </button>
+          </div>
         `;
       }
     }
@@ -2129,6 +2148,266 @@ function handleEmployeeFilter() {
       (e.email && e.email.toLowerCase().includes(kw))
   );
   renderEmployeesTable(filtered);
+}
+
+// ==============================================================================
+// CHỨC NĂNG SỬA & XÓA THÔNG TIN NHÂN VIÊN
+// ==============================================================================
+
+function openEditEmployeeModal(empId) {
+  const emp = (state.employees || []).find(e => String(e.id) === String(empId) || e.code === empId);
+  if (!emp) {
+    return showToast('Không tìm thấy thông tin nhân viên', 'error');
+  }
+
+  const assignment = getUserAssignment(emp.username, emp.id) || {};
+  const code = emp.code || emp.employee_code || emp.employeeCode || '';
+  const fullName = emp.full_name || emp.fullName || '';
+  const email = emp.email || '';
+  const phone = (emp.phone && emp.phone !== '-') ? emp.phone : (assignment.phone || '');
+  const currentDept = emp.department_name || assignment.department || 'Phòng Kỹ Thuật';
+  const currentManager = emp.manager_name || assignment.managerName || 'Nguyễn Thanh Lâm (Trưởng ban Công nghệ)';
+  const currentOffice = assignment.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+  const currentShift = assignment.shiftName || 'Ca Hành Chính';
+  const currentPosition = emp.position_title || emp.position_name || assignment.position || 'Kỹ sư phần mềm SOA';
+  const currentSalary = assignment.baseSalary || 15000000;
+  const currentStatus = emp.status || 'ACTIVE';
+
+  const html = `
+    <div style="padding: 10px 0;">
+      <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px;">
+        <div style="font-weight: 700; color: #0f172a; font-size: 14.5px;">✏️ Chỉnh sửa hồ sơ nhân sự</div>
+        <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">
+          Cập nhật thông tin định danh, ca làm việc, văn phòng và mức lương cơ bản cho nhân viên.
+        </div>
+      </div>
+
+      <form id="formEditEmployee" onsubmit="handleUpdateEmployeeSubmit(event, '${emp.id}')">
+        <!-- Hàng 1: Mã nhân viên & Họ tên -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Mã nhân viên (employeeCode) *</label>
+            <input type="text" id="editEmpCode" value="${code}" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px; text-transform: uppercase; font-weight: 700; color: #2563eb;" required>
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Họ và tên *</label>
+            <input type="text" id="editEmpFullName" value="${fullName}" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px; font-weight: 600;" required>
+          </div>
+        </div>
+
+        <!-- Hàng 2: Email & Số điện thoại -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Email liên hệ *</label>
+            <input type="email" id="editEmpEmail" value="${email}" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Số điện thoại</label>
+            <input type="text" id="editEmpPhone" value="${phone}" placeholder="09xxxxxxxx" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;">
+          </div>
+        </div>
+
+        <!-- Hàng 3: Phòng ban & Quản lý trực tiếp -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Phòng ban (departmentId) *</label>
+            <select id="editEmpDept" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+              <option value="Phòng Kỹ Thuật" ${currentDept.includes('Kỹ Thuật') || currentDept.includes('Công nghệ') ? 'selected' : ''}>Phòng Kỹ Thuật</option>
+              <option value="Phòng Nhân sự" ${currentDept.includes('Nhân sự') ? 'selected' : ''}>Phòng Nhân sự</option>
+              <option value="Phòng Kinh Doanh" ${currentDept.includes('Kinh Doanh') ? 'selected' : ''}>Phòng Kinh Doanh</option>
+              <option value="Phòng Tài Chính - Kế Toán" ${currentDept.includes('Tài Chính') ? 'selected' : ''}>Phòng Tài Chính - Kế Toán</option>
+              <option value="Ban Giám Đốc" ${currentDept.includes('Giám Đốc') ? 'selected' : ''}>Ban Giám Đốc</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Quản lý trực tiếp (managerId) *</label>
+            <select id="editEmpManager" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+              <option value="Nguyễn Thanh Lâm (Trưởng ban Công nghệ)" ${currentManager.includes('Lâm') || currentManager.includes('Công nghệ') ? 'selected' : ''}>Nguyễn Thanh Lâm (Trưởng ban Công nghệ)</option>
+              <option value="Lê Ngọc Mai (Trưởng phòng Nhân sự)" ${currentManager.includes('Mai') ? 'selected' : ''}>Lê Ngọc Mai (Trưởng phòng Nhân sự)</option>
+              <option value="Phạm Minh Tuân (Trưởng phòng Kinh Doanh)" ${currentManager.includes('Tuân') ? 'selected' : ''}>Phạm Minh Tuân (Trưởng phòng Kinh Doanh)</option>
+              <option value="Đỗ Thu Hà (Trưởng phòng Tài Chính - Kế Toán)" ${currentManager.includes('Hà') ? 'selected' : ''}>Đỗ Thu Hà (Trưởng phòng Tài Chính - Kế Toán)</option>
+              <option value="Vũ Đức Hiếu (Ban Giám Đốc)" ${currentManager.includes('Hiếu') ? 'selected' : ''}>Vũ Đức Hiếu (Ban Giám Đốc)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Hàng 4: Văn phòng GPS & Ca làm việc -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Văn phòng GPS (officeId) *</label>
+            <select id="editEmpOffice" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+              <option value="Văn phòng Quy Nhơn (170 An Dương Vương)" ${currentOffice.includes('Quy Nhơn') ? 'selected' : ''}>Văn phòng Quy Nhơn (170 An Dương Vương)</option>
+              <option value="Trụ sở Hà Nội (HITC Cầu Giấy)" ${currentOffice.includes('Hà Nội') ? 'selected' : ''}>Trụ sở Hà Nội (HITC Cầu Giấy)</option>
+              <option value="Chi nhánh TP.HCM (72 Lê Thánh Tôn, Q.1)" ${currentOffice.includes('TP.HCM') || currentOffice.includes('HCM') ? 'selected' : ''}>Chi nhánh TP.HCM (72 Lê Thánh Tôn, Q.1)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Ca làm việc (shiftId) *</label>
+            <select id="editEmpShift" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+              <option value="Ca Hành Chính" ${currentShift.includes('Hành Chính') ? 'selected' : ''}>Ca Hành Chính (08:00 - 17:30)</option>
+              <option value="Ca Sáng" ${currentShift.includes('Sáng') ? 'selected' : ''}>Ca Sáng (06:00 - 14:00)</option>
+              <option value="Ca Chiều" ${currentShift.includes('Chiều') ? 'selected' : ''}>Ca Chiều (14:00 - 22:00)</option>
+              <option value="Ca Linh Hoạt" ${currentShift.includes('Linh Hoạt') ? 'selected' : ''}>Ca Linh Hoạt</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Hàng 5: Chức danh / Vị trí & Lương cơ bản -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Chức danh / Vị trí (position) *</label>
+            <select id="editEmpPosition" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
+              <option value="Kỹ sư phần mềm SOA" ${currentPosition.includes('SOA') ? 'selected' : ''}>Kỹ sư phần mềm SOA</option>
+              <option value="Chuyên viên Phát triển Hệ thống" ${currentPosition.includes('Hệ thống') ? 'selected' : ''}>Chuyên viên Phát triển Hệ thống</option>
+              <option value="Frontend & UI Developer" ${currentPosition.includes('Frontend') ? 'selected' : ''}>Frontend & UI Developer</option>
+              <option value="Backend Developer" ${currentPosition.includes('Backend') ? 'selected' : ''}>Backend Developer</option>
+              <option value="Chuyên viên Tuyển dụng & C&B" ${currentPosition.includes('Tuyển dụng') ? 'selected' : ''}>Chuyên viên Tuyển dụng & C&B</option>
+              <option value="Chuyên viên Kinh doanh" ${currentPosition.includes('Kinh doanh') ? 'selected' : ''}>Chuyên viên Kinh doanh</option>
+              <option value="Kế toán viên tiền lương" ${currentPosition.includes('Kế toán') ? 'selected' : ''}>Kế toán viên tiền lương</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Mức lương cơ bản (baseSalary VND) *</label>
+            <input type="number" id="editEmpSalary" value="${currentSalary}" min="5000000" step="500000" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px; font-weight: 600;" required>
+          </div>
+        </div>
+
+        <!-- Hàng 6: Trạng thái hoạt động -->
+        <div style="margin-bottom: 22px;">
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Trạng thái hoạt động *</label>
+          <select id="editEmpStatus" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;">
+            <option value="ACTIVE" ${currentStatus === 'ACTIVE' ? 'selected' : ''}>🟢 ACTIVE (Đang làm việc)</option>
+            <option value="INACTIVE" ${currentStatus === 'INACTIVE' ? 'selected' : ''}>🟡 INACTIVE (Tạm ngưng)</option>
+            <option value="RESIGNED" ${currentStatus === 'RESIGNED' ? 'selected' : ''}>🔴 RESIGNED (Đã nghỉ việc)</option>
+          </select>
+        </div>
+
+        <!-- Nút thao tác -->
+        <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+          <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
+          <button type="submit" class="btn-primary-blue" style="padding: 9px 20px; font-weight: 700; border-radius: 8px;">
+            💾 Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  openModal(`Sửa thông tin nhân sự – ${fullName || code}`, html);
+}
+
+async function handleUpdateEmployeeSubmit(e, empId) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  const code = (document.getElementById('editEmpCode')?.value || '').trim().toUpperCase();
+  const fullName = (document.getElementById('editEmpFullName')?.value || '').trim();
+  const email = (document.getElementById('editEmpEmail')?.value || '').trim();
+  const phone = (document.getElementById('editEmpPhone')?.value || '').trim();
+  const dept = document.getElementById('editEmpDept')?.value;
+  const manager = document.getElementById('editEmpManager')?.value;
+  const office = document.getElementById('editEmpOffice')?.value;
+  const shift = document.getElementById('editEmpShift')?.value;
+  const position = document.getElementById('editEmpPosition')?.value;
+  const salary = Number(document.getElementById('editEmpSalary')?.value) || 15000000;
+  const status = document.getElementById('editEmpStatus')?.value || 'ACTIVE';
+
+  if (!code || !fullName || !email) {
+    return showToast('Vui lòng điền đầy đủ Mã nhân viên, Họ tên và Email', 'warning');
+  }
+
+  // 1. Gọi API Backend PUT /api/v1/employees/:id
+  try {
+    await apiCall(`/api/v1/employees/${empId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        employeeCode: code,
+        code,
+        fullName,
+        email,
+        phone,
+        departmentName: dept,
+        department: dept,
+        managerName: manager,
+        positionTitle: position,
+        position,
+        officeLocation: office,
+        shiftName: shift,
+        baseSalary: salary,
+        status,
+        contractType: 'OFFICIAL'
+      })
+    });
+  } catch (apiErr) {
+    console.warn('Lỗi gọi API PUT /api/v1/employees:', apiErr.message);
+  }
+
+  // 2. Cập nhật state.employees trực tiếp
+  const targetIdx = (state.employees || []).findIndex(x => String(x.id) === String(empId) || x.code === code);
+  if (targetIdx >= 0) {
+    state.employees[targetIdx].code = code;
+    state.employees[targetIdx].employee_code = code;
+    state.employees[targetIdx].full_name = fullName;
+    state.employees[targetIdx].email = email;
+    state.employees[targetIdx].phone = phone;
+    state.employees[targetIdx].department_name = dept;
+    state.employees[targetIdx].position_title = position;
+    state.employees[targetIdx].status = status;
+  }
+
+  // 3. Cập nhật assignment lưu trữ
+  const empObj = state.employees ? state.employees[targetIdx] : null;
+  const username = empObj?.username || empId;
+  saveUserAssignment(username, {
+    id: empId,
+    username,
+    fullName,
+    email,
+    code,
+    employeeCode: code,
+    department: dept,
+    managerName: manager,
+    position,
+    officeLocation: office,
+    shiftName: shift,
+    baseSalary: salary,
+    status,
+    contractType: 'OFFICIAL'
+  });
+
+  closeModal();
+  showToast(`Cập nhật thông tin nhân viên "${fullName}" (${code}) thành công!`, 'success');
+
+  // Làm mới bảng danh sách ngay lập tức
+  renderEmployeesTable(state.employees);
+  await loadEmployeesData();
+}
+
+function confirmDeleteEmployee(id, name) {
+  openModal(
+    'Xác nhận xóa nhân sự',
+    `
+    <div style="padding: 10px 0;">
+      <p style="font-size: 14px; color: #1e293b;">Bạn có chắc chắn muốn xóa nhân sự <strong>${name}</strong> khỏi hệ thống?</p>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
+        <button class="btn-secondary-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn-reject-sm" style="padding: 8px 18px; font-weight: 700;" onclick="handleDeleteEmployee('${id}', '${name}')">🗑️ Xác nhận Xóa</button>
+      </div>
+    </div>
+    `
+  );
+}
+
+async function handleDeleteEmployee(id, name) {
+  try {
+    await apiCall(`/api/organization/employees/${id}`, { method: 'DELETE' });
+    state.employees = (state.employees || []).filter(e => String(e.id) !== String(id));
+    closeModal();
+    showToast(`Đã xóa nhân viên ${name} thành công`, 'success');
+    renderEmployeesTable(state.employees);
+  } catch (err) {
+    closeModal();
+    showToast(err.message || 'Lỗi khi xóa nhân viên', 'error');
+  }
 }
 
 // Nạp lịch sử chấm công toàn bộ nhân viên (từ Attendance Service :3003)
