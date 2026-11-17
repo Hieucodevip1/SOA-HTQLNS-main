@@ -25,7 +25,7 @@ const {
 const { createOpenApiSpec } = require('../../shared/openapi');
 
 const PORT = Number(process.env.ORGANIZATION_PORT || 3002);
-const DB_NAME = 'htqlns_organization';
+const DB_NAME = process.env.ORGANIZATION_DB_NAME || 'htqlns_organization';
 
 // ==============================================================================
 // DỮ LIỆU DỰ PHÒNG TRONG BỘ NHỚ (In-memory fallback khi chưa có MySQL)
@@ -535,6 +535,11 @@ app.post('/api/positions', createPositionHandler);
 
 const getEmployeesHandler = async (req, res) => {
   try {
+    if (!req.user) return unauthorized(res, 'Yêu cầu đăng nhập');
+    if (!['ADMIN', 'HR', 'MANAGER'].includes(req.user.role)) {
+      return forbidden(res, 'Chỉ ADMIN, HR hoặc MANAGER mới có quyền xem danh sách nhân sự');
+    }
+
     const { department_id, status, keyword } = req.query;
     const useDb = await isDbAvailable();
     let employees = [];
@@ -553,6 +558,12 @@ const getEmployeesHandler = async (req, res) => {
       if (department_id) {
         sql += ' AND e.department_id = ?';
         params.push(department_id);
+      }
+      if (req.user.role === 'MANAGER') {
+        const managerEmpId = req.user.empId || req.user.emp_id;
+        if (!managerEmpId) return forbidden(res, 'Tài khoản quản lý chưa liên kết hồ sơ nhân sự');
+        sql += ' AND (e.manager_id = ? OR e.id = ?)';
+        params.push(managerEmpId, managerEmpId);
       }
       if (status) {
         sql += ' AND e.status = ?';
@@ -582,6 +593,11 @@ const getEmployeesHandler = async (req, res) => {
       if (department_id) {
         employees = employees.filter((e) => e.department_id === department_id);
       }
+      if (req.user.role === 'MANAGER') {
+        const managerEmpId = req.user.empId || req.user.emp_id;
+        if (!managerEmpId) return forbidden(res, 'Tài khoản quản lý chưa liên kết hồ sơ nhân sự');
+        employees = employees.filter((e) => e.manager_id === managerEmpId || e.id === managerEmpId);
+      }
       if (status) {
         employees = employees.filter((e) => e.status === status);
       }
@@ -596,6 +612,9 @@ const getEmployeesHandler = async (req, res) => {
       }
     }
 
+    if (req.user.role === 'MANAGER') {
+      employees = employees.map(({ identity_card, ...employee }) => employee);
+    }
     return success(res, employees);
   } catch (err) {
     return error(res, 'Lỗi lấy danh sách nhân sự: ' + err.message);
@@ -641,6 +660,11 @@ app.get('/api/organization/employees/me/profile', async (req, res) => {
 // Chi tiết hồ sơ một nhân sự
 const getEmployeeDetailHandler = async (req, res) => {
   try {
+    if (!req.user) return unauthorized(res, 'Yêu cầu đăng nhập');
+    if (!['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'].includes(req.user.role)) {
+      return forbidden(res, 'Vai trò hiện tại không được xem hồ sơ nhân sự');
+    }
+
     const id = req.params.id;
     const useDb = await isDbAvailable();
     let emp = null;
@@ -662,6 +686,14 @@ const getEmployeeDetailHandler = async (req, res) => {
     }
 
     if (!emp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
+
+    const userEmpId = req.user.empId || req.user.emp_id;
+    const canView = ['ADMIN', 'HR'].includes(req.user.role)
+      || (req.user.role === 'MANAGER' && userEmpId && (emp.manager_id === userEmpId || emp.id === userEmpId))
+      || (req.user.role === 'EMPLOYEE' && userEmpId === emp.id);
+    if (!canView) return forbidden(res, 'Bạn không có quyền xem hồ sơ nhân sự này');
+
+    if (req.user.role === 'MANAGER') delete emp.identity_card;
     return success(res, emp);
   } catch (err) {
     return error(res, err.message);

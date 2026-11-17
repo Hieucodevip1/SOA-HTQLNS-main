@@ -8,6 +8,7 @@ const { createServiceApp, requireAuth, requireInternalKey } = require('../../sha
 const db = require('../../shared/db');
 const registrar = require('../../shared/registrar');
 const events = require('../../shared/events');
+const { addEmployeeScope, getVisibleEmployeeIds, isDirectReport } = require('../../shared/employee-scope');
 
 const SERVICE_NAME = 'leave-service';
 const PORT = Number(process.env.LEAVE_SERVICE_PORT || 3004);
@@ -56,6 +57,15 @@ app.post(['/api/v1/leave-types', '/api/leaves/types', '/api/leave/types'], requi
 app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'], requireAuth(), async (req, res, next) => {
   try {
     const empId = req.user.role === 'EMPLOYEE' ? req.user.empId : (req.query.empId || req.user.empId);
+    if (req.user.role === 'EMPLOYEE' && !empId) {
+      return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+    }
+    if (req.user.role === 'MANAGER') {
+      const visibleEmployeeIds = await getVisibleEmployeeIds(req.user);
+      if (!empId || !visibleEmployeeIds.includes(empId)) {
+        return res.status(403).json({ success: false, error: 'Bạn chỉ được xem quỹ phép của chính mình hoặc nhân viên thuộc nhóm quản lý' });
+      }
+    }
     const year = Number(req.query.year || new Date().getFullYear());
 
     const [rows] = await pool.query(
@@ -75,16 +85,25 @@ app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'
 // 3. Danh sách đơn xin nghỉ phép (SCR_LEAVE_02, SCR_REQ_01)
 app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
-    const { status, empId } = req.query;
+    const { status, empId, approvalQueue } = req.query;
     const conditions = [];
     const params = [];
+    const employeeScope = await getVisibleEmployeeIds(req.user);
+    addEmployeeScope(conditions, params, employeeScope, 'lr.emp_id');
 
     if (req.user.role === 'EMPLOYEE') {
+      if (!req.user.empId) {
+        return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+      }
       conditions.push('lr.emp_id = ?');
       params.push(req.user.empId);
     } else if (empId) {
       conditions.push('lr.emp_id = ?');
       params.push(empId);
+    }
+    if (req.user.role === 'MANAGER' && approvalQueue === 'true') {
+      conditions.push('lr.emp_id <> ?');
+      params.push(req.user.empId || req.user.emp_id);
     }
     if (status) {
       conditions.push('lr.status = ?');
@@ -112,6 +131,9 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
     const empId = req.user.empId;
     const { leaveTypeId, startDate, endDate, totalDays, session = 'FULL_DAY', reason, attachmentUrl = null } = req.body;
 
+    if (req.user.role === 'EMPLOYEE' && !empId) {
+      return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+    }
     if (!empId || !leaveTypeId || !startDate || !endDate || !totalDays || !reason) {
       return res.status(400).json({ success: false, error: 'Thiếu thông tin bắt buộc' });
     }
@@ -165,6 +187,9 @@ app.patch('/api/v1/leave-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MA
     if (!rows.length) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
     const leave = rows[0];
     if (leave.status !== 'PENDING') return res.status(400).json({ success: false, error: 'Đơn đã được xử lý' });
+    if (req.user.role === 'MANAGER' && !await isDirectReport(req.user.empId || req.user.emp_id, leave.emp_id)) {
+      return res.status(403).json({ success: false, error: 'Bạn chỉ được xử lý đơn nghỉ phép của nhân viên thuộc nhóm quản lý' });
+    }
 
     const approverId = req.user.empId || req.user.userId;
     await pool.query(
@@ -210,15 +235,21 @@ app.patch('/api/v1/leave-requests/:id/decision', requireAuth(['ADMIN', 'HR', 'MA
 app.get('/internal/leaves/monthly-summary', requireInternalKey, async (req, res, next) => {
   try {
     const { month, year } = req.query;
+    const employeeScope = req.query.managerId
+      ? await getVisibleEmployeeIds({ role: 'MANAGER', empId: req.query.managerId })
+      : null;
+    const conditions = ['lr.status = ?', 'MONTH(lr.start_date) = ?', 'YEAR(lr.start_date) = ?'];
+    const params = ['APPROVED', Number(month), Number(year)];
+    addEmployeeScope(conditions, params, employeeScope, 'lr.emp_id');
     const [rows] = await pool.query(
       `SELECT lr.emp_id,
               SUM(CASE WHEN lt.is_paid = TRUE THEN lr.total_days ELSE 0 END) AS paid_leave_days,
               SUM(CASE WHEN lt.is_paid = FALSE THEN lr.total_days ELSE 0 END) AS unpaid_leave_days
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
-       WHERE lr.status = 'APPROVED' AND MONTH(lr.start_date) = ? AND YEAR(lr.start_date) = ?
+       WHERE ${conditions.join(' AND ')}
        GROUP BY lr.emp_id`,
-      [Number(month), Number(year)]
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {

@@ -9,6 +9,7 @@ const db = require('../../shared/db');
 const registrar = require('../../shared/registrar');
 const events = require('../../shared/events');
 const env = require('../../shared/env');
+const { addEmployeeScope, getVisibleEmployeeIds } = require('../../shared/employee-scope');
 
 const SERVICE_NAME = 'payroll-service';
 const PORT = Number(process.env.PAYROLL_SERVICE_PORT || 3006);
@@ -140,13 +141,16 @@ app.post(['/api/v1/payrolls/calculate', '/api/payroll/calculate'], requireAuth([
 });
 
 // 3. Xem danh sách phiếu lương / Phiếu lương cá nhân (SCR_PAY_01)
-app.get(['/api/v1/payslips', '/api/payslips'], requireAuth(), async (req, res, next) => {
+app.get(['/api/v1/payslips', '/api/payslips'], requireAuth(['ADMIN', 'HR', 'EMPLOYEE']), async (req, res, next) => {
   try {
     const { month, year, empId } = req.query;
     const conditions = [];
     const params = [];
 
     if (req.user.role === 'EMPLOYEE') {
+      if (!req.user.empId) {
+        return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
+      }
       conditions.push('emp_id = ?');
       params.push(req.user.empId);
     } else if (empId) {
@@ -186,9 +190,17 @@ app.post(['/api/v1/payrolls/publish', '/api/payroll/publish'], requireAuth(['ADM
 app.get('/internal/payrolls/summary', requireInternalKey, async (req, res, next) => {
   try {
     const { month, year } = req.query;
+    const employeeScope = req.query.managerId
+      ? await getVisibleEmployeeIds({ role: 'MANAGER', empId: req.query.managerId })
+      : null;
+    const conditions = ['month = ?', 'year = ?'];
+    const params = [Number(month), Number(year)];
+    addEmployeeScope(conditions, params, employeeScope, 'emp_id');
     const [rows] = await pool.query(
-      'SELECT COUNT(*) AS employee_count, COALESCE(SUM(net_salary), 0) AS total_net_salary FROM payslips WHERE month = ? AND year = ?',
-      [Number(month), Number(year)]
+      `SELECT COUNT(*) AS employee_count, COALESCE(SUM(net_salary), 0) AS total_net_salary
+       FROM payslips
+       WHERE ${conditions.join(' AND ')}`,
+      params
     );
     res.json({ success: true, data: rows[0] });
   } catch (err) {

@@ -153,13 +153,24 @@
       ]
     },
     {
-      "prefix": "/api/organization/employees",
+      "prefix": "/api/organization/employees/me",
       "service": "organization-service",
       "rules": [
         {
           "methods": ["GET"],
           "auth": true,
           "roles": ["*"]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/organization/employees",
+      "service": "organization-service",
+      "rules": [
+        {
+          "methods": ["GET"],
+          "auth": true,
+          "roles": ["ADMIN", "HR", "MANAGER"]
         },
         {
           "methods": ["POST", "PUT", "DELETE"],
@@ -218,7 +229,7 @@
         {
           "methods": ["GET"],
           "auth": true,
-          "roles": ["*"]
+          "roles": ["ADMIN", "HR", "MANAGER"]
         },
         {
           "methods": ["POST", "PUT", "DELETE"],
@@ -384,7 +395,7 @@
         {
           "methods": ["GET"],
           "auth": true,
-          "roles": ["*"]
+          "roles": ["ADMIN", "HR", "EMPLOYEE"]
         },
         {
           "methods": ["POST", "PUT", "DELETE"],
@@ -456,6 +467,7 @@
       "service": "attendance-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PATCH"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] },
         { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
@@ -479,6 +491,7 @@
       "service": "leave-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PATCH"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] },
         { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
@@ -503,6 +516,7 @@
       "service": "shift-service",
       "rules": [
         { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
+        { "methods": ["PATCH"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] },
         { "methods": ["PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
       ]
     },
@@ -524,7 +538,7 @@
       "prefix": "/api/v1/payslips",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
+        { "methods": ["GET"], "auth": true, "roles": ["ADMIN", "HR", "EMPLOYEE"] },
         { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
       ]
     },

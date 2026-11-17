@@ -144,29 +144,6 @@ body {
   }
 }
 
-/* Điểm ghim tròn đỏ ở góc trên bên trái card */
-.card-pin-indicator {
-  position: absolute;
-  top: -14px;
-  left: -14px;
-  width: 36px;
-  height: 36px;
-  background: #ffffff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  z-index: 12;
-}
-
-.card-pin-dot {
-  width: 20px;
-  height: 20px;
-  background: #d84349;
-  border-radius: 50%;
-}
-
 .auth-card-header {
   text-align: center;
   margin-bottom: 24px;
@@ -202,6 +179,10 @@ body {
   color: #1e293b;
 }
 
+.password-field {
+  padding-right: 58px;
+}
+
 .figma-pill-input:focus {
   border-color: #d84349;
   box-shadow: 0 0 0 3px rgba(216, 67, 73, 0.15);
@@ -212,14 +193,17 @@ body {
   margin-bottom: 14px;
 }
 
-.input-icon-right {
+.password-toggle {
   position: absolute;
   right: 18px;
   top: 50%;
   transform: translateY(-50%);
   cursor: pointer;
   color: #94a3b8;
-  font-size: 15px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
 }
 
 .auth-options-row {
@@ -459,12 +443,6 @@ body {
   font-weight: 600;
 }
 
-.figma-nav-icon {
-  font-size: 16px;
-  width: 20px;
-  text-align: center;
-}
-
 .sidebar-bottom-help {
   padding: 18px 20px;
   border-top: 1px solid var(--border-light);
@@ -511,7 +489,7 @@ body {
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 10px 42px 10px 16px;
+  padding: 10px 16px;
   font-size: 13px;
   outline: none;
 }
@@ -521,38 +499,20 @@ body {
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
 }
 
-.topbar-search-icon {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  font-size: 15px;
-}
-
 .topbar-right-profile {
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
-.notif-bell-btn {
+.notification-button {
   background: none;
   border: none;
-  font-size: 18px;
   cursor: pointer;
   color: #64748b;
-  position: relative;
-}
-
-.notif-badge-dot {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 7px;
-  height: 7px;
-  background: #de4b4b;
-  border-radius: 50%;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .user-info-box {
@@ -677,7 +637,7 @@ body {
 
 .metric-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   font-size: 13px;
   font-weight: 600;
@@ -934,21 +894,6 @@ body {
   display: flex;
   gap: 12px;
 }
-
-.step-icon-circle {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  flex-shrink: 0;
-  font-weight: 700;
-}
-
-.step-icon-blue { background: #3b82f6; color: #ffffff; }
-.step-icon-red { background: #ef4444; color: #ffffff; }
 
 .step-content {
   font-size: 12px;
@@ -1244,6 +1189,7 @@ input:checked + .slider:before {
 }
 
   </style>
+  <link rel="stylesheet" href="css/controls.css">
 </head>
 <body>
 
@@ -1262,11 +1208,6 @@ input:checked + .slider:before {
     <!-- Nửa phải: Nền Đỏ San Hô + Floating Auth Card Bo Góc Lớn -->
     <div class="login-side-red">
       <div class="figma-auth-card">
-        <!-- Điểm ghim tròn đỏ ở góc trên bên trái card -->
-        <div class="card-pin-indicator">
-          <div class="card-pin-dot"></div>
-        </div>
-
         <!-- FORM ĐĂNG NHẬP -->
         <div id="authLoginFormContainer">
           <div class="auth-card-header">
@@ -1280,8 +1221,8 @@ input:checked + .slider:before {
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="loginPassword" class="figma-pill-input" placeholder="Password" required autocomplete="current-password">
-              <span class="input-icon-right" onclick="togglePasswordVisibility('loginPassword')">👁️</span>
+              <input type="password" id="loginPassword" class="figma-pill-input password-field" placeholder="Password" required autocomplete="current-password">
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
             <div class="auth-options-row">
@@ -1292,33 +1233,6 @@ input:checked + .slider:before {
             </div>
 
             <button type="submit" class="btn-figma-dark" id="btnLoginAction">Login</button>
-
-            <div class="auth-divider">
-              <span>Or</span>
-            </div>
-
-            <div class="social-btn-group">
-              <button type="button" class="btn-social-fb" onclick="showToast('Chức năng SSO Facebook đang được tích hợp', 'warning')">
-                <span>f</span> Continue with facebook
-              </button>
-              <button type="button" class="btn-social-gg" onclick="showToast('Chức năng Google Workspace đang được tích hợp', 'warning')">
-                <span>G</span> Continue with google
-              </button>
-            </div>
-
-            <!-- Nút chọn nhanh tài khoản kiểm thử 1-Click -->
-            <div class="quick-login-pills">
-              <div class="quick-login-pills-title">
-                <span>Chọn nhanh tài khoản thử nghiệm:</span>
-                <span style="color: #94a3b8; font-weight: normal;">MK: 123456</span>
-              </div>
-              <div class="quick-pills-row">
-                <button type="button" class="pill-btn-role" onclick="quickFillAuth('admin')">👑 Admin</button>
-                <button type="button" class="pill-btn-role" onclick="quickFillAuth('manager')">👨‍💼 Thầy Lâm (Manager)</button>
-                <button type="button" class="pill-btn-role" onclick="quickFillAuth('hr_admin')">👩‍💼 HR Admin</button>
-                <button type="button" class="pill-btn-role" onclick="quickFillAuth('employee')">👨‍💻 Nhân viên (Hiếu)</button>
-              </div>
-            </div>
 
             <div class="auth-switch-link">
               Don't have an account? <a onclick="toggleAuthMode('register')" style="color: #d84349; font-weight: 600; text-decoration: none; cursor: pointer;">Signup</a>
@@ -1344,29 +1258,16 @@ input:checked + .slider:before {
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="regPassword" class="figma-pill-input" placeholder="Password" required minlength="6">
-              <span class="input-icon-right" onclick="togglePasswordVisibility('regPassword')">👁️</span>
+              <input type="password" id="regPassword" class="figma-pill-input password-field" placeholder="Password" required minlength="6">
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="regConfirmPassword" class="figma-pill-input" placeholder="Confirm password" required minlength="6">
-              <span class="input-icon-right" onclick="togglePasswordVisibility('regConfirmPassword')">👁️</span>
+              <input type="password" id="regConfirmPassword" class="figma-pill-input password-field" placeholder="Confirm password" required minlength="6">
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regConfirmPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
             <button type="submit" class="btn-figma-dark" id="btnRegisterAction">Register</button>
-
-            <div class="auth-divider">
-              <span>Or</span>
-            </div>
-
-            <div class="social-btn-group">
-              <button type="button" class="btn-social-fb" onclick="showToast('Chức năng SSO Facebook đang được tích hợp', 'warning')">
-                <span>f</span> Continue with facebook
-              </button>
-              <button type="button" class="btn-social-gg" onclick="showToast('Chức năng Google Workspace đang được tích hợp', 'warning')">
-                <span>G</span> Continue with google
-              </button>
-            </div>
 
             <div class="auth-switch-link">
               Already have an account? <a onclick="toggleAuthMode('login')" style="color: #d84349; font-weight: 600; text-decoration: none; cursor: pointer;">Login</a>
@@ -1392,43 +1293,43 @@ input:checked + .slider:before {
 
       <nav class="sidebar-nav-list">
         <a class="figma-nav-item active" id="nav-dashboard" onclick="navigateToView('dashboard')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🏠</span> Tổng quan
+          Tổng quan
         </a>
         <a class="figma-nav-item" id="nav-employees" onclick="navigateToView('employees')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📋</span> Nhân viên
+          Nhân viên
         </a>
         <a class="figma-nav-item" id="nav-departments" onclick="navigateToView('departments')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🏢</span> Cơ cấu phòng ban
+          Cơ cấu phòng ban
         </a>
         <a class="figma-nav-item" id="nav-attendance-history" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📄</span> Lịch sử chấm công NV
+          Lịch sử chấm công NV
         </a>
         <a class="figma-nav-item" id="nav-my-attendance" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
-          <span class="figma-nav-icon">👤</span> Lịch sử chấm công
+          Lịch sử chấm công
         </a>
         <a class="figma-nav-item" id="nav-rbac" onclick="navigateToView('rbac')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🔐</span> Quản lý phân quyền
+          Quản lý phân quyền
         </a>
         <a class="figma-nav-item" id="nav-stats" onclick="navigateToView('stats')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📈</span> Thống kê
+          Thống kê
         </a>
         <a class="figma-nav-item" id="nav-requests" onclick="navigateToView('requests')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📝</span> Đơn từ
+          Đơn từ
         </a>
         <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')" style="cursor: pointer;">
-          <span class="figma-nav-icon">⚙️</span> Thiết lập chấm công
+          Thiết lập chấm công
         </a>
         <a class="figma-nav-item" id="nav-profile" onclick="navigateToView('profile')" style="cursor: pointer;">
-          <span class="figma-nav-icon">👤</span> Hồ sơ cá nhân
+          Hồ sơ cá nhân
         </a>
         <a class="figma-nav-item" id="nav-soa-monitor" onclick="navigateToView('soa-monitor')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🌐</span> Hạ tầng SOA
+          Hạ tầng SOA
         </a>
       </nav>
 
       <div style="padding: 10px 14px; border-top: 1px solid var(--border-light);">
-        <button type="button" onclick="handleLogoutClick()" style="width: 100%; background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
-          <span>🚪</span> Đăng xuất
+        <button type="button" onclick="handleLogoutClick()" style="width: 100%; background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          Đăng xuất
         </button>
       </div>
 
@@ -1445,13 +1346,11 @@ input:checked + .slider:before {
       <header class="figma-topbar">
         <div class="topbar-search-wrap">
           <input type="text" class="topbar-search-input" placeholder="Tìm kiếm trong hệ thống (nhấn Enter)" onkeydown="handleTopbarSearch(event)">
-          <span class="topbar-search-icon">🔍</span>
         </div>
 
         <div class="topbar-right-profile" style="display: flex; align-items: center; gap: 14px;">
-          <button class="notif-bell-btn" title="Thông báo mới" onclick="openNotificationsModal()" style="cursor: pointer;">
-            🔔
-            <span class="notif-badge-dot"></span>
+          <button type="button" class="notification-button" title="Thông báo mới" onclick="openNotificationsModal()">
+            Thông báo
           </button>
 
           <div class="user-info-box" onclick="navigateToView('profile')" style="cursor: pointer;" title="Nhấp để xem hồ sơ cá nhân">
@@ -1464,8 +1363,8 @@ input:checked + .slider:before {
             </div>
           </div>
 
-          <button type="button" class="btn-logout-header" onclick="handleLogoutClick()" title="Đăng xuất khỏi hệ thống" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
-            <span>🚪</span> Đăng xuất
+          <button type="button" class="btn-logout-header" onclick="handleLogoutClick()" title="Đăng xuất khỏi hệ thống" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+            Đăng xuất
           </button>
         </div>
       </header>
@@ -1477,70 +1376,93 @@ input:checked + .slider:before {
              VIEW 1: TỔNG QUAN TRONG NGÀY (FIGMA IMAGE 3)
              ==================================================================== -->
         <section id="view-dashboard" class="figma-view-section">
-          <div class="breadcrumb-trail">Tổng quan / Tổng quan trong ngày</div>
+          <div class="breadcrumb-trail">Tổng quan / Dashboard</div>
           <div class="page-main-header">
-            <h1 class="page-heading-title">Tổng quan trong ngày</h1>
-            <div class="page-heading-desc" id="dashGreetingSub">Xin chào Thầy Lâm, đây là tình hình đội nhóm hôm nay.</div>
+            <h1 class="page-heading-title">Tổng quan</h1>
+            <div class="page-heading-desc" id="dashGreetingSub">Dữ liệu tổng hợp theo phạm vi được cấp quyền.</div>
           </div>
 
-          <!-- Bộ lọc ngày & phòng ban theo Figma Image 3 -->
           <div class="filter-pill-bar">
             <div class="pill-dropdown-group">
-              <div class="figma-filter-pill" onclick="openDateFilterModal()" style="cursor: pointer;" title="Nhấp để đổi ngày xem">
-                <span id="currentDatePillText">📅 30/10/2026 • Hôm nay</span> ▾
+              <div class="figma-filter-pill">
+                <span id="currentDatePillText">Tháng hiện tại</span>
               </div>
-              <div class="figma-filter-pill" onclick="openDeptFilterModal()" style="cursor: pointer;" title="Nhấp để đổi phòng ban">
-                <span id="currentDeptPillText">🏢 Phòng Kỹ Thuật • 40 người</span> ▾
+              <div class="figma-filter-pill">
+                <span id="currentDeptPillText">Phạm vi được cấp quyền</span>
               </div>
             </div>
-            <div class="update-time-meta">Cập nhật lúc: 09:00 • Ca 08:00 - 16:00</div>
+            <div class="update-time-meta" id="dashUpdateTime">Đang tải dữ liệu...</div>
           </div>
 
           <!-- 4 THẺ CHỈ SỐ METRIC (FIGMA IMAGE 3) - CÓ THỂ BẤM TƯƠNG TÁC -->
-          <div class="metrics-row-4">
+          <div class="figma-white-card" id="dashOrgDataState" style="margin-bottom: 14px; color: #64748b;">Đang tải số liệu...</div>
+          <div class="metrics-row-4" id="dashOrgMetrics">
             <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn cơ quan">
               <div class="metric-header">
-                <span>Đã đi làm</span>
-                <span>👤</span>
+                <span id="dashMetricLbl1">Ngày công tháng này</span>
               </div>
-              <div class="metric-value-huge metric-value-green">34 / 40</div>
-              <div class="metric-footer-note">85% nhân sự • Gồm 3 người đi muộn →</div>
+              <div class="metric-value-huge metric-value-green" id="dashMetricVal1">—</div>
+              <div class="metric-footer-note" id="dashMetricSub1">Ngày công được ghi nhận</div>
             </div>
 
             <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
               <div class="metric-header">
-                <span>Nghỉ phép</span>
-                <span>📅</span>
+                <span id="dashMetricLbl2">Ngày nghỉ phép tháng này</span>
               </div>
-              <div class="metric-value-huge metric-value-blue">04</div>
-              <div class="metric-footer-note">Đã được duyệt nghỉ hôm nay →</div>
+              <div class="metric-value-huge metric-value-blue" id="dashMetricVal2">—</div>
+              <div class="metric-footer-note" id="dashMetricSub2">Ngày nghỉ đã được duyệt</div>
             </div>
 
             <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
               <div class="metric-header">
-                <span>Đi muộn</span>
-                <span>⏰</span>
+                <span id="dashMetricLbl3">Phút đi muộn tháng này</span>
               </div>
-              <div class="metric-value-huge metric-value-orange">03</div>
-              <div class="metric-footer-note">Là một phần trong 34 người đi làm ↓</div>
+              <div class="metric-value-huge metric-value-orange" id="dashMetricVal3">—</div>
+              <div class="metric-footer-note" id="dashMetricSub3">Tổng phút đi muộn được ghi nhận</div>
             </div>
 
             <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem và xử lý đơn chờ duyệt">
               <div class="metric-header">
-                <span>Đơn chờ duyệt</span>
-                <span>📄</span>
+                <span id="dashMetricLbl4">Giờ OT tháng này</span>
               </div>
-              <div class="metric-value-huge metric-value-blue">07</div>
-              <div class="metric-footer-note">Tất cả ngày yêu cầu • Cần xử lý →</div>
+              <div class="metric-value-huge metric-value-blue" id="dashMetricVal4">—</div>
+              <div class="metric-footer-note" id="dashMetricSub4">Giờ tăng ca đã được duyệt</div>
             </div>
           </div>
 
+          <div class="figma-white-card" id="dashPersonalMetrics" style="display: none; margin-bottom: 20px;">
+            <div class="card-title-text" style="margin-bottom: 14px;">Tổng quan cá nhân tháng này</div>
+            <div class="metrics-row-4">
+              <div class="figma-metric-card">
+                <div class="metric-header"><span>Ngày công đã ghi nhận</span></div>
+                <div class="metric-value-huge metric-value-green" id="dashPersonalWorkDays">—</div>
+                <div class="metric-footer-note" id="dashPersonalWorkHours">Tổng giờ làm —</div>
+              </div>
+              <div class="figma-metric-card">
+                <div class="metric-header"><span>Quỹ phép còn lại</span></div>
+                <div class="metric-value-huge metric-value-blue" id="dashPersonalLeaveDays">—</div>
+                <div class="metric-footer-note">Ngày phép</div>
+              </div>
+              <div class="figma-metric-card">
+                <div class="metric-header"><span>Ngày đi muộn</span></div>
+                <div class="metric-value-huge metric-value-orange" id="dashPersonalLateDays">—</div>
+                <div class="metric-footer-note" id="dashPersonalLateMinutes">Tổng phút đi muộn —</div>
+              </div>
+              <div class="figma-metric-card">
+                <div class="metric-header"><span>Đơn đang chờ</span></div>
+                <div class="metric-value-huge metric-value-blue" id="dashPersonalPending">—</div>
+                <div class="metric-footer-note">Đơn nghỉ phép và OT</div>
+              </div>
+            </div>
+            <div id="dashPersonalDataState" style="margin-top: 12px; color: #64748b;">Đang tải số liệu cá nhân...</div>
+          </div>
+
           <!-- PHÂN BỔ CHẤM CÔNG HÔM NAY (DONUT CHART) & NHÂN VIÊN ĐI MUỘN -->
-          <div class="middle-grid-2">
+          <div class="middle-grid-2" id="dashOrgDetails">
             <!-- Card Trái: Biểu đồ Donut Phân bổ chấm công -->
             <div class="figma-white-card">
               <div class="card-title-flex">
-                <div class="card-title-text">Phân bổ chấm công hôm nay</div>
+                <div class="card-title-text">Phân bổ ngày công tháng này</div>
               </div>
 
               <div class="donut-chart-container">
@@ -1549,17 +1471,17 @@ input:checked + .slider:before {
                     <!-- Vòng nền -->
                     <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" stroke-width="3.8"></circle>
                     <!-- Đúng giờ (31/40 = 77.5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="3.8" stroke-dasharray="77.5 22.5" stroke-dashoffset="0"></circle>
+                    <circle id="dashCircleOnTime" cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                     <!-- Đi muộn (3/40 = 7.5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="3.8" stroke-dasharray="7.5 92.5" stroke-dashoffset="-77.5"></circle>
+                    <circle id="dashCircleLate" cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                     <!-- Nghỉ phép (4/40 = 10%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="3.8" stroke-dasharray="10 90" stroke-dashoffset="-85"></circle>
+                    <circle id="dashCircleLeave" cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                     <!-- Chưa chấm công (2/40 = 5%) -->
-                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#94a3b8" stroke-width="3.8" stroke-dasharray="5 95" stroke-dashoffset="-95"></circle>
+                    <circle id="dashCircleAbsent" cx="18" cy="18" r="15.915" fill="transparent" stroke="#94a3b8" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                   </svg>
                   <div class="donut-center-label">
-                    <div class="donut-center-number">40</div>
-                    <div class="donut-center-sub">nhân viên</div>
+                    <div class="donut-center-number" id="dashDonutTotal">—</div>
+                    <div class="donut-center-sub">ngày công</div>
                   </div>
                 </div>
 
@@ -1569,7 +1491,7 @@ input:checked + .slider:before {
                       <span class="dot-color dot-ontime"></span>
                       <span>Đúng giờ</span>
                     </div>
-                    <span class="legend-count">31</span>
+                    <span class="legend-count" id="dashLegendOnTime">—</span>
                   </div>
 
                   <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
@@ -1577,7 +1499,7 @@ input:checked + .slider:before {
                       <span class="dot-color dot-late"></span>
                       <span>Đi muộn</span>
                     </div>
-                    <span class="legend-count">03</span>
+                    <span class="legend-count" id="dashLegendLate">—</span>
                   </div>
 
                   <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
@@ -1585,7 +1507,7 @@ input:checked + .slider:before {
                       <span class="dot-color dot-leave"></span>
                       <span>Nghỉ phép</span>
                     </div>
-                    <span class="legend-count">04</span>
+                    <span class="legend-count" id="dashLegendLeave">—</span>
                   </div>
 
                   <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn bộ nhân sự">
@@ -1593,60 +1515,34 @@ input:checked + .slider:before {
                       <span class="dot-color dot-absent"></span>
                       <span>Chưa chấm công</span>
                     </div>
-                    <span class="legend-count">02</span>
+                    <span class="legend-count" id="dashLegendAbsent">—</span>
                   </div>
                 </div>
               </div>
 
               <div style="font-size: 11px; color: #94a3b8; margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 10px;">
-                31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên.
+                Dữ liệu tổng hợp từ chấm công và đơn nghỉ phép đã duyệt trong tháng.
               </div>
             </div>
 
             <!-- Card Phải: Bảng Nhân viên đi muộn (Có thể tương tác bấm xem) -->
             <div class="figma-white-card" id="lateEmployeesCard">
               <div class="card-title-flex">
-                <div class="card-title-text">Nhân viên đi muộn</div>
-                <span class="badge-status" style="background: #fef3c7; color: #b45309;">• 3 người</span>
+                <div class="card-title-text">Nhân sự đi muộn trong tháng</div>
+                <span class="badge-status" id="dashLateCountBadge" style="background: #fef3c7; color: #b45309;">—</span>
               </div>
 
               <table class="figma-table">
                 <thead>
                   <tr>
-                    <th>Nhân viên</th>
-                    <th>Giờ vào</th>
-                    <th>Đi muộn</th>
-                    <th>Chi tiết</th>
+                    <th>Mã hồ sơ</th>
+                    <th>Số ngày</th>
+                    <th>Tổng phút</th>
+                    <th>Kỳ thống kê</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <div style="font-weight: 700;">Huỳnh Gia Kiệt</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-002</div>
-                    </td>
-                    <td>08:12</td>
-                    <td><span style="color: #d97706; font-weight: 600;">12 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Huỳnh Gia Kiệt', 'NV-002', '12 phút', '08:12')">Xem xét →</a></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <div style="font-weight: 700;">Nguyễn Gia Hảo</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-003</div>
-                    </td>
-                    <td>08:07</td>
-                    <td><span style="color: #d97706; font-weight: 600;">7 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Nguyễn Gia Hảo', 'NV-003', '7 phút', '08:07')">Xem xét →</a></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <div style="font-weight: 700;">Trần Hoài An</div>
-                      <div style="font-size: 11px; color: #94a3b8;">NV-008</div>
-                    </td>
-                    <td>08:21</td>
-                    <td><span style="color: #d97706; font-weight: 600;">21 phút</span></td>
-                    <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('Trần Hoài An', 'NV-008', '21 phút', '08:21')">Xem xét →</a></td>
-                  </tr>
+                <tbody id="dashLateEmployeesBody">
+                  <tr><td colspan="4" style="text-align: center; color: #64748b;">Đang tải số liệu...</td></tr>
                 </tbody>
               </table>
 
@@ -1657,26 +1553,29 @@ input:checked + .slider:before {
           </div>
 
           <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (FIGMA IMAGE 3 BOTTOM - CÓ THỂ DUYỆT / TỪ CHỐI) -->
-          <div class="figma-white-card">
+          <div class="figma-white-card" id="dashPendingApprovalCard">
             <div class="card-title-flex">
               <div>
-                <div class="card-title-text">Đơn đang chờ phê duyệt</div>
-                <div style="font-size: 12px; color: #64748b;">7 đơn cần xử lý - Nhấp để duyệt hoặc từ chối trực tiếp</div>
+                <div class="card-title-text">Đơn nghỉ phép đang chờ phê duyệt</div>
+                <div style="font-size: 12px; color: #64748b;"><span id="dashPendingLeaveCount">—</span> đơn cần xử lý</div>
               </div>
-              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem tất cả 7 đơn →</a>
+              <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem danh sách đơn →</a>
             </div>
 
             <table class="figma-table">
               <thead>
                 <tr>
-                  <th>Nhân viên / Mã đơn</th>
+                  <th>Mã hồ sơ nhân sự</th>
                   <th>Loại đơn</th>
                   <th>Thời gian yêu cầu</th>
                   <th>Ngày gửi</th>
-                  <th>Thao tác</th>
+                  <th>Trạng thái</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="dashPendingLeavesBody">
+                <tr><td colspan="5" style="text-align: center; color: #64748b;">Đang tải danh sách đơn...</td></tr>
+              </tbody>
+              <tbody style="display: none;">
                 <tr id="req-row-NP-2026-024">
                   <td>
                     <div style="font-weight: 700;">Vũ Đức Hiếu</div>
@@ -1748,7 +1647,7 @@ input:checked + .slider:before {
                     <div style="font-size: 18px; font-weight: 700; color: #1e293b;">Đơn xin nghỉ phép</div>
                     <div style="font-size: 12px; color: #64748b;">NP-2026-021 • Gửi ngày 28/10/2026 • 10:05</div>
                   </div>
-                  <span class="badge-status badge-rejected">• Bị từ chối</span>
+                  <span class="badge-status badge-rejected">Bị từ chối</span>
                 </div>
 
                 <div class="detail-info-grid">
@@ -1792,7 +1691,6 @@ input:checked + .slider:before {
 
                 <div class="file-attach-box">
                   <div class="file-info-left">
-                    <span style="font-size: 20px;">📄</span>
                     <div>
                       <div style="font-weight: 600;">Ke-hoach-cong-viec.pdf</div>
                       <div style="font-size: 11px; color: #94a3b8;">PDF • 245 KB • Đính kèm khi gửi đơn</div>
@@ -1804,7 +1702,7 @@ input:checked + .slider:before {
                 <!-- Alert Đỏ từ chối -->
                 <div class="rejection-alert-box">
                   <div class="rejection-title">
-                    <span>⚠️</span> Lý do từ chối từ quản lý
+                    Lý do từ chối từ quản lý
                   </div>
                   <div class="rejection-content">
                     Ngày 30/10 cần đủ nhân sự để bàn giao phiên bản. Kế hoạch chưa có người thay thế phụ trách kiểm thử. Vui lòng chọn ngày khác và bổ sung phương án bàn giao.
@@ -1831,7 +1729,6 @@ input:checked + .slider:before {
                 <div class="status-timeline">
                   <!-- Bước 1 -->
                   <div class="timeline-step">
-                    <div class="step-icon-circle step-icon-blue">✔</div>
                     <div class="step-content">
                       <div class="step-title">Đã gửi đơn</div>
                       <div class="step-time">28/10/2026 • 10:05</div>
@@ -1841,7 +1738,6 @@ input:checked + .slider:before {
 
                   <!-- Bước 2 -->
                   <div class="timeline-step">
-                    <div class="step-icon-circle step-icon-red">●</div>
                     <div class="step-content">
                       <div class="step-title" style="color: #c53030;">Bị từ chối</div>
                       <div class="step-time">28/10/2026 • 15:40</div>
@@ -1880,7 +1776,6 @@ input:checked + .slider:before {
 
           <!-- Banner xanh thông báo quy tắc đang áp dụng -->
           <div class="alert-banner-blue">
-            <span style="font-size: 18px;">ℹ️</span>
             <div>
               <strong>Quy tắc đang áp dụng: Wi-Fi công ty VÀ vị trí GPS hợp lệ.</strong><br>
               Nhân viên phải kết nối đúng Wi-Fi đã đăng ký và ở trong bán kính 100 m của văn phòng. Nhận diện khuôn mặt đang tắt, không phải điều kiện chấm công.
@@ -1893,7 +1788,7 @@ input:checked + .slider:before {
             <div class="figma-white-card">
               <div class="toggle-top-row">
                 <div class="toggle-title">
-                  <span>📶</span> Wi-Fi công ty
+                  Wi-Fi công ty
                 </div>
                 <label class="switch">
                   <input type="checkbox" id="toggleWifi" checked onchange="handleSettingToggle('wifi')">
@@ -1912,7 +1807,7 @@ input:checked + .slider:before {
             <div class="figma-white-card">
               <div class="toggle-top-row">
                 <div class="toggle-title">
-                  <span>📍</span> GPS / Vùng cho phép
+                  GPS / Vùng cho phép
                 </div>
                 <label class="switch">
                   <input type="checkbox" id="toggleGps" checked onchange="handleSettingToggle('gps')">
@@ -1931,9 +1826,9 @@ input:checked + .slider:before {
             <div class="figma-white-card">
               <div class="toggle-top-row">
                 <div class="toggle-title">
-                  <span>📷</span> Nhận diện khuôn mặt
+                  Nhận diện khuôn mặt
                 </div>
-                <span class="badge-status" style="background:#f1f5f9; color:#64748b;">• Đang tắt</span>
+                <span class="badge-status" style="background:#f1f5f9; color:#64748b;">Đang tắt</span>
               </div>
               <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 12px;">
                 Đối chiếu khuôn mặt đã đăng ký. Chưa thu thập dữ liệu khi đang tắt.
@@ -1973,7 +1868,7 @@ input:checked + .slider:before {
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
                   <a class="link-action-blue" style="font-size: 13px;" onclick="showToast('Thêm điểm truy cập WiFi BSSID phụ', 'success')">+ Thêm điểm truy cập</a>
-                  <span class="badge-status" style="background:#dcfce7; color:#166534;">• 2 điểm truy cập</span>
+                  <span class="badge-status" style="background:#dcfce7; color:#166534;">2 điểm truy cập</span>
                 </div>
 
                 <div style="font-size: 11px; color: #94a3b8; margin-top: 12px; line-height: 1.4;">
@@ -1995,7 +1890,6 @@ input:checked + .slider:before {
                 <!-- Mô phỏng bản đồ tròn Figma Image 4 -->
                 <div class="map-visual-box">
                   <div class="map-circle-radius">
-                    <span style="font-size: 20px;">🏢</span>
                     <span>Văn phòng Quy Nhơn</span>
                     <span style="font-size: 9px; font-weight: normal; opacity: 0.8;">Bán kính 100 m</span>
                   </div>
@@ -2188,7 +2082,7 @@ input:checked + .slider:before {
           <!-- Alert giải thích các vai trò trong hệ thống -->
           <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;">
             <div style="font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
-              <span>🛡️</span> Ma trận Phân định Trách nhiệm & Quyền hạn (Role-Based Access Control)
+              Ma trận Phân định Trách nhiệm & Quyền hạn (Role-Based Access Control)
             </div>
             <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6;">
               <div>• <strong>ADMIN (Quản trị viên):</strong> Toàn quyền kiểm soát hệ thống, phân quyền vai trò tài khoản, cấu hình ca làm việc, giám sát hạ tầng SOA.</div>
@@ -2205,7 +2099,7 @@ input:checked + .slider:before {
                 <div class="card-title-text">Danh sách Tài khoản & Phân quyền Vai trò</div>
                 <div style="font-size: 12px; color: #64748b;">Chọn vai trò tương ứng và nhấn Lưu quyền để cập nhật trực tiếp vào Auth Service.</div>
               </div>
-              <button class="btn-primary-blue" onclick="loadRbacUsersData()">🔄 Làm mới danh sách</button>
+              <button class="btn-primary-blue" onclick="loadRbacUsersData()">Làm mới danh sách</button>
             </div>
 
             <table class="figma-table">
@@ -2322,7 +2216,7 @@ input:checked + .slider:before {
           <div class="figma-white-card">
             <div class="card-title-flex">
               <div class="card-title-text">Bảng tra cứu Service Registry (:3500)</div>
-              <button class="btn-primary-blue" onclick="loadSoaServicesStatus()">🔄 Quét lại sức khỏe</button>
+              <button class="btn-primary-blue" onclick="loadSoaServicesStatus()">Quét lại sức khỏe</button>
             </div>
 
             <table class="figma-table">
@@ -2350,29 +2244,16 @@ input:checked + .slider:before {
           <div class="breadcrumb-trail">Chấm công / Lịch sử chấm công NV</div>
           <div class="page-main-header">
             <h1 class="page-heading-title">Lịch sử Chấm công Nhân sự</h1>
-            <div class="page-heading-desc">Theo dõi nhật ký vào ca, ra ca và thời gian làm việc toàn cơ quan.</div>
+            <div class="page-heading-desc">Theo dõi nhật ký vào ca, ra ca và thời gian làm việc trong phạm vi được cấp quyền.</div>
           </div>
 
           <div class="figma-white-card">
             <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
               <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="date" value="2026-10-30" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
-                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
-                  <option value="ALL">Tất cả phòng ban</option>
-                  <option value="TECH">Phòng Kỹ Thuật</option>
-                  <option value="HR">Phòng Nhân sự</option>
-                  <option value="FIN">Phòng Tài Chính</option>
-                  <option value="BIZ">Phòng Kinh Doanh</option>
-                </select>
-                <select class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="ON_TIME">Đúng giờ</option>
-                  <option value="LATE">Đi muộn</option>
-                  <option value="LEAVE">Nghỉ phép</option>
-                </select>
+                <input type="date" id="attendanceHistoryDate" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
               </div>
               <div>
-                <button class="btn-primary-blue" onclick="showToast('Đang trích xuất file Excel báo cáo chấm công...', 'success')">📥 Xuất Excel</button>
+                <button class="btn-primary-blue" disabled title="Chưa có API xuất báo cáo">Xuất Excel</button>
               </div>
             </div>
 
@@ -2387,7 +2268,7 @@ input:checked + .slider:before {
                   <th>Giờ ra</th>
                   <th>Số giờ</th>
                   <th>Trạng thái</th>
-                  <th>Thao tác</th>
+                  <th>Phương thức</th>
                 </tr>
               </thead>
               <tbody id="attendanceHistoryTableBody">
@@ -2413,14 +2294,14 @@ input:checked + .slider:before {
               <div>
                 <div style="font-size: 13px; color: #94a3b8; font-weight: 600;">HỆ THỐNG ĐIỂM DANH THỜI GIAN THỰC</div>
                 <div style="font-size: 32px; font-weight: 800; color: #38bdf8; letter-spacing: 1px; margin: 4px 0;" id="liveClockText">08:00:00</div>
-                <div style="font-size: 13px; color: #cbd5e1;">📍 Tọa độ GPS: 10.762622, 106.660172 • Wi-Fi: <strong>HTQLNS-Community-5G</strong></div>
+                <div style="font-size: 13px; color: #cbd5e1;">Tọa độ GPS: 10.762622, 106.660172 • Wi-Fi: <strong>HTQLNS-Community-5G</strong></div>
               </div>
               <div style="display: flex; gap: 12px;">
                 <button type="button" class="btn-figma-dark" id="btnMyCheckIn" onclick="handleCheckIn()" style="background: #10b981; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
-                  🟢 Điểm danh vào ca
+                  Điểm danh vào ca
                 </button>
                 <button type="button" class="btn-figma-dark" id="btnMyCheckOut" onclick="handleCheckOut()" style="background: #ef4444; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
-                  🔴 Điểm danh ra ca
+                  Điểm danh ra ca
                 </button>
               </div>
             </div>
@@ -2429,21 +2310,22 @@ input:checked + .slider:before {
           <!-- 3 THẺ TỔNG HỢP CÔNG CÁ NHÂN -->
           <div class="metrics-row-4" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Ngày công tháng này</span><span>📅</span></div>
-              <div class="metric-value-huge metric-value-green">22 / 24</div>
-              <div class="metric-footer-note">Đạt 91.6% chỉ tiêu ngày công</div>
+              <div class="metric-header"><span>Ngày công tháng này</span></div>
+              <div class="metric-value-huge metric-value-green" id="myAttendanceWorkDays">—</div>
+              <div class="metric-footer-note" id="myAttendanceWorkHours">Ngày công ghi nhận trong tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Đi muộn trong tháng</span><span>⏰</span></div>
-              <div class="metric-value-huge metric-value-orange">01 lần</div>
-              <div class="metric-footer-note">Tổng thời gian trễ: 12 phút</div>
+              <div class="metric-header"><span>Đi muộn trong tháng</span></div>
+              <div class="metric-value-huge metric-value-orange" id="myAttendanceLateDays">—</div>
+              <div class="metric-footer-note" id="myAttendanceLateMinutes">Tổng thời gian trễ: —</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Quỹ phép còn lại</span><span>🏖️</span></div>
-              <div class="metric-value-huge metric-value-blue">11 ngày</div>
-              <div class="metric-footer-note">Phép năm 2026: 12 ngày / năm</div>
+              <div class="metric-header"><span>Quỹ phép còn lại</span></div>
+              <div class="metric-value-huge metric-value-blue" id="myAttendanceLeaveDays">—</div>
+              <div class="metric-footer-note">Ngày phép còn lại trong năm</div>
             </div>
           </div>
+          <div id="myAttendanceDataState" style="margin-bottom: 12px; color: #64748b;">Đang tải dữ liệu cá nhân...</div>
 
           <div class="figma-white-card">
             <div class="card-title-flex">
@@ -2479,10 +2361,10 @@ input:checked + .slider:before {
             </div>
 
             <!-- Bộ lọc kỳ thống kê -->
-            <div style="display: flex; gap: 8px;">
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('2026-10')" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">📅 Tháng 10/2026 (Hiện tại)</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('2026-09')" style="cursor: pointer;">📅 Tháng 09/2026</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('2026-Q3')" style="cursor: pointer;">📅 Quý III/2026</button>
+            <div id="statPeriodFilters" style="display: flex; gap: 8px;">
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod(0)" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">Tháng này</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod(1)" style="cursor: pointer;">Tháng trước</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod(2)" style="cursor: pointer;">2 tháng trước</button>
             </div>
           </div>
 
@@ -2490,69 +2372,70 @@ input:checked + .slider:before {
           <div class="figma-white-card" id="statEmployeePersonalCard" style="display: none; margin-bottom: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0;">
             <div class="card-title-flex">
               <div>
-                <div class="card-title-text" style="color: #065f46;">📊 Kết quả Chuyên cần Cá nhân Tháng 10/2026 của bạn</div>
+                <div class="card-title-text" style="color: #065f46;">Kết quả chuyên cần cá nhân tháng này</div>
                 <div style="font-size: 12px; color: #047857;">Tóm tắt ngày công, ngày phép và giờ làm việc ghi nhận trên hệ thống</div>
               </div>
-              <span class="badge-status badge-approved" style="font-size: 13px; font-weight: 700;">Hạng A+ (Xuất sắc)</span>
+              <span class="badge-status badge-approved" style="font-size: 13px; font-weight: 700;">Dữ liệu cá nhân</span>
             </div>
             <div class="metrics-row-4" style="margin-top: 14px;">
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Số ngày công thực tế</div>
-                <div style="font-size: 22px; font-weight: 700; color: #059669;">22 / 22 ngày</div>
-                <div style="font-size: 11px; color: #059669;">Đạt 100% công chuẩn</div>
+                <div id="statPersonalWorkDays" style="font-size: 22px; font-weight: 700; color: #059669;">—</div>
+                <div id="statPersonalWorkHours" style="font-size: 11px; color: #059669;">Tổng giờ làm —</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Số lần đi muộn</div>
-                <div style="font-size: 22px; font-weight: 700; color: #059669;">0 lần</div>
-                <div style="font-size: 11px; color: #059669;">Chấp hành tốt giờ giấc</div>
+                <div id="statPersonalLateDays" style="font-size: 22px; font-weight: 700; color: #059669;">—</div>
+                <div id="statPersonalLateMinutes" style="font-size: 11px; color: #059669;">Tổng phút đi muộn —</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Quỹ phép năm còn lại</div>
-                <div style="font-size: 22px; font-weight: 700; color: #2563eb;">10 / 12 ngày</div>
-                <div style="font-size: 11px; color: #64748b;">Đã dùng 2 ngày</div>
+                <div id="statPersonalLeaveDays" style="font-size: 22px; font-weight: 700; color: #2563eb;">—</div>
+                <div style="font-size: 11px; color: #64748b;">Ngày phép còn lại</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
-                <div style="font-size: 12px; color: #64748b;">Giờ tăng ca (OT) tích lũy</div>
-                <div style="font-size: 22px; font-weight: 700; color: #d97706;">4.5 giờ</div>
-                <div style="font-size: 11px; color: #64748b;">Trong hạn mức quy định</div>
+                <div style="font-size: 12px; color: #64748b;">Đơn đang chờ xử lý</div>
+                <div id="statPersonalPending" style="font-size: 22px; font-weight: 700; color: #d97706;">—</div>
+                <div style="font-size: 11px; color: #64748b;">Đơn nghỉ phép và OT</div>
               </div>
             </div>
+            <div id="statPersonalDataState" style="margin-top: 12px; color: #047857;">Đang tải số liệu cá nhân...</div>
           </div>
 
           <!-- 4 THẺ CHỈ SỐ KPI TOÀN CƠ QUAN -->
-          <div class="metrics-row-4" style="margin-bottom: 20px;">
+          <div class="metrics-row-4" id="statOrgMetrics" style="margin-bottom: 20px;">
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ đi làm đúng giờ</span><span>🎯</span></div>
-              <div class="metric-value-huge metric-value-green" id="statMetricOnTime">88.5%</div>
-              <div class="metric-footer-note" id="statMetricOnTimeSub">Tăng 2.1% so với tháng trước</div>
+              <div class="metric-header"><span>Ngày công thực tế</span></div>
+              <div class="metric-value-huge metric-value-green" id="statMetricOnTime">—</div>
+              <div class="metric-footer-note" id="statMetricOnTimeSub">Dữ liệu tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ đi muộn</span><span>⚠️</span></div>
-              <div class="metric-value-huge metric-value-orange" id="statMetricLate">6.8%</div>
-              <div class="metric-footer-note" id="statMetricLateSub">Bình quân trễ 12.5 phút/lần</div>
+              <div class="metric-header"><span>Ngày đi muộn</span></div>
+              <div class="metric-value-huge metric-value-orange" id="statMetricLate">—</div>
+              <div class="metric-footer-note" id="statMetricLateSub">Dữ liệu tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ nghỉ phép</span><span>🏖️</span></div>
-              <div class="metric-value-huge metric-value-blue" id="statMetricLeave">4.7%</div>
-              <div class="metric-footer-note" id="statMetricLeaveSub">100% đơn được duyệt đúng quy định</div>
+              <div class="metric-header"><span>Ngày nghỉ phép</span></div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricLeave">—</div>
+              <div class="metric-footer-note" id="statMetricLeaveSub">Đã được duyệt trong tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏱️</span></div>
-              <div class="metric-value-huge metric-value-blue" id="statMetricHours">6,580 h</div>
-              <div class="metric-footer-note" id="statMetricHoursSub">95 nhân sự toàn công ty</div>
+              <div class="metric-header"><span>Tổng giờ OT</span></div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricHours">—</div>
+              <div class="metric-footer-note" id="statMetricHoursSub">Giờ OT đã duyệt trong tháng</div>
             </div>
           </div>
 
           <!-- BẢNG TỔNG HỢP THEO PHÒNG BAN -->
-          <div class="figma-white-card">
+          <div class="figma-white-card" id="statDepartmentReport">
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Bảng tổng hợp chuyên cần theo từng phòng ban</div>
-                <div style="font-size: 12px; color: #64748b;">Số liệu tổng kết công chuẩn, công thực tế và ngày nghỉ của 4 phòng ban</div>
+                <div style="font-size: 12px; color: #64748b;">Analytics Service hiện chưa cung cấp số liệu phân tách theo phòng ban.</div>
               </div>
               <div style="display: flex; gap: 8px;">
-                <button class="btn-primary-blue" onclick="showToast('Đang xuất dữ liệu Excel (.xlsx)...', 'success')">📊 Xuất Excel</button>
-                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="showToast('Đang tải file PDF báo cáo...', 'success')">📄 Tải PDF</button>
+                <button class="btn-primary-blue" disabled title="Chưa có API xuất báo cáo">Xuất Excel</button>
+                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" disabled title="Chưa có API xuất báo cáo">Tải PDF</button>
               </div>
             </div>
             <table class="figma-table">
@@ -2568,6 +2451,9 @@ input:checked + .slider:before {
                 </tr>
               </thead>
               <tbody id="statDeptTableBody">
+                <tr><td colspan="7" style="text-align: center; color: #64748b;">Analytics Service hiện chưa cung cấp số liệu phân tách theo phòng ban.</td></tr>
+              </tbody>
+              <tbody style="display: none;">
                 <tr>
                   <td><strong>Phòng Kỹ Thuật</strong></td>
                   <td>40</td>
@@ -2607,26 +2493,26 @@ input:checked + .slider:before {
               </tbody>
               <tfoot style="background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1;">
                 <tr>
-                  <td>TỔNG TOÀN CÔNG TY</td>
-                  <td id="statFootEmployees">95</td>
-                  <td id="statFootStandardDays">2,090 công</td>
-                  <td id="statFootActualDays">2,046 công</td>
-                  <td id="statFootLateCount" style="color: #d97706;">15 lượt</td>
-                  <td id="statFootLeaveDays">30 ngày</td>
-                  <td><span class="badge-status badge-approved" id="statFootRate">97.9%</span></td>
+                  <td>TỔNG TRONG PHẠM VI</td>
+                  <td id="statFootEmployees">—</td>
+                  <td id="statFootStandardDays">—</td>
+                  <td id="statFootActualDays">—</td>
+                  <td id="statFootLateCount" style="color: #d97706;">—</td>
+                  <td id="statFootLeaveDays">—</td>
+                  <td><span class="badge-status badge-approved" id="statFootRate">—</span></td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
           <!-- BẢNG CẢNH BÁO VI PHẠM NGƯỠNG (ANALYTICS SERVICE) -->
-          <div class="figma-white-card" style="margin-top: 24px;">
+          <div class="figma-white-card" id="statAlertsReport" style="margin-top: 24px;">
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Cảnh báo Vi phạm Ngưỡng (Analytics Alert Thresholds)</div>
                 <div style="font-size: 12px; color: #64748b;">Giám sát tự động từ Analytics Service (:3008) theo quy định Luật Lao động & Nội quy công ty</div>
               </div>
-              <span class="badge-status badge-approved">2 ngưỡng kích hoạt</span>
+              <span class="badge-status badge-approved" id="statAlertCount">—</span>
             </div>
             <table class="figma-table">
               <thead>
@@ -2640,7 +2526,10 @@ input:checked + .slider:before {
                   <th>Trạng thái</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="statAlertsBody">
+                <tr><td colspan="7" style="text-align: center; color: #64748b;">Đang tải dữ liệu cảnh báo...</td></tr>
+              </tbody>
+              <tbody style="display: none;">
                 <tr>
                   <td><strong>TH-LATE-3</strong></td>
                   <td>Cảnh báo đi muộn quá 3 lần/tháng</td>
@@ -2710,7 +2599,7 @@ input:checked + .slider:before {
               </div>
 
               <div style="margin-top: 24px;">
-                <button class="btn-figma-dark" style="background: #dc2626; border: none; padding: 10px 20px;" onclick="handleLogoutClick()">🚪 Đăng xuất tài khoản</button>
+                <button class="btn-figma-dark" style="background: #dc2626; border: none; padding: 10px 20px;" onclick="handleLogoutClick()">Đăng xuất tài khoản</button>
               </div>
             </div>
 
@@ -2720,18 +2609,18 @@ input:checked + .slider:before {
                 <div class="card-title-text">Bảo mật & Đổi mật khẩu</div>
               </div>
 
-              <form onsubmit="event.preventDefault(); showToast('Đổi mật khẩu thành công!', 'success');">
+              <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
                 <div class="figma-input-wrapper" style="margin-bottom: 12px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu hiện tại</label>
-                  <input type="password" class="figma-pill-input" placeholder="Nhập mật khẩu hiện tại" value="123456" required>
+                  <input type="password" id="currentPassword" class="figma-pill-input" placeholder="Nhập mật khẩu hiện tại" required autocomplete="current-password">
                 </div>
                 <div class="figma-input-wrapper" style="margin-bottom: 12px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mật khẩu mới</label>
-                  <input type="password" class="figma-pill-input" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" required minlength="6">
+                  <input type="password" id="newPassword" class="figma-pill-input" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" required minlength="6" autocomplete="new-password">
                 </div>
                 <div class="figma-input-wrapper" style="margin-bottom: 16px;">
                   <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Xác nhận mật khẩu mới</label>
-                  <input type="password" class="figma-pill-input" placeholder="Nhập lại mật khẩu mới" required minlength="6">
+                  <input type="password" id="confirmNewPassword" class="figma-pill-input" placeholder="Nhập lại mật khẩu mới" required minlength="6" autocomplete="new-password">
                 </div>
                 <button type="submit" class="btn-primary-blue" style="width: 100%;">Cập nhật mật khẩu</button>
               </form>
@@ -2759,20 +2648,6 @@ input:checked + .slider:before {
 
   <!-- Script logic ứng dụng -->
   <script src="js/app.js"></script>
-
-  <!-- ==========================================================================
-       THANH ĐIỀU HƯỚNG DEMO WIREFRAME FIGMA (1-CLICK XEM TẤT CẢ MÀN HÌNH MẪU)
-       ========================================================================== -->
-  <div id="demoScreenBar" class="demo-screen-bar">
-    <span class="demo-screen-label">🎯 Xem nhanh giao diện:</span>
-    <button type="button" class="btn-demo-view" id="btn-demo-login" onclick="showScreenView('login')">🔐 1. Đăng nhập (Login)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-register" onclick="showScreenView('register')">📝 2. Đăng ký (Register)</button>
-    <button type="button" class="btn-demo-view active-demo" id="btn-demo-dashboard" onclick="showScreenView('dashboard')">📊 3. Dashboard (Thầy Lâm)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">📄 4. Chi tiết đơn từ (Hiếu)</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ 5. Thiết lập Wi-Fi / GPS</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">👥 6. Danh sách Nhân viên</button>
-    <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">✕</button>
-  </div>
 
 </body>
 </html>

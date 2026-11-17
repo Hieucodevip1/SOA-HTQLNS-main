@@ -136,29 +136,6 @@ body {
   }
 }
 
-/* Điểm ghim tròn đỏ ở góc trên bên trái card */
-.card-pin-indicator {
-  position: absolute;
-  top: -14px;
-  left: -14px;
-  width: 36px;
-  height: 36px;
-  background: #ffffff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  z-index: 12;
-}
-
-.card-pin-dot {
-  width: 20px;
-  height: 20px;
-  background: #d84349;
-  border-radius: 50%;
-}
-
 .auth-card-header {
   text-align: center;
   margin-bottom: 24px;
@@ -194,6 +171,10 @@ body {
   color: #1e293b;
 }
 
+.password-field {
+  padding-right: 58px;
+}
+
 .figma-pill-input:focus {
   border-color: #d84349;
   box-shadow: 0 0 0 3px rgba(216, 67, 73, 0.15);
@@ -204,14 +185,17 @@ body {
   margin-bottom: 14px;
 }
 
-.input-icon-right {
+.password-toggle {
   position: absolute;
   right: 18px;
   top: 50%;
   transform: translateY(-50%);
   cursor: pointer;
   color: #94a3b8;
-  font-size: 15px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
 }
 
 .auth-options-row {
@@ -451,12 +435,6 @@ body {
   font-weight: 600;
 }
 
-.figma-nav-icon {
-  font-size: 16px;
-  width: 20px;
-  text-align: center;
-}
-
 .sidebar-bottom-help {
   padding: 18px 20px;
   border-top: 1px solid var(--border-light);
@@ -503,7 +481,7 @@ body {
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 10px 42px 10px 16px;
+  padding: 10px 16px;
   font-size: 13px;
   outline: none;
 }
@@ -513,38 +491,20 @@ body {
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
 }
 
-.topbar-search-icon {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  font-size: 15px;
-}
-
 .topbar-right-profile {
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
-.notif-bell-btn {
+.notification-button {
   background: none;
   border: none;
-  font-size: 18px;
   cursor: pointer;
   color: #64748b;
-  position: relative;
-}
-
-.notif-badge-dot {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 7px;
-  height: 7px;
-  background: #de4b4b;
-  border-radius: 50%;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .user-info-box {
@@ -669,7 +629,7 @@ body {
 
 .metric-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   font-size: 13px;
   font-weight: 600;
@@ -926,21 +886,6 @@ body {
   display: flex;
   gap: 12px;
 }
-
-.step-icon-circle {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  flex-shrink: 0;
-  font-weight: 700;
-}
-
-.step-icon-blue { background: #3b82f6; color: #ffffff; }
-.step-icon-red { background: #ef4444; color: #ffffff; }
 
 .step-content {
   font-size: 12px;
