@@ -2050,6 +2050,7 @@ async function loadEmployeesData() {
       }
     }
   });
+  }
 
   renderEmployeesTable(state.employees);
 }
