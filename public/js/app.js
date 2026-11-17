@@ -2217,69 +2217,141 @@ async function loadAttendanceHistoryData() {
 }
 
 // Nạp lịch sử chấm công cá nhân (kết nối API GET /api/attendance)
+// Nạp lịch sử chấm công cá nhân (kết nối endpoint mới GET /api/v1/attendances/history)
 async function loadMyAttendanceData() {
   const tbody = document.getElementById('myAttendanceTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 15px;">Đang nạp dữ liệu chấm công cá nhân...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">Đang tải lịch sử chấm công cá nhân...</td></tr>`;
+
+  // Đọc các giá trị bộ lọc
+  const now = new Date();
+  const monthSelect = document.getElementById('myAttFilterMonth');
+  const yearSelect = document.getElementById('myAttFilterYear');
+  const statusSelect = document.getElementById('myAttFilterStatus');
+
+  const month = monthSelect ? monthSelect.value : (now.getMonth() + 1);
+  const year = yearSelect ? yearSelect.value : now.getFullYear();
+  const status = statusSelect ? statusSelect.value : 'ALL';
 
   let records = [];
+  let summaryMeta = null;
+
   try {
-    const res = await apiCall('/api/attendance');
-    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-      records = res.data.map(r => ({
-        id: r.id,
-        work_date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
-        date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : 'Hôm nay',
-        in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-        out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-        duration: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time ? 'Đang trong ca' : '-'),
-        type: r.check_in_method === 'WIFI' ? 'Wi-Fi Office' : (r.check_in_method === 'GPS' ? 'GPS Mobile' : (r.location_name || 'Văn phòng')),
-        status: r.status,
-        late_minutes: r.late_minutes || 0,
-        adj_id: r.adjustment_id || null,
-        adj_reason: r.adjustment_reason || null,
-        adj_status: r.adjustment_status || null
-      }));
+    const url = `/api/v1/attendances/history?month=${month}&year=${year}&status=${status}`;
+    const res = await apiCall(url);
+
+    if (res && res.success) {
+      records = Array.isArray(res.data) ? res.data : [];
+      summaryMeta = res.meta || null;
     }
   } catch (err) {
-    console.warn('Lỗi gọi API attendance cá nhân, sử dụng dữ liệu mặc định:', err.message);
+    console.warn('Lỗi gọi API /api/v1/attendances/history, thử lại fallback:', err.message);
+  }
+
+  // Cập nhật các thẻ tóm tắt KPI đầu trang
+  const cardWorkDays = document.getElementById('myAttSummaryWorkDays');
+  const cardWorkHours = document.getElementById('myAttSummaryWorkHours');
+  const cardExceptions = document.getElementById('myAttSummaryExceptions');
+  const cardExceptionsNote = document.getElementById('myAttSummaryExceptionsNote');
+
+  if (summaryMeta?.summary) {
+    const sum = summaryMeta.summary;
+    if (cardWorkDays) cardWorkDays.innerText = `${sum.totalWorkDays} ngày`;
+    if (cardWorkHours) cardWorkHours.innerText = `${sum.totalWorkingHours} giờ`;
+    if (cardExceptions) cardExceptions.innerText = `${sum.totalExceptions} lần`;
+    if (cardExceptionsNote) {
+      cardExceptionsNote.innerText = `${sum.lateCount} đi muộn • ${sum.earlyLeaveCount} về sớm • ${sum.missingCheckoutCount} thiếu check-out`;
+    }
+  } else {
+    // Fallback tính toán từ records
+    const totalDays = records.filter(r => ['ON_TIME', 'LATE', 'EARLY_LEAVE', 'MISSING_CHECKOUT'].includes(r.status)).length;
+    const totalHours = records.reduce((acc, cur) => acc + (Number(cur.workingHours) || 0), 0);
+    const exceptions = records.filter(r => ['LATE', 'EARLY_LEAVE', 'MISSING_CHECKOUT', 'LATE_AND_EARLY'].includes(r.status)).length;
+
+    if (cardWorkDays) cardWorkDays.innerText = `${totalDays} ngày`;
+    if (cardWorkHours) cardWorkHours.innerText = `${totalHours.toFixed(1)} giờ`;
+    if (cardExceptions) cardExceptions.innerText = `${exceptions} lần`;
+  }
+
+  // Nếu tài khoản mới chưa gán phòng ban -> thông báo rõ ràng
+  if (summaryMeta?.unassigned) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: #b45309; padding: 30px; background: #fffbeb;">
+          <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">⚠️ Bạn chưa thuộc phòng ban/tổ chức nào</div>
+          <div style="font-size: 13px; color: #78350f; max-width: 500px; margin: 0 auto; line-height: 1.5;">
+            Vui lòng nhập mã mời (Invite Code) từ Quản lý của bạn tại Sảnh chờ hoặc bấm chấp nhận thư mời để kích hoạt bảng chấm công cá nhân.
+          </div>
+        </td>
+      </tr>
+    `;
+    checkTodayAttendanceStatus();
+    return;
   }
 
   if (!records.length) {
-    records = [
-      { id: 'my-1', date: '30/10/2026', work_date: '30/10/2026', in: '07:55', out: '16:05', duration: '8h 10m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-2', date: '29/10/2026', work_date: '29/10/2026', in: '08:00', out: '16:15', duration: '8h 15m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-3', date: '28/10/2026', work_date: '28/10/2026', in: '08:12', out: '16:30', duration: '8h 18m', type: 'GPS Mobile', status: 'LATE', late_minutes: 12, adj_status: null },
-      { id: 'my-4', date: '27/10/2026', work_date: '27/10/2026', in: '07:52', out: '16:00', duration: '8h 08m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null },
-      { id: 'my-5', date: '26/10/2026', work_date: '26/10/2026', in: '07:48', out: '16:05', duration: '8h 17m', type: 'Wi-Fi Office', status: 'ON_TIME', late_minutes: 0, adj_status: null }
-    ];
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: #64748b; padding: 24px;">
+          Không tìm thấy bản ghi chấm công nào phù hợp với bộ lọc Tháng ${month}/${year}.
+        </td>
+      </tr>
+    `;
+    checkTodayAttendanceStatus();
+    return;
   }
 
   tbody.innerHTML = records.map(r => {
-    let statusBadge = '<span class="badge-status badge-approved">Đúng giờ</span>';
-    let adjCell = '<span style="color: #94a3b8;">-</span>';
-
+    // 1. Huy hiệu trạng thái
+    let statusBadge = '<span class="badge-status badge-approved">🟢 Đúng giờ</span>';
     if (r.status === 'LATE') {
-      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
-      if (r.adj_status === 'APPROVED') {
-        adjCell = '<span class="badge-status badge-approved">✓ Đã duyệt giải trình</span>';
-      } else if (r.adj_status === 'PENDING') {
-        adjCell = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Chờ duyệt giải trình</span>';
-      } else {
-        adjCell = `<button class="btn-primary-blue" style="padding: 4px 10px; font-size: 11.5px; border-radius: 6px;" onclick="openSubmitAdjustmentModal('${r.id || ''}', '${r.date}', '${r.in}')">📝 Gửi giải trình</button>`;
-      }
-    } else if (r.status === 'LEAVE') {
-      statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706; font-weight:700;">🟡 Đi muộn (${r.lateMinutes || 0}p)</span>`;
+    } else if (r.status === 'EARLY_LEAVE') {
+      statusBadge = `<span class="badge-status" style="background:#fef9c3; color:#a16207; font-weight:700;">🟠 Về sớm (${r.earlyLeaveMinutes || 0}p)</span>`;
+    } else if (r.status === 'LATE_AND_EARLY') {
+      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#c2410c; font-weight:700;">🔴 Đi muộn & Về sớm</span>`;
+    } else if (r.status === 'MISSING_CHECKOUT') {
+      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🔴 Thiếu check-out</span>`;
+    } else if (r.status === 'ON_LEAVE') {
+      statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb; font-weight:700;">🏖️ Nghỉ phép</span>';
+    } else if (r.status === 'ABSENT') {
+      statusBadge = '<span class="badge-status" style="background:#f1f5f9; color:#64748b; font-weight:700;">⚪ Vắng mặt</span>';
     }
+
+    // 2. Ô Thao tác / Giải trình
+    let adjCell = '<span style="color: #94a3b8;">-</span>';
+    if (r.adjustmentStatus === 'APPROVED') {
+      adjCell = '<span class="badge-status badge-approved" style="font-size: 11px;">✓ Đã duyệt giải trình</span>';
+    } else if (r.adjustmentStatus === 'PENDING') {
+      adjCell = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-size: 11px;">⏳ Chờ duyệt giải trình</span>';
+    } else if (['LATE', 'EARLY_LEAVE', 'MISSING_CHECKOUT', 'LATE_AND_EARLY'].includes(r.status)) {
+      const dateForModal = r.rawWorkDate || r.workDate;
+      const inTimeForModal = r.checkInTime || '08:00:00';
+      adjCell = `
+        <button type="button" class="btn-primary-blue" style="padding: 4px 10px; font-size: 11.5px; border-radius: 6px; font-weight: 600; cursor: pointer;"
+          onclick="openSubmitAdjustmentModal('${r.id || ''}', '${dateForModal}', '${inTimeForModal}')" title="Gửi đơn giải trình ngày này">
+          📝 Gửi giải trình
+        </button>
+      `;
+    }
+
+    // 3. Vị trí và khoảng cách GPS
+    const distText = r.distanceMeters !== null && r.distanceMeters !== undefined ? `${r.distanceMeters}m` : '-';
+    const methodBadge = r.checkInMethod === 'WIFI'
+      ? `<span class="badge-status" style="background:#eff6ff; color:#1d4ed8; font-size: 11px;">📶 Wi-Fi</span>`
+      : `<span class="badge-status" style="background:#f0fdf4; color:#15803d; font-size: 11px;">📍 GPS (${distText})</span>`;
+
+    const workingHoursText = r.workingHours ? `<strong>${r.workingHours}h</strong>` : '<span style="color:#94a3b8;">-</span>';
+    const checkOutText = r.checkOutTime || '<span style="color:#ef4444; font-weight:600;">Chưa ra ca</span>';
 
     return `
       <tr>
-        <td><strong>${r.date}</strong></td>
-        <td>${r.in}</td>
-        <td>${r.out}</td>
-        <td>${r.duration}</td>
-        <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${r.type}</span></td>
+        <td><strong>${r.workDate}</strong></td>
+        <td>${r.checkInTime || '-'}</td>
+        <td>${checkOutText}</td>
+        <td>${methodBadge}</td>
+        <td>${workingHoursText}</td>
         <td>${statusBadge}</td>
         <td style="text-align: center;">${adjCell}</td>
       </tr>

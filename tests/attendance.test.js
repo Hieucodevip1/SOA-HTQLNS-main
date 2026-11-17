@@ -29,6 +29,13 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     role: 'EMPLOYEE'
   });
 
+  const defaultEmpToken = jwt.signToken({
+    userId: 'u_emp_default',
+    empId: 'e0000001-0000-0000-0000-000000000004',
+    username: 'employee',
+    role: 'EMPLOYEE'
+  });
+
   before(async () => {
     // Khởi chạy attendance-service trên cổng kiểm thử độc lập :3103
     attProcess = fork(path.resolve(__dirname, '..', 'services', 'attendance-service', 'index.js'), [], {
@@ -265,5 +272,114 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     const data = await resWithKey.json();
     assert.strictEqual(data.success, true);
     assert.ok(Array.isArray(data.data));
+  });
+
+  // ============================================================================
+  // TÍNH NĂNG MỚI: LỊCH SỬ CHẤM CÔNG CÁ NHÂN (GET /api/v1/attendances/history)
+  // ============================================================================
+
+  // 13. Lấy lịch sử chấm công cá nhân với cấu trúc chuẩn SOA & camelCase
+  test('Lấy lịch sử chấm công cá nhân GET /api/v1/attendances/history chuẩn SOA', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history`, {
+      headers: {
+        Authorization: `Bearer ${defaultEmpToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000004',
+        'x-user-role': 'EMPLOYEE'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data), 'data phải là mảng');
+    assert.ok(body.data.length > 0, 'Phải có bản ghi công');
+
+    const first = body.data[0];
+    assert.ok(first.workDate, 'Phải có workDate định dạng dd/MM/yyyy');
+    assert.match(first.workDate, /^\d{2}\/\d{2}\/\d{4}$/, 'workDate phải đúng định dạng dd/MM/yyyy');
+    assert.ok(first.checkInTime, 'Phải có checkInTime');
+    assert.match(first.checkInTime, /^\d{2}:\d{2}:\d{2}$/, 'checkInTime phải đúng định dạng HH:mm:ss');
+    assert.ok(typeof first.distanceMeters === 'number', 'distanceMeters phải là số mét làm tròn');
+    assert.ok(first.status, 'Phải có trường status');
+    assert.ok(first.statusLabel, 'Phải có nhãn tiếng Việt statusLabel');
+
+    // Kiểm tra các trường summary trong meta
+    assert.ok(body.meta, 'Phải có meta');
+    assert.ok(body.meta.summary, 'Phải có meta.summary');
+    assert.ok(typeof body.meta.summary.totalWorkDays === 'number', 'totalWorkDays phải là số');
+    assert.ok(typeof body.meta.summary.totalWorkingHours === 'number', 'totalWorkingHours phải là số');
+  });
+
+  // 14. Lọc lịch sử chấm công theo Tháng và Năm (?month=11&year=2026)
+  test('Lọc lịch sử chấm công theo tháng & năm (?month=11&year=2026)', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history?month=11&year=2026`, {
+      headers: {
+        Authorization: `Bearer ${defaultEmpToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000004',
+        'x-user-role': 'EMPLOYEE'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.meta.month, 11);
+    assert.strictEqual(body.meta.year, 2026);
+    assert.ok(body.data.every(r => r.workDate.endsWith('/11/2026')), 'Toàn bộ kết quả phải thuộc tháng 11/2026');
+  });
+
+  // 15. Cô lập dữ liệu cá nhân: Ngăn chặn xem trộm công của nhân viên khác (HTTP 403)
+  test('Cô lập dữ liệu cá nhân: Chặn xem trộm công của nhân viên khác (HTTP 403)', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history?employeeId=e0000001-0000-0000-0000-000000000099`, {
+      headers: {
+        Authorization: `Bearer ${defaultEmpToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000004',
+        'x-user-role': 'EMPLOYEE'
+      }
+    });
+
+    assert.strictEqual(res.status, 403);
+    const body = await res.json();
+    assert.strictEqual(body.success, false);
+    assert.ok(body.error.includes('không có quyền truy cập'), 'Phải thông báo không có quyền');
+  });
+
+  // 16. Xử lý trường hợp thiếu check-out (MISSING_CHECKOUT)
+  test('Xử lý bản ghi thiếu check-out tự động gán MISSING_CHECKOUT', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history?month=11&year=2026`, {
+      headers: {
+        Authorization: `Bearer ${defaultEmpToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000004',
+        'x-user-role': 'EMPLOYEE'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    const missingRecord = body.data.find(r => r.workDate === '05/11/2026');
+    assert.ok(missingRecord, 'Phải tìm thấy bản ghi ngày 05/11/2026');
+    assert.strictEqual(missingRecord.status, 'MISSING_CHECKOUT');
+    assert.strictEqual(missingRecord.statusLabel, 'Thiếu check-out');
+    assert.strictEqual(missingRecord.checkOutTime, null);
+    assert.ok(body.meta.summary.missingCheckoutCount >= 1, 'missingCheckoutCount phải >= 1');
+  });
+
+  // 17. Tài khoản nhân viên mới chưa có phòng ban trả về mảng rỗng []
+  test('Tài khoản mới chưa có phòng ban trả về mảng rỗng [] và unassigned: true', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history`, {
+      headers: {
+        Authorization: `Bearer ${employeeToken}`,
+        'x-user-id': 'emp-unassigned-new',
+        'x-user-role': 'EMPLOYEE',
+        'x-test-unassigned': 'true'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.deepStrictEqual(body.data, []);
+    assert.strictEqual(body.meta.unassigned, true);
+    assert.strictEqual(body.meta.total, 0);
   });
 });

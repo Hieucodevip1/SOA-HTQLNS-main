@@ -3455,42 +3455,94 @@ input:checked + .slider:before {
           <!-- 3 THẺ TỔNG HỢP CÔNG CÁ NHÂN -->
           <div class="metrics-row-4" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Ngày công tháng này</span><span>📅</span></div>
-              <div class="metric-value-huge metric-value-green">22 / 24</div>
-              <div class="metric-footer-note">Đạt 91.6% chỉ tiêu ngày công</div>
+              <div class="metric-header"><span>Tổng ngày công trong tháng</span><span>📅</span></div>
+              <div class="metric-value-huge metric-value-green" id="myAttSummaryWorkDays">--</div>
+              <div class="metric-footer-note" id="myAttSummaryWorkDaysNote">Số ngày công thực tế ghi nhận</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Đi muộn trong tháng</span><span>⏰</span></div>
-              <div class="metric-value-huge metric-value-orange">01 lần</div>
-              <div class="metric-footer-note">Tổng thời gian trễ: 12 phút</div>
+              <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏳</span></div>
+              <div class="metric-value-huge metric-value-blue" id="myAttSummaryWorkHours">--</div>
+              <div class="metric-footer-note" id="myAttSummaryWorkHoursNote">Tích lũy giờ làm trong tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Quỹ phép còn lại</span><span>🏖️</span></div>
-              <div class="metric-value-huge metric-value-blue">11 ngày</div>
-              <div class="metric-footer-note">Phép năm 2026: 12 ngày / năm</div>
+              <div class="metric-header"><span>Đi muộn / Về sớm / Thiếu công</span><span>⚠️</span></div>
+              <div class="metric-value-huge metric-value-orange" id="myAttSummaryExceptions">--</div>
+              <div class="metric-footer-note" id="myAttSummaryExceptionsNote">Số lần cần giải trình công</div>
             </div>
           </div>
 
           <div class="figma-white-card">
-            <div class="card-title-flex">
-              <div class="card-title-text">Nhật ký chấm công gần nhất</div>
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 14px; margin-bottom: 16px;">
+              <div>
+                <div class="card-title-text">Lịch sử chấm công cá nhân</div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Nhật ký điểm danh vào/ra, vị trí GPS và trạng thái chuyên cần</div>
+              </div>
+
+              <!-- BỘ LỌC THÁNG/NĂM & TRẠNG THÁI -->
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Tháng:</span>
+                  <select id="myAttFilterMonth" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;" onchange="loadMyAttendanceData()">
+                    <option value="1">Tháng 01</option>
+                    <option value="2">Tháng 02</option>
+                    <option value="3">Tháng 03</option>
+                    <option value="4">Tháng 04</option>
+                    <option value="5">Tháng 05</option>
+                    <option value="6">Tháng 06</option>
+                    <option value="7">Tháng 07</option>
+                    <option value="8">Tháng 08</option>
+                    <option value="9">Tháng 09</option>
+                    <option value="10">Tháng 10</option>
+                    <option value="11" selected>Tháng 11</option>
+                    <option value="12">Tháng 12</option>
+                  </select>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Năm:</span>
+                  <select id="myAttFilterYear" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;" onchange="loadMyAttendanceData()">
+                    <option value="2025">2025</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                  </select>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Trạng thái:</span>
+                  <select id="myAttFilterStatus" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;" onchange="loadMyAttendanceData()">
+                    <option value="ALL" selected>Tất cả trạng thái</option>
+                    <option value="ON_TIME">Đúng giờ</option>
+                    <option value="LATE">Đi muộn</option>
+                    <option value="EARLY_LEAVE">Về sớm</option>
+                    <option value="MISSING_CHECKOUT">Thiếu check-out</option>
+                  </select>
+                </div>
+
+                <button type="button" class="btn-figma-dark" onclick="loadMyAttendanceData()" style="padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 9999px; cursor: pointer;" title="Tải lại bảng công">
+                  🔄 Làm mới
+                </button>
+              </div>
             </div>
-            <table class="figma-table">
-              <thead>
-                <tr>
-                  <th>Ngày</th>
-                  <th>Giờ vào</th>
-                  <th>Giờ ra</th>
-                  <th>Thời lượng</th>
-                  <th>Phương thức</th>
-                  <th>Trạng thái</th>
-                  <th style="text-align: center;">Thao tác / Giải trình</th>
-                </tr>
-              </thead>
-              <tbody id="myAttendanceTableBody">
-                <!-- Nạp qua loadMyAttendanceData() -->
-              </tbody>
-            </table>
+
+            <!-- BẢNG CHI TIẾT LỊCH SỬ CHẤM CÔNG -->
+            <div style="overflow-x: auto;">
+              <table class="figma-table">
+                <thead>
+                  <tr>
+                    <th>Ngày làm việc</th>
+                    <th>Giờ vào</th>
+                    <th>Giờ ra</th>
+                    <th>Vị trí / GPS</th>
+                    <th>Tổng giờ công</th>
+                    <th>Trạng thái</th>
+                    <th style="text-align: center;">Hành động / Giải trình</th>
+                  </tr>
+                </thead>
+                <tbody id="myAttendanceTableBody">
+                  <!-- Nạp qua loadMyAttendanceData() -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
