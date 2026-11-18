@@ -32,9 +32,10 @@ const memoryFallbackEmployees = [
 ];
 
 const memoryFallbackDepartments = [
-  { id: 'd0000001-0000-0000-0000-000000000001', code: 'PB-BGD', name: 'Ban Giám Đốc', manager_id: 'e0000001-0000-0000-0000-000000000001' },
-  { id: 'd0000001-0000-0000-0000-000000000002', code: 'PB-HR', name: 'Phòng Hành chính Nhân sự', manager_id: 'e0000001-0000-0000-0000-000000000002' },
-  { id: 'd0000001-0000-0000-0000-000000000003', code: 'PB-TECH', name: 'Phòng Công nghệ & Phần mềm', manager_id: 'e0000001-0000-0000-0000-000000000003' }
+  { id: 'd0000001-0000-0000-0000-000000000001', code: 'PB-BGD', name: 'Ban Giám Đốc', manager_id: 'e0000001-0000-0000-0000-000000000001', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000002', code: 'PB-HR', name: 'Phòng Hành chính Nhân sự', manager_id: 'e0000001-0000-0000-0000-000000000002', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000003', code: 'PB-TECH', name: 'Phòng Công nghệ & Phần mềm', manager_id: 'e0000001-0000-0000-0000-000000000003', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000004', code: 'PB-SALES', name: 'Phòng Kinh doanh & Marketing', manager_id: null, status: 'ACTIVE' }
 ];
 
 function formatTime(val) {
@@ -501,13 +502,19 @@ const getStatsHandler = async (req, res, next) => {
       ots = [];
     }
 
+    let targetDepartments = [];
     let scopedEmployees = [];
     if (isManager) {
-      const managedDeptIds = allDepartments.filter((d) => d.manager_id === callerUserId).map((d) => d.id);
+      const managerUser = allEmployees.find((e) => e.id === callerUserId);
+      const managerDeptId = managerUser ? managerUser.department_id : null;
+      targetDepartments = allDepartments.filter((d) => d.manager_id === callerUserId || (managerDeptId && d.id === managerDeptId));
+      const targetDeptIds = new Set(targetDepartments.map((d) => d.id));
       scopedEmployees = allEmployees.filter(
-        (e) => (e.manager_id && e.manager_id === callerUserId) || (e.department_id && managedDeptIds.includes(e.department_id))
+        (e) => (e.manager_id && e.manager_id === callerUserId) || (e.department_id && targetDeptIds.has(e.department_id))
       );
     } else {
+      // ADMIN / HR: Tổng hợp tất cả các phòng ban hiện có trong hệ thống
+      targetDepartments = allDepartments;
       scopedEmployees = allEmployees;
     }
 
@@ -532,8 +539,10 @@ const getStatsHandler = async (req, res, next) => {
             onTimeRate: '0%',
             lateRate: '0%',
             leaveRate: '0%',
+            attendanceRate: '0%',
             totalWorkingHours: '0 h',
             totalEmployees: 0,
+            totalStandardDays: 0,
             totalWorkDays: 0,
             totalLateCount: 0,
             totalEarlyLeaveCount: 0,
@@ -549,45 +558,38 @@ const getStatsHandler = async (req, res, next) => {
     const scopedLeaves = leaves.filter((l) => scopedEmpIds.has(l.emp_id));
     const scopedOts = ots.filter((o) => scopedEmpIds.has(o.emp_id));
 
-    const deptMap = new Map();
-    allDepartments.forEach((d) => {
-      const deptEmps = scopedEmployees.filter((e) => e.department_id === d.id);
-      if (deptEmps.length > 0) {
-        deptMap.set(d.id, {
-          id: d.id,
-          name: d.name,
-          code: d.code,
-          empCount: deptEmps.length,
-          empIds: new Set(deptEmps.map((e) => e.id))
-        });
-      }
-    });
-
     const standardDaysMultiplier = isQuarter ? 66 : 22;
     const departmentsStats = [];
 
-    deptMap.forEach((d) => {
-      const dLogs = scopedLogs.filter((l) => d.empIds.has(l.emp_id));
-      const dLeaves = scopedLeaves.filter((l) => d.empIds.has(l.emp_id));
-      const standardDays = d.empCount * standardDaysMultiplier;
+    targetDepartments.forEach((d) => {
+      const deptEmps = scopedEmployees.filter((e) => e.department_id === d.id);
+      const empIds = new Set(deptEmps.map((e) => e.id));
+      const empCount = deptEmps.length;
+      const standardDays = empCount * standardDaysMultiplier;
+      const dLogs = scopedLogs.filter((l) => empIds.has(l.emp_id));
+      const dLeaves = scopedLeaves.filter((l) => empIds.has(l.emp_id));
       const actualDays = dLogs.filter((l) => l.check_in_time || ['ON_TIME', 'LATE', 'EARLY_LEAVE'].includes(l.status)).length;
       const lateCount = dLogs.filter((l) => l.status === 'LATE' || Number(l.late_minutes) > 0).length;
       const leaveDays = dLeaves.reduce((acc, cur) => acc + (Number(cur.total_days) || 1), 0);
       const rateNum = standardDays > 0 ? Math.min(100, Math.round((actualDays / standardDays) * 1000) / 10) : 0;
+      const rateStr = `${rateNum}%`;
 
       departmentsStats.push({
         id: d.id,
         name: d.name,
         code: d.code,
-        empCount: d.empCount,
+        employeeCount: empCount,
+        empCount: empCount,
         standardDays,
         actualDays,
         lateCount,
         leaveDays,
-        attendanceRate: `${rateNum}%`
+        attendanceRate: rateStr,
+        onTimeRate: rateStr
       });
     });
 
+    const totalStandardDays = departmentsStats.reduce((acc, cur) => acc + cur.standardDays, 0);
     const totalWorkDays = scopedLogs.filter((l) => l.check_in_time || ['ON_TIME', 'LATE', 'EARLY_LEAVE'].includes(l.status)).length;
     const totalLateCount = scopedLogs.filter((l) => l.status === 'LATE' || Number(l.late_minutes) > 0).length;
     const totalEarlyLeaveCount = scopedLogs.filter((l) => l.status === 'EARLY_LEAVE' || Number(l.early_leave_minutes) > 0).length;
@@ -597,8 +599,8 @@ const getStatsHandler = async (req, res, next) => {
 
     const onTimeRate = totalWorkDays > 0 ? Math.round(((totalWorkDays - totalLateCount) / totalWorkDays) * 1000) / 10 : 0;
     const lateRate = totalWorkDays > 0 ? Math.round((totalLateCount / totalWorkDays) * 1000) / 10 : 0;
-    const totalStandardDays = totalEmployees * standardDaysMultiplier;
     const leaveRate = totalStandardDays > 0 ? Math.round((totalLeaveDays / totalStandardDays) * 1000) / 10 : 0;
+    const overallAttendanceRate = totalStandardDays > 0 ? Math.min(100, Math.round((totalWorkDays / totalStandardDays) * 1000) / 10) : 0;
 
     return res.json({
       success: true,
@@ -614,8 +616,10 @@ const getStatsHandler = async (req, res, next) => {
           onTimeRate: `${onTimeRate}%`,
           lateRate: `${lateRate}%`,
           leaveRate: `${leaveRate}%`,
+          attendanceRate: `${overallAttendanceRate}%`,
           totalWorkingHours: `${totalWorkingHours.toLocaleString('vi-VN')} h`,
           totalEmployees,
+          totalStandardDays,
           totalWorkDays,
           totalLateCount,
           totalEarlyLeaveCount,

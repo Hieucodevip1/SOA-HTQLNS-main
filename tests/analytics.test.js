@@ -322,4 +322,37 @@ describe('Kiểm thử Phân hệ Analytics Service (:3108)', () => {
     assert.strictEqual(body.data.period, '2026-Q3');
     assert.ok(body.data.summary);
   });
+
+  // 13. Bảng tổng hợp chuyên cần theo từng phòng ban tính động 100%, không trả về số liệu mẫu hardcode 40/880
+  test('Bảng tổng hợp chuyên cần theo phòng ban tính động 100%, không chứa dữ liệu hardcode 40/880', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data.departments), 'departments phải là mảng');
+    assert.ok(body.data.departments.length > 0, 'Phải có ít nhất 1 phòng ban');
+
+    let totalDeptEmps = 0;
+    let totalDeptStdDays = 0;
+    for (const dept of body.data.departments) {
+      assert.notStrictEqual(dept.employeeCount, 40, 'Số nhân sự phòng ban không được hardcode 40');
+      assert.notStrictEqual(dept.standardDays, 880, 'Số công chuẩn không được hardcode 880');
+      assert.strictEqual(dept.standardDays, dept.employeeCount * 22, 'Số công chuẩn phải = employeeCount * 22');
+      assert.ok(typeof dept.actualDays === 'number', 'actualDays phải là số');
+      assert.ok(typeof dept.lateCount === 'number', 'lateCount phải là số');
+      assert.ok(typeof dept.leaveDays === 'number', 'leaveDays phải là số');
+      assert.ok(typeof dept.attendanceRate === 'string', 'attendanceRate phải là chuỗi %');
+      assert.ok(!dept.attendanceRate.includes('NaN'), 'attendanceRate không được chứa NaN');
+      totalDeptEmps += dept.employeeCount;
+      totalDeptStdDays += dept.standardDays;
+    }
+
+    assert.notStrictEqual(totalDeptStdDays, 2090, 'Tổng công chuẩn toàn công ty không được hardcode 2090');
+    assert.strictEqual(totalDeptStdDays, totalDeptEmps * 22, 'Tổng công chuẩn toàn công ty phải = totalDeptEmps * 22');
+  });
 });

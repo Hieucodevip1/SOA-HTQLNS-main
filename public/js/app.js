@@ -352,18 +352,18 @@ const MOCK_EMPLOYEES = [
   { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm SOA', contract_type: 'OFFICIAL', status: 'ACTIVE' },
   { id: 2, code: 'NV-002', full_name: 'Huỳnh Gia Kiệt', email: 'kiet.hg@htqlns.com', phone: '0901000002', department_name: 'Phòng Kỹ Thuật', position_title: 'Backend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
   { id: 3, code: 'NV-003', full_name: 'Nguyễn Gia Hảo', email: 'hao.ng@htqlns.com', phone: '0901000003', department_name: 'Phòng Kỹ Thuật', position_title: 'Frontend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 4, code: 'NV-004', full_name: 'Thầy Lâm (Nguyễn Thanh Lâm)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Kỹ Thuật', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 5, code: 'NV-005', full_name: 'Lê Ngọc Mai', email: 'mai.ln@htqlns.com', phone: '0901000005', department_name: 'Phòng Nhân sự', position_title: 'Chuyên viên C&B', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 6, code: 'NV-006', full_name: 'Phạm Minh Tuân', email: 'tuan.pm@htqlns.com', phone: '0901000006', department_name: 'Phòng Kinh Doanh', position_title: 'Chuyên viên Tư vấn', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 7, code: 'NV-007', full_name: 'Đỗ Thu Hà', email: 'ha.dt@htqlns.com', phone: '0901000007', department_name: 'Phòng Tài Chính - Kế Toán', position_title: 'Kế toán tiền lương', contract_type: 'OFFICIAL', status: 'ACTIVE' },
-  { id: 8, code: 'NV-008', full_name: 'Trần Hoài An', email: 'an.th@htqlns.com', phone: '0901000008', department_name: 'Phòng Kỹ Thuật', position_title: 'DevOps & QA', contract_type: 'PROBATION', status: 'ACTIVE' }
+  { id: 4, code: 'NV-004', full_name: 'Nguyễn Thanh Lâm (Quản lý)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Công nghệ & Phần mềm', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 5, code: 'NV-005', full_name: 'Lê Ngọc Mai', email: 'mai.ln@htqlns.com', phone: '0901000005', department_name: 'Phòng Hành chính Nhân sự', position_title: 'Chuyên viên C&B', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 6, code: 'NV-006', full_name: 'Phạm Minh Tuân', email: 'tuan.pm@htqlns.com', phone: '0901000006', department_name: 'Phòng Kinh doanh & Marketing', position_title: 'Chuyên viên Tư vấn', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 7, code: 'NV-007', full_name: 'Đỗ Thu Hà', email: 'ha.dt@htqlns.com', phone: '0901000007', department_name: 'Phòng Hành chính Nhân sự', position_title: 'Kế toán tiền lương', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 8, code: 'NV-008', full_name: 'Trần Hoài An', email: 'an.th@htqlns.com', phone: '0901000008', department_name: 'Phòng Công nghệ & Phần mềm', position_title: 'DevOps & QA', contract_type: 'PROBATION', status: 'ACTIVE' }
 ];
 
 const MOCK_DEPARTMENTS = [
-  { id: 1, code: 'TECH', name: 'Phòng Kỹ Thuật', manager_name: 'Thầy Lâm', employee_count: 40, description: 'Phát triển kiến trúc SOA Microservices', status: 'ACTIVE' },
-  { id: 2, code: 'HR', name: 'Phòng Nhân sự', manager_name: 'Lê Ngọc Mai', employee_count: 12, description: 'Tuyển dụng, chế độ C&B, quản lý hồ sơ', status: 'ACTIVE' },
-  { id: 3, code: 'FIN', name: 'Phòng Tài Chính - Kế Toán', manager_name: 'Đỗ Thu Hà', employee_count: 15, description: 'Bảng lương, quyết toán tài chính', status: 'ACTIVE' },
-  { id: 4, code: 'BIZ', name: 'Phòng Kinh Doanh', manager_name: 'Phạm Minh Tuân', employee_count: 28, description: 'Kinh doanh và chăm sóc đối tác', status: 'ACTIVE' }
+  { id: 'd0000001-0000-0000-0000-000000000001', code: 'PB-BGD', name: 'Ban Giám Đốc', manager_name: 'Nguyễn Quản Trị', employee_count: 1, description: 'Ban Giám Đốc điều hành', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000002', code: 'PB-HR', name: 'Phòng Hành chính Nhân sự', manager_name: 'Trần Thị Thu Hà', employee_count: 1, description: 'Tuyển dụng, chế độ C&B, quản lý hồ sơ', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000003', code: 'PB-TECH', name: 'Phòng Công nghệ & Phần mềm', manager_name: 'Nguyễn Thanh Lâm', employee_count: 2, description: 'Phát triển kiến trúc SOA Microservices', status: 'ACTIVE' },
+  { id: 'd0000001-0000-0000-0000-000000000004', code: 'PB-SALES', name: 'Phòng Kinh doanh & Marketing', manager_name: 'Chưa chỉ định', employee_count: 0, description: 'Kinh doanh và chăm sóc đối tác', status: 'ACTIVE' }
 ];
 
 // ==============================================================================
@@ -3146,23 +3146,32 @@ async function changeStatPeriod(period) {
       // Cập nhật bảng tổng hợp phòng ban
       if (tbody) {
         if (!depts.length) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 24px;">Không có nhân sự nào trong phạm vi quản lý của bạn</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 24px;">Không có dữ liệu phòng ban trong phạm vi quản lý của bạn</td></tr>`;
         } else {
-          tbody.innerHTML = depts.map(d => `
+          tbody.innerHTML = depts.map(d => {
+            const empCount = d.employeeCount ?? d.empCount ?? 0;
+            const stdDays = d.standardDays ?? 0;
+            const actDays = d.actualDays ?? 0;
+            const lateCount = d.lateCount ?? 0;
+            const leaveDays = d.leaveDays ?? 0;
+            const rateStr = d.attendanceRate || d.onTimeRate || (stdDays > 0 ? (Math.round((actDays / stdDays) * 1000) / 10) + '%' : '0%');
+            return `
             <tr>
               <td><strong>${d.name || d.code}</strong></td>
-              <td>${d.employeeCount || 0}</td>
-              <td>${(d.standardDays || 0).toLocaleString('vi-VN')} công</td>
-              <td><strong>${(d.actualDays || 0).toLocaleString('vi-VN')} công</strong></td>
-              <td><span class="badge-status" style="background: ${d.lateCount > 0 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.lateCount || 0} lượt</span></td>
-              <td>${d.leaveDays || 0} ngày</td>
-              <td><span class="badge-status badge-approved">${d.onTimeRate || '100.0%'}</span></td>
+              <td>${empCount}</td>
+              <td>${stdDays.toLocaleString('vi-VN')} công</td>
+              <td><strong>${actDays.toLocaleString('vi-VN')} công</strong></td>
+              <td><span class="badge-status" style="background: ${lateCount > 0 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${lateCount} lượt</span></td>
+              <td>${leaveDays} ngày</td>
+              <td><span class="badge-status badge-approved">${rateStr}</span></td>
             </tr>
-          `).join('');
+          `;
+          }).join('');
         }
       }
 
-      // Cập nhật dòng tổng kết (footer)
+      // Cập nhật dòng tổng kết (footer) cộng dồn động 100% từ các dòng phòng ban phía trên
+      const fTitle = document.getElementById('statFootTitle');
       const fEmp = document.getElementById('statFootEmployees');
       const fStd = document.getElementById('statFootStandardDays');
       const fAct = document.getElementById('statFootActualDays');
@@ -3170,13 +3179,22 @@ async function changeStatPeriod(period) {
       const fLeave = document.getElementById('statFootLeaveDays');
       const fRate = document.getElementById('statFootRate');
 
-      const totalStd = depts.reduce((acc, cur) => acc + (cur.standardDays || 0), 0);
-      if (fEmp) fEmp.innerText = summary.totalEmployees || 0;
-      if (fStd) fStd.innerText = `${totalStd.toLocaleString('vi-VN')} công`;
-      if (fAct) fAct.innerText = `${(summary.totalWorkDays || 0).toLocaleString('vi-VN')} công`;
-      if (fLate) fLate.innerText = `${summary.totalLateCount || 0} lượt`;
-      if (fLeave) fLeave.innerText = `${summary.totalLeaveDays || 0} ngày`;
-      if (fRate) fRate.innerText = summary.onTimeRate || '0.0%';
+      const isManager = (state.user && state.user.role === 'MANAGER');
+      if (fTitle) fTitle.innerText = isManager ? 'TỔNG CỘNG ĐỘI NHÓM' : 'TỔNG TOÀN CÔNG TY';
+
+      const sumEmployees = depts.reduce((acc, cur) => acc + (cur.employeeCount ?? cur.empCount ?? 0), 0);
+      const sumStandard = depts.reduce((acc, cur) => acc + (cur.standardDays ?? 0), 0);
+      const sumActual = depts.reduce((acc, cur) => acc + (cur.actualDays ?? 0), 0);
+      const sumLate = depts.reduce((acc, cur) => acc + (cur.lateCount ?? 0), 0);
+      const sumLeave = depts.reduce((acc, cur) => acc + (cur.leaveDays ?? 0), 0);
+      const overallRate = sumStandard > 0 ? (Math.round((sumActual / sumStandard) * 1000) / 10) + '%' : '0%';
+
+      if (fEmp) fEmp.innerText = sumEmployees;
+      if (fStd) fStd.innerText = `${sumStandard.toLocaleString('vi-VN')} công`;
+      if (fAct) fAct.innerText = `${sumActual.toLocaleString('vi-VN')} công`;
+      if (fLate) fLate.innerText = `${sumLate.toLocaleString('vi-VN')} lượt`;
+      if (fLeave) fLeave.innerText = `${sumLeave.toLocaleString('vi-VN')} ngày`;
+      if (fRate) fRate.innerText = overallRate;
 
       showToast(`Đã nạp số liệu thống kê ${periodLabel} từ Analytics Service`, 'success');
       return;
@@ -3189,6 +3207,18 @@ async function changeStatPeriod(period) {
   if (tbody) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">Không thể kết nối Analytics Service hoặc không có dữ liệu</td></tr>`;
   }
+  const fEmp = document.getElementById('statFootEmployees');
+  const fStd = document.getElementById('statFootStandardDays');
+  const fAct = document.getElementById('statFootActualDays');
+  const fLate = document.getElementById('statFootLateCount');
+  const fLeave = document.getElementById('statFootLeaveDays');
+  const fRate = document.getElementById('statFootRate');
+  if (fEmp) fEmp.innerText = '0';
+  if (fStd) fStd.innerText = '0 công';
+  if (fAct) fAct.innerText = '0 công';
+  if (fLate) fLate.innerText = '0 lượt';
+  if (fLeave) fLeave.innerText = '0 ngày';
+  if (fRate) fRate.innerText = '0%';
 }
 
 // Nạp dữ liệu hồ sơ cá nhân (Động 100%, không còn lỗi gán sẵn Phòng Kỹ Thuật)
@@ -4478,11 +4508,10 @@ function openOnboardEmployeeModal(username, fullName, email, id = '') {
           <div>
             <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">1. Phòng ban (department_id) *</label>
             <select id="onboardDept" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
-              <option value="Phòng Kỹ Thuật">Phòng Kỹ Thuật (TECH • 40 nhân sự)</option>
-              <option value="Phòng Nhân sự">Phòng Nhân sự (HR • 12 nhân sự)</option>
-              <option value="Phòng Kinh Doanh">Phòng Kinh Doanh (BIZ • 28 nhân sự)</option>
-              <option value="Phòng Tài Chính - Kế Toán">Phòng Tài Chính - Kế Toán (FIN • 15 nhân sự)</option>
-              <option value="Ban Giám Đốc">Ban Giám Đốc</option>
+              <option value="Phòng Công nghệ & Phần mềm">Phòng Công nghệ & Phần mềm (PB-TECH)</option>
+              <option value="Phòng Hành chính Nhân sự">Phòng Hành chính Nhân sự (PB-HR)</option>
+              <option value="Phòng Kinh doanh & Marketing">Phòng Kinh doanh & Marketing (PB-SALES)</option>
+              <option value="Ban Giám Đốc">Ban Giám Đốc (PB-BGD)</option>
             </select>
           </div>
 
