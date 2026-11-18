@@ -221,11 +221,38 @@ function syncUserOnboardingState() {
   }
 
   // TÀI KHOẢN MỚI TẠO HOẶC TÀI KHOẢN KHÁC:
-  // Kiểm tra xem Quản trị viên / HR đã tiếp nhận vào ban/phòng chưa
+  // 1. Nếu state.user đã có phòng ban hợp lệ từ API backend hoặc session
+  const currentDept = state.user.department || state.user.departmentName || state.user.department_name;
+  if (currentDept && currentDept !== '-' && state.user.status !== 'PENDING_ASSIGNMENT' && state.user.status !== 'PENDING') {
+    state.user.isOnboarded = true;
+    state.user.department = currentDept;
+    state.user.departmentName = currentDept;
+    let pos = state.user.position || state.user.positionTitle || 'Kỹ sư phần mềm';
+    if (pos.includes('Kỹ sư phần mềm SOA') || pos.includes('Kỹ Sư Phần Mềm SOA')) {
+      pos = 'Kỹ sư phần mềm';
+    }
+    state.user.position = pos;
+    if (!state.user.managerName) state.user.managerName = 'Nguyễn Thanh Lâm';
+    if (!state.user.officeLocation) state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+    if (!state.user.officeLatitude) state.user.officeLatitude = 13.7587;
+    if (!state.user.officeLongitude) state.user.officeLongitude = 109.2190;
+    if (!state.user.officeRadius) state.user.officeRadius = 100;
+    if (!state.user.officeSsid) state.user.officeSsid = 'QNU-Office';
+    if (!state.user.officeBssid) state.user.officeBssid = 'A4:5E:60:12:34:01';
+    if (!state.user.shiftName) state.user.shiftName = 'Ca Hành Chính';
+    if (!state.user.shiftStart) state.user.shiftStart = '08:00';
+    if (!state.user.shiftEnd) state.user.shiftEnd = '17:30';
+    if (state.user.leaveBalance === undefined || state.user.leaveBalance === 0) state.user.leaveBalance = 12.0;
+    if (!state.user.baseSalary) state.user.baseSalary = 12000000;
+    return;
+  }
+
+  // 2. Kiểm tra xem Quản trị viên / HR đã tiếp nhận vào ban/phòng chưa trong local assignment
   const assignment = getUserAssignment(username, userId);
   if (assignment && assignment.status === 'ACTIVE') {
     state.user.isOnboarded = true;
     state.user.department = assignment.department;
+    state.user.departmentName = assignment.department;
     let pos = assignment.position;
     if (pos && (pos.includes('Kỹ sư phần mềm SOA') || pos.includes('Kỹ Sư Phần Mềm SOA'))) {
       pos = 'Kỹ sư phần mềm';
@@ -247,6 +274,7 @@ function syncUserOnboardingState() {
     // Tài khoản mới đăng ký chưa được tiếp nhận vào ban/phòng -> HOÀN TOÀN TRỐNG DỮ LIỆU PHÒNG BAN!
     state.user.isOnboarded = false;
     state.user.department = null;
+    state.user.departmentName = null;
     state.user.position = null;
     state.user.managerName = null;
     state.user.officeLocation = null;
@@ -261,6 +289,87 @@ function syncUserOnboardingState() {
     state.user.leaveBalance = 0.0;
     state.user.baseSalary = 0;
   }
+}
+
+/**
+ * Lấy hồ sơ tài khoản mới nhất từ Backend (GET /api/v1/employees/me hoặc /api/v1/auth/me)
+ * Tự động cập nhật currentUser, localStorage và mở khóa nút chấm công ngay khi được gán phòng ban.
+ */
+async function fetchCurrentUserProfile() {
+  if (!state.token) return null;
+  try {
+    let profile = null;
+    try {
+      const res = await apiCall('/api/v1/employees/me');
+      if (res && res.success && res.data) {
+        profile = res.data;
+      }
+    } catch (_) {}
+
+    if (!profile || !profile.id) {
+      try {
+        const res = await apiCall('/api/v1/auth/me');
+        if (res && res.success && res.data) {
+          profile = res.data;
+        }
+      } catch (_) {
+        try {
+          const res = await apiCall('/api/auth/me');
+          if (res && res.success && res.data) {
+            profile = res.data;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (profile && (profile.id || profile.username || profile.email)) {
+      const deptName = profile.departmentName || profile.department_name || profile.department || profile.deptName;
+      const deptId = profile.departmentId || profile.department_id;
+      const posTitle = profile.positionTitle || profile.position_title || profile.position;
+      const status = profile.status || state.user?.status || 'ACTIVE';
+      const isNowOnboarded = Boolean(deptName && deptName !== '-' && status !== 'PENDING_ASSIGNMENT' && status !== 'PENDING');
+
+      state.user = {
+        ...state.user,
+        ...profile,
+        id: profile.id || state.user?.id,
+        empId: profile.empId || profile.emp_id || profile.id || state.user?.empId,
+        username: profile.username || state.user?.username,
+        email: profile.email || state.user?.email,
+        fullName: profile.fullName || profile.full_name || state.user?.fullName,
+        department: deptName || state.user?.department || null,
+        departmentName: deptName || state.user?.departmentName || null,
+        departmentId: deptId || state.user?.departmentId || null,
+        department_id: deptId || state.user?.department_id || null,
+        position: posTitle || state.user?.position || null,
+        positionTitle: posTitle || state.user?.positionTitle || null,
+        status: status,
+        isOnboarded: isNowOnboarded
+      };
+
+      if (isNowOnboarded) {
+        if (!state.user.officeLocation) state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
+        if (!state.user.shiftName) state.user.shiftName = 'Ca Hành Chính';
+        if (!state.user.shiftStart) state.user.shiftStart = '08:00';
+        if (!state.user.shiftEnd) state.user.shiftEnd = '17:30';
+      }
+
+      safeSetStorage('htqlns_user', JSON.stringify(state.user));
+      syncUserOnboardingState();
+      updateTopbarUser();
+      applyRoleBasedUI();
+      checkTodayAttendanceStatus();
+
+      const banner = document.getElementById('dashEmpOnboardingBanner');
+      if (banner) banner.style.display = isNowOnboarded ? 'none' : 'block';
+
+      return state.user;
+    }
+  } catch (err) {
+    console.warn('[AUTH] Lỗi đồng bộ hồ sơ người dùng:', err.message);
+  }
+  return state.user;
+}
 }
 // Sinh khóa lưu trữ riêng biệt theo mã/tên người dùng
 function getUserStorageKey(entity) {
@@ -487,6 +596,9 @@ async function handleLoginSubmit(e) {
     safeSetStorage('htqlns_token', state.token);
     safeSetStorage('htqlns_user', JSON.stringify(state.user));
     safeSetStorage('htqlns_current_view', 'dashboard');
+
+    // Đồng bộ ngay hồ sơ tài khoản mới nhất từ backend (phòng ban, ca làm việc, chức danh)
+    await fetchCurrentUserProfile();
 
     showToast(`Đăng nhập thành công! Xin chào ${state.user.fullName || state.user.username}`, 'success');
     initPortalDashboard('dashboard');
@@ -5013,12 +5125,18 @@ function initPortalDashboard(targetView = null) {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').style.display = 'flex';
 
+  syncUserOnboardingState();
   updateTopbarUser();
   applyRoleBasedUI();
 
   const savedView = targetView || safeGetStorage('htqlns_current_view', 'dashboard');
   navigateToView(savedView);
   checkTodayAttendanceStatus();
+
+  // Tự động kiểm tra và đồng bộ hồ sơ mới nhất từ Backend khi vào Dashboard
+  if (savedView === 'dashboard') {
+    fetchCurrentUserProfile().catch(() => {});
+  }
 }
 
 // ==============================================================================
@@ -5040,6 +5158,15 @@ window.addEventListener('DOMContentLoaded', () => {
   if (state.token && state.user && isTokenValid(state.token)) {
     const lastView = safeGetStorage('htqlns_current_view', 'dashboard');
     initPortalDashboard(lastView);
+
+    // Bắt buộc gọi API lấy hồ sơ mới nhất từ backend khi F5 / mở lại trang
+    fetchCurrentUserProfile().then(() => {
+      if (lastView === 'dashboard') {
+        const isEmployee = state.user.role === 'EMPLOYEE' || state.user.username === 'employee';
+        if (isEmployee) loadEmployeeDashboardData();
+        else loadDashboardData();
+      }
+    });
   } else {
     // Nếu chưa đăng nhập hoặc token đã hết hạn -> hiển thị màn hình Đăng nhập
     showScreenView('login');

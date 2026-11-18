@@ -102,6 +102,17 @@
       ]
     },
     {
+      "prefix": "/api/v1/auth/me",
+      "service": "auth-service",
+      "rules": [
+        {
+          "methods": ["GET", "PUT"],
+          "auth": true,
+          "roles": ["*"]
+        }
+      ]
+    },
+    {
       "prefix": "/api/auth/change-password",
       "service": "auth-service",
       "rules": [

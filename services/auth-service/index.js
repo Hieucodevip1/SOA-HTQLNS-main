@@ -122,45 +122,75 @@ async function enrichUserProfile(user, useDb) {
   let deptName = null;
   let departmentId = null;
   let managerId = null;
+  let position = user.position || null;
 
-  if (useDb && user.emp_id) {
+  if (useDb) {
     try {
       const empRows = await db.query(
-        `SELECT e.code, e.full_name, e.department_id, e.manager_id, d.name AS dept_name 
+        `SELECT e.id, e.code, e.full_name, e.department_id, e.manager_id, e.position_id, e.status, d.name AS dept_name, p.title AS position_title 
          FROM htqlns_organization.employees e 
          LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id 
-         WHERE e.id = ? LIMIT 1`,
-        [user.emp_id]
+         LEFT JOIN htqlns_organization.positions p ON e.position_id = p.id
+         WHERE (e.id = ? AND ? IS NOT NULL) OR (e.email = ? AND ? IS NOT NULL) OR (e.code = ? AND ? IS NOT NULL) LIMIT 1`,
+        [user.emp_id, user.emp_id, user.email, user.email, user.username, user.username]
       );
       if (empRows.length > 0) {
-        fullName = empRows[0].full_name;
+        fullName = empRows[0].full_name || fullName;
         empCode = empRows[0].code;
         deptName = empRows[0].dept_name;
         departmentId = empRows[0].department_id || null;
         managerId = empRows[0].manager_id || null;
+        position = empRows[0].position_title || position;
+        if (!user.emp_id) {
+          user.emp_id = empRows[0].id;
+          try {
+            await db.query('UPDATE users SET emp_id = ? WHERE id = ?', [empRows[0].id, user.id], DB_NAME);
+          } catch {}
+        }
       }
     } catch (e) {}
+  } else {
+    if (user.departmentId || user.departmentName || user.department_id || user.deptName) {
+      departmentId = user.departmentId || user.department_id;
+      deptName = user.departmentName || user.deptName;
+      managerId = user.managerId || user.manager_id;
+      position = user.position || user.positionTitle;
+    }
   }
 
-  if (!empCode) {
-    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; departmentId = 'd0000001-0000-0000-0000-000000000001'; }
-    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; }
-    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; managerId = 'e0000001-0000-0000-0000-000000000003'; }
-    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Hành chính Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; }
+  if (deptName === 'Phòng Nhân sự' || (deptName && deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+    deptName = 'Phòng Hành chính Nhân sự';
+  }
+
+  if (!deptName && !departmentId) {
+    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; departmentId = 'd0000001-0000-0000-0000-000000000001'; position = 'Tổng Giám Đốc Điều Hành'; }
+    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; position = 'Trưởng Nhóm Kỹ Thuật (Tech Lead)'; }
+    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; managerId = 'e0000001-0000-0000-0000-000000000003'; position = 'Kỹ Sư Phần Mềm'; }
+    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Hành chính Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; position = 'Trưởng Phòng Nhân Sự'; }
   }
 
   const isAssigned = Boolean(departmentId || managerId);
 
   return {
     id: user.id,
-    empId: user.emp_id,
+    empId: user.emp_id || user.id,
+    emp_id: user.emp_id || user.id,
     empCode,
+    employeeCode: empCode,
     username: user.username,
     fullName,
+    full_name: fullName,
     deptName: deptName || null,
     departmentName: deptName || null,
+    department_name: deptName || null,
+    department: deptName || null,
     departmentId: departmentId || null,
+    department_id: departmentId || null,
+    position: position || null,
+    positionTitle: position || null,
+    position_title: position || null,
     managerId: managerId || null,
+    manager_id: managerId || null,
     officeId: null,
     shiftId: null,
     isAssigned,
@@ -474,7 +504,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 // ==============================================================================
 // 4. ENDPOINT: Lấy thông tin tài khoản hiện tại (GET /api/auth/me)
 // ==============================================================================
-app.get('/api/auth/me', async (req, res) => {
+const getMeHandler = async (req, res) => {
   try {
     const currentUser = req.user;
     if (!currentUser) {
@@ -490,6 +520,44 @@ app.get('/api/auth/me', async (req, res) => {
     const userProfile = await enrichUserProfile(user, useDb);
 
     return success(res, userProfile);
+  } catch (err) {
+    return error(res, err.message);
+  }
+};
+
+app.get('/api/auth/me', getMeHandler);
+app.get('/api/v1/auth/me', getMeHandler);
+
+// Endpoint nội bộ đồng bộ dữ liệu nhân viên từ organization-service
+app.post('/internal/auth/sync-employee', async (req, res) => {
+  try {
+    const { id, empId, code, email, fullName, departmentId, departmentName, position, status } = req.body || {};
+    const useDb = await isDbAvailable();
+    if (useDb) {
+      try {
+        if (id && (email || code)) {
+          await db.query(
+            'UPDATE users SET emp_id = ? WHERE (email = ? OR username = ?) AND (emp_id IS NULL OR emp_id = "")',
+            [id, email || '', code || ''],
+            DB_NAME
+          );
+        }
+      } catch (err) {
+        console.warn('[AUTH-SYNC] Lỗi cập nhật DB:', err.message);
+      }
+    }
+    for (const [uid, u] of memoryUsers.entries()) {
+      if ((id && (u.emp_id === id || u.id === id)) || (email && u.email === email) || (code && (u.username === code || u.code === code))) {
+        if (id) u.emp_id = id;
+        if (fullName) u.full_name = fullName;
+        if (departmentId) u.departmentId = departmentId;
+        if (departmentName) u.departmentName = departmentName;
+        if (position) u.position = position;
+        if (status) u.status = status;
+        u.isAssigned = Boolean(u.departmentId || departmentId);
+      }
+    }
+    return success(res, { synced: true }, 200, 'Đồng bộ thông tin nhân sự thành công');
   } catch (err) {
     return error(res, err.message);
   }
@@ -850,6 +918,47 @@ app.use(
           memoryUsers.delete(uid);
         }
       }
+    },
+    'employee.updated': async (event) => {
+      const { id, empId, code, email, fullName, departmentId, departmentName, position, status } = event.data || {};
+      const actualId = id || empId;
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          if (actualId && (email || code)) {
+            await db.query(
+              'UPDATE users SET emp_id = ? WHERE (email = ? OR username = ?) AND (emp_id IS NULL OR emp_id = "")',
+              [actualId, email || '', code || ''],
+              DB_NAME
+            );
+          }
+        } catch (err) {
+          console.warn('[AUTH-SERVICE] Lỗi cập nhật user khi nhận event employee.updated:', err.message);
+        }
+      }
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((actualId && (u.emp_id === actualId || u.id === actualId)) || (email && u.email === email) || (code && (u.username === code || u.code === code))) {
+          if (actualId) u.emp_id = actualId;
+          if (fullName) u.full_name = fullName;
+          if (departmentId) u.departmentId = departmentId;
+          if (departmentName) u.departmentName = departmentName;
+          if (position) u.position = position;
+          if (status) u.status = status;
+          u.isAssigned = Boolean(u.departmentId || departmentId);
+        }
+      }
+    },
+    'employee.onboarded': async (event) => {
+      const { id, code, departmentId, departmentName, status } = event.data || {};
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((id && (u.emp_id === id || u.id === id)) || (code && (u.username === code || u.code === code))) {
+          if (id) u.emp_id = id;
+          if (departmentId) u.departmentId = departmentId;
+          if (departmentName) u.departmentName = departmentName;
+          if (status) u.status = status;
+          u.isAssigned = Boolean(u.departmentId || departmentId);
+        }
+      }
     }
   })
 );
@@ -868,6 +977,15 @@ const server = app.start(PORT, () => {
   } catch (err) {
     console.warn('[AUTH-SERVICE] Không thể đăng ký với Registry:', err.message);
   }
+
+  // Đăng ký nhận sự kiện từ Event Bus
+  setTimeout(async () => {
+    try {
+      await events.subscribe(['employee.deleted', 'employee.updated', 'employee.onboarded'], `http://localhost:${PORT}/events`, {
+        serviceName: 'auth-service'
+      });
+    } catch {}
+  }, 2000);
 });
 
 module.exports = { app, server };

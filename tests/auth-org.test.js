@@ -351,6 +351,43 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(getData.data.full_name, 'Vũ Văn Kiểm Thử (Chuẩn SOA)');
     });
 
+    test('Admin gán/cập nhật phòng ban mới cho nhân viên -> Nhân viên gọi /api/v1/employees/me nhận đúng departmentId & departmentName', async () => {
+      assert.ok(createdEmpId, 'Phải có createdEmpId');
+      const targetDeptId = 'd0000001-0000-0000-0000-000000000003'; // Phòng Công nghệ & Phần mềm
+      const targetDeptName = 'Phòng Công nghệ & Phần mềm';
+
+      // 1. Admin cập nhật phòng ban mới qua PUT /api/v1/employees/:id chấp nhận departmentId linh hoạt
+      const updateRes = await fetch(`http://localhost:${ORG_PORT}/api/v1/employees/${createdEmpId}`, {
+        method: 'PUT',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          departmentId: targetDeptId,
+          departmentName: targetDeptName
+        })
+      });
+      assert.strictEqual(updateRes.status, 200);
+      const updateData = await updateRes.json();
+      assert.strictEqual(updateData.success, true);
+      assert.strictEqual(updateData.data.departmentId, targetDeptId);
+      assert.strictEqual(updateData.data.status, 'ACTIVE');
+
+      // 2. Nhân viên gọi GET /api/v1/employees/me với token nhận được đúng departmentId & departmentName
+      const empMeRes = await fetch(`http://localhost:${ORG_PORT}/api/v1/employees/me`, {
+        headers: {
+          'x-user-id': createdEmpId,
+          'x-user-role': 'EMPLOYEE',
+          'Authorization': `Bearer ${jwt.signToken({ userId: createdEmpId, empId: createdEmpId, role: 'EMPLOYEE' })}`
+        }
+      });
+      assert.strictEqual(empMeRes.status, 200);
+      const empMeData = await empMeRes.json();
+      assert.strictEqual(empMeData.success, true);
+      assert.strictEqual(empMeData.data.departmentId, targetDeptId);
+      assert.ok(empMeData.data.departmentName.includes('Công nghệ') || empMeData.data.departmentName.includes('Phần mềm'));
+      assert.strictEqual(empMeData.data.isAssigned, true);
+      assert.strictEqual(empMeData.data.status, 'ACTIVE');
+    });
+
     test('Cập nhật trạng thái nhân viên nghỉ việc hoặc xóa nhân viên /api/organization/employees/:id (HTTP 200)', async () => {
       assert.ok(createdEmpId, 'Phải có createdEmpId');
       const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/${createdEmpId}`, {

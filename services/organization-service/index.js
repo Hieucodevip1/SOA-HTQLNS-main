@@ -718,10 +718,21 @@ const getEmployeesHandler = async (req, res) => {
 
       return {
         ...e,
+        departmentId: deptId,
         department_id: deptId,
+        departmentName: deptName,
         department_name: deptName,
+        department: deptName,
+        deptName: deptName,
+        positionId: posId,
         position_id: posId,
-        position_title: posTitle
+        positionTitle: posTitle,
+        position_title: posTitle,
+        position: posTitle,
+        managerId: e.manager_id || null,
+        manager_id: e.manager_id || null,
+        managerName: e.manager_name || null,
+        manager_name: e.manager_name || null
       };
     });
 
@@ -770,39 +781,121 @@ app.get('/api/v1/employees', getEmployeesHandler);
 app.get('/api/organization/employees', getEmployeesHandler);
 app.get('/api/employees', getEmployeesHandler);
 
-// Hồ sơ nhân sự của tài khoản đang đăng nhập
-app.get('/api/organization/employees/me/profile', async (req, res) => {
+// Hồ sơ nhân sự của tài khoản đang đăng nhập (GET /api/v1/employees/me)
+const getEmployeeMeHandler = async (req, res) => {
   try {
     const currentUser = req.user;
-    if (!currentUser) return unauthorized(res);
+    const callerEmpId = req.headers['x-user-id'] || currentUser?.empId || currentUser?.emp_id || currentUser?.userId || currentUser?.id;
+    const callerEmail = currentUser?.email || null;
+    const callerUsername = currentUser?.username || null;
 
-    const empId = currentUser.empId || currentUser.emp_id;
-    let employee = null;
+    if (!callerEmpId && !callerEmail && !callerUsername) {
+      return unauthorized(res, 'Yêu cầu đăng nhập');
+    }
+
     const useDb = await isDbAvailable();
+    let employee = null;
 
     if (useDb) {
-      if (empId) {
-        const rows = await db.query('SELECT * FROM employees WHERE id = ? LIMIT 1', [empId], DB_NAME);
-        employee = rows[0];
-      }
-      if (!employee && currentUser.email) {
-        const rows = await db.query('SELECT * FROM employees WHERE email = ? LIMIT 1', [currentUser.email], DB_NAME);
-        employee = rows[0];
-      }
+      const sql = `
+        SELECT e.*, d.name AS department_name, p.title AS position_title, m.full_name AS manager_name
+        FROM employees e
+        LEFT JOIN departments d ON e.department_id = d.id
+        LEFT JOIN positions p ON e.position_id = p.id
+        LEFT JOIN employees m ON e.manager_id = m.id
+        WHERE (e.id = ? AND ? IS NOT NULL)
+           OR (e.email = ? AND ? IS NOT NULL)
+           OR (e.code = ? AND ? IS NOT NULL)
+        LIMIT 1
+      `;
+      const rows = await db.query(sql, [callerEmpId, callerEmpId, callerEmail, callerEmail, callerUsername, callerUsername], DB_NAME);
+      employee = rows[0] || null;
     } else {
-      if (empId) employee = memoryEmployees.get(empId);
-      if (!employee && currentUser.email) {
-        employee = Array.from(memoryEmployees.values()).find((e) => e.email === currentUser.email);
+      if (callerEmpId) employee = memoryEmployees.get(callerEmpId);
+      if (!employee) {
+        for (const e of memoryEmployees.values()) {
+          if ((callerEmpId && e.id === callerEmpId) || (callerEmail && e.email === callerEmail) || (callerUsername && (e.code === callerUsername || e.username === callerUsername))) {
+            employee = e;
+            break;
+          }
+        }
+      }
+      if (employee) {
+        const d = employee.department_id ? memoryDepartments.get(employee.department_id) : null;
+        const p = employee.position_id ? memoryPositions.get(employee.position_id) : null;
+        const m = employee.manager_id ? memoryEmployees.get(employee.manager_id) : null;
+        employee = {
+          ...employee,
+          department_name: d ? d.name : (employee.department_name || null),
+          position_title: p ? p.title : (employee.position_title || null),
+          manager_name: m ? m.full_name : (employee.manager_name || null)
+        };
       }
     }
 
-    if (!employee) return notFound(res, 'Chưa tìm thấy hồ sơ nhân sự liên kết với tài khoản này');
-    return success(res, employee);
+    if (!employee) {
+      return notFound(res, 'Chưa tìm thấy hồ sơ nhân sự liên kết với tài khoản này');
+    }
+
+    let deptId = employee.department_id || null;
+    let deptName = employee.department_name || null;
+    let posId = employee.position_id || null;
+    let posTitle = employee.position_title || null;
+
+    if (deptName === 'Phòng Nhân sự' || (deptName && deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+      deptName = 'Phòng Hành chính Nhân sự';
+    }
+    if (posTitle && (posTitle.includes('Kỹ sư phần mềm SOA') || posTitle.includes('Kỹ Sư Phần Mềm SOA'))) {
+      posTitle = 'Kỹ Sư Phần Mềm';
+    }
+
+    if (employee.status === 'ACTIVE') {
+      if (!deptName || deptName === '-' || !deptId) {
+        deptId = deptId || 'd0000001-0000-0000-0000-000000000003';
+        deptName = 'Phòng Công nghệ & Phần mềm';
+      }
+      if (!posTitle || posTitle === '-' || !posId) {
+        posId = posId || 'p0000001-0000-0000-0000-000000000004';
+        posTitle = 'Kỹ Sư Phần Mềm';
+      }
+    }
+
+    const formatted = {
+      ...employee,
+      departmentId: deptId,
+      department_id: deptId,
+      departmentName: deptName,
+      department_name: deptName,
+      department: deptName,
+      deptName: deptName,
+      positionId: posId,
+      position_id: posId,
+      positionTitle: posTitle,
+      position_title: posTitle,
+      position: posTitle,
+      managerId: employee.manager_id || null,
+      manager_id: employee.manager_id || null,
+      managerName: employee.manager_name || null,
+      manager_name: employee.manager_name || null,
+      contractType: employee.contract_type || 'OFFICIAL',
+      contract_type: employee.contract_type || 'OFFICIAL',
+      status: employee.status || 'ACTIVE',
+      isAssigned: Boolean(deptId)
+    };
+
+    return success(res, formatted);
   } catch (err) {
-    console.error('[ORG-UPDATE-ERROR]:', err);
+    console.error('[ORG-ME-ERROR]:', err);
     return error(res, err.message);
   }
-});
+};
+
+app.get('/api/v1/employees/me', getEmployeeMeHandler);
+app.get('/api/v1/employees/me/profile', getEmployeeMeHandler);
+app.get('/api/organization/employees/me/profile', getEmployeeMeHandler);
+app.get('/api/organization/employees/me', getEmployeeMeHandler);
+app.get('/api/employees/me', getEmployeeMeHandler);
+app.get('/api/employees/me/profile', getEmployeeMeHandler);
 
 // Chi tiết hồ sơ một nhân sự
 const getEmployeeDetailHandler = async (req, res) => {
@@ -818,23 +911,82 @@ const getEmployeeDetailHandler = async (req, res) => {
          LEFT JOIN departments d ON e.department_id = d.id
          LEFT JOIN positions p ON e.position_id = p.id
          LEFT JOIN employees m ON e.manager_id = m.id
-         WHERE e.id = ? OR e.code = ? LIMIT 1`,
-        [id, id],
+         WHERE e.id = ? OR e.code = ? OR e.email = ? LIMIT 1`,
+        [id, id, id],
         DB_NAME
       );
       emp = rows[0] || null;
     } else {
-      emp = memoryEmployees.get(id) || Array.from(memoryEmployees.values()).find((e) => e.code === id) || null;
+      emp = memoryEmployees.get(id) || Array.from(memoryEmployees.values()).find((e) => e.code === id || e.email === id) || null;
+      if (emp) {
+        const d = emp.department_id ? memoryDepartments.get(emp.department_id) : null;
+        const p = emp.position_id ? memoryPositions.get(emp.position_id) : null;
+        const m = emp.manager_id ? memoryEmployees.get(emp.manager_id) : null;
+        emp = {
+          ...emp,
+          department_name: d ? d.name : (emp.department_name || null),
+          position_title: p ? p.title : (emp.position_title || null),
+          manager_name: m ? m.full_name : (emp.manager_name || null)
+        };
+      }
     }
 
     if (!emp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
-    return success(res, emp);
+
+    let deptId = emp.department_id || null;
+    let deptName = emp.department_name || null;
+    let posId = emp.position_id || null;
+    let posTitle = emp.position_title || null;
+
+    if (deptName === 'Phòng Nhân sự' || (deptName && deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+      deptName = 'Phòng Hành chính Nhân sự';
+    }
+    if (posTitle && (posTitle.includes('Kỹ sư phần mềm SOA') || posTitle.includes('Kỹ Sư Phần Mềm SOA'))) {
+      posTitle = 'Kỹ Sư Phần Mềm';
+    }
+
+    if (emp.status === 'ACTIVE') {
+      if (!deptName || deptName === '-' || !deptId) {
+        deptId = deptId || 'd0000001-0000-0000-0000-000000000003';
+        deptName = 'Phòng Công nghệ & Phần mềm';
+      }
+      if (!posTitle || posTitle === '-' || !posId) {
+        posId = posId || 'p0000001-0000-0000-0000-000000000004';
+        posTitle = 'Kỹ Sư Phần Mềm';
+      }
+    }
+
+    const formatted = {
+      ...emp,
+      departmentId: deptId,
+      department_id: deptId,
+      departmentName: deptName,
+      department_name: deptName,
+      department: deptName,
+      deptName: deptName,
+      positionId: posId,
+      position_id: posId,
+      positionTitle: posTitle,
+      position_title: posTitle,
+      position: posTitle,
+      managerId: emp.manager_id || null,
+      manager_id: emp.manager_id || null,
+      managerName: emp.manager_name || null,
+      manager_name: emp.manager_name || null,
+      contractType: emp.contract_type || 'OFFICIAL',
+      contract_type: emp.contract_type || 'OFFICIAL',
+      status: emp.status || 'ACTIVE',
+      isAssigned: Boolean(deptId)
+    };
+
+    return success(res, formatted);
   } catch (err) {
-    console.error('[ORG-UPDATE-ERROR]:', err);
+    console.error('[ORG-DETAIL-ERROR]:', err);
     return error(res, err.message);
   }
 };
 
+app.get('/api/v1/employees/:id', getEmployeeDetailHandler);
 app.get('/api/organization/employees/:id', getEmployeeDetailHandler);
 app.get('/api/employees/:id', getEmployeeDetailHandler);
 
@@ -962,7 +1114,36 @@ const updateEmployeeHandler = async (req, res) => {
     const finalContract = contractType || contract_type || null;
     const finalSalary = baseSalary !== undefined ? Number(baseSalary) : (base_salary !== undefined ? Number(base_salary) : null);
 
-    // Tìm ID phòng ban nếu truyền tên phòng ban
+    const useDb = await isDbAvailable();
+
+    // Tìm hồ sơ nhân sự hiện tại trong DB hoặc In-memory fallback
+    let targetEmp = null;
+    let actualEmpId = id;
+
+    if (useDb) {
+      const existing = await db.query(
+        'SELECT * FROM employees WHERE id = ? OR code = ? OR email = ? LIMIT 1',
+        [id, id, id],
+        DB_NAME
+      );
+      if (existing && existing.length > 0) {
+        targetEmp = existing[0];
+        actualEmpId = targetEmp.id;
+      }
+    } else {
+      targetEmp = memoryEmployees.get(id);
+      if (!targetEmp) {
+        for (const [k, v] of memoryEmployees.entries()) {
+          if (v.id === id || v.email === id || v.username === id || v.code === id) {
+            targetEmp = v;
+            actualEmpId = v.id;
+            break;
+          }
+        }
+      }
+    }
+
+    // Tìm ID phòng ban nếu truyền tên phòng ban hoặc mã phòng ban
     const deptInput = department || departmentName;
     if (!finalDept && deptInput) {
       if (deptInput.includes('Nhân sự')) {
@@ -983,6 +1164,22 @@ const updateEmployeeHandler = async (req, res) => {
       }
     }
 
+    // Tra cứu tên phòng ban để đồng bộ đầy đủ
+    let deptName = null;
+    if (finalDept) {
+      if (useDb) {
+        try {
+          const dRows = await db.query('SELECT name FROM departments WHERE id = ? LIMIT 1', [finalDept], DB_NAME);
+          if (dRows.length > 0) deptName = dRows[0].name;
+        } catch {}
+      }
+      if (!deptName) {
+        const d = memoryDepartments.get(finalDept);
+        if (d) deptName = d.name;
+      }
+    }
+    if (!deptName && deptInput) deptName = deptInput;
+
     // Tìm ID vị trí việc làm nếu truyền tên chức danh
     const posInput = position || positionTitle;
     if (!finalPos && posInput) {
@@ -998,13 +1195,40 @@ const updateEmployeeHandler = async (req, res) => {
       }
     }
 
-    // Ràng buộc: Khi kích hoạt ACTIVE, bắt buộc phải có phòng ban và chức danh mặc định
-    if (finalStatus === 'ACTIVE') {
-      if (!finalDept) finalDept = 'd0000001-0000-0000-0000-000000000003';
-      if (!finalPos) finalPos = 'p0000001-0000-0000-0000-000000000004';
+    let posTitle = null;
+    if (finalPos) {
+      if (useDb) {
+        try {
+          const pRows = await db.query('SELECT title FROM positions WHERE id = ? LIMIT 1', [finalPos], DB_NAME);
+          if (pRows.length > 0) posTitle = pRows[0].title;
+        } catch {}
+      }
+      if (!posTitle) {
+        const p = memoryPositions.get(finalPos);
+        if (p) posTitle = p.title;
+      }
+    }
+    if (!posTitle && posInput) posTitle = posInput;
+
+    // Tự động chuyển trạng thái PENDING -> ACTIVE và OFFICIAL nếu đã được gán phòng ban hợp lệ
+    let resolvedStatus = finalStatus;
+    let resolvedContract = finalContract;
+    const currentStatus = targetEmp?.status || 'PENDING';
+
+    if (finalDept) {
+      if (!resolvedStatus || ['PENDING', 'PENDING_ASSIGNMENT'].includes(resolvedStatus) || ['PENDING', 'PENDING_ASSIGNMENT'].includes(currentStatus)) {
+        resolvedStatus = 'ACTIVE';
+        if (!resolvedContract || resolvedContract === 'PENDING') {
+          resolvedContract = 'OFFICIAL';
+        }
+      }
     }
 
-    const useDb = await isDbAvailable();
+    // Ràng buộc: Khi kích hoạt ACTIVE, bắt buộc phải có phòng ban và chức danh mặc định
+    if (resolvedStatus === 'ACTIVE') {
+      if (!finalDept) finalDept = targetEmp?.department_id || 'd0000001-0000-0000-0000-000000000003';
+      if (!finalPos) finalPos = targetEmp?.position_id || 'p0000001-0000-0000-0000-000000000004';
+    }
 
     if (useDb) {
       await db.query(
@@ -1020,7 +1244,7 @@ const updateEmployeeHandler = async (req, res) => {
           status = COALESCE(?, status),
           contract_type = COALESCE(?, contract_type)
          WHERE id = ?`,
-        [newCode, finalFullName, finalEmail, finalPhone, finalIdCard, finalDept, finalPos, finalMgr, finalStatus, finalContract, id],
+        [newCode, finalFullName, finalEmail, finalPhone, finalIdCard, finalDept, finalPos, finalMgr, resolvedStatus, resolvedContract, actualEmpId],
         DB_NAME
       );
 
@@ -1029,60 +1253,164 @@ const updateEmployeeHandler = async (req, res) => {
         try {
           await db.query(
             `UPDATE htqlns_payroll.payroll_configs SET base_salary = ? WHERE emp_id = ?`,
-            [finalSalary, id]
+            [finalSalary, actualEmpId]
           );
         } catch {}
       }
     } else {
-      let emp = memoryEmployees.get(id);
+      let emp = memoryEmployees.get(actualEmpId);
       if (!emp) {
         for (const [k, v] of memoryEmployees.entries()) {
-          if (v.id === id || v.email === id || v.username === id || v.code === id) {
+          if (v.id === actualEmpId || v.email === id || v.username === id || v.code === id) {
             emp = v;
             break;
           }
         }
       }
-      if (!emp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
-      if (newCode) emp.code = newCode;
-      if (finalFullName) emp.full_name = finalFullName;
-      if (finalEmail) emp.email = finalEmail;
-      if (finalPhone !== null) emp.phone = finalPhone;
-      if (finalIdCard) emp.identity_card = finalIdCard;
-      if (finalDept) emp.department_id = finalDept;
-      if (finalPos) emp.position_id = finalPos;
-      if (finalMgr) emp.manager_id = finalMgr;
-      if (finalStatus) emp.status = finalStatus;
-      if (finalContract) emp.contract_type = finalContract;
-      if (finalSalary !== null) emp.base_salary = finalSalary;
-      if (shiftId || shift_id) emp.shift_id = shiftId || shift_id;
-      if (officeId || office_id) emp.office_id = officeId || office_id;
+      if (!emp && !targetEmp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
+      if (emp) {
+        if (newCode) emp.code = newCode;
+        if (finalFullName) emp.full_name = finalFullName;
+        if (finalEmail) emp.email = finalEmail;
+        if (finalPhone !== null) emp.phone = finalPhone;
+        if (finalIdCard) emp.identity_card = finalIdCard;
+        if (finalDept) emp.department_id = finalDept;
+        if (finalPos) emp.position_id = finalPos;
+        if (finalMgr) emp.manager_id = finalMgr;
+        if (resolvedStatus) emp.status = resolvedStatus;
+        if (resolvedContract) emp.contract_type = resolvedContract;
+        if (finalSalary !== null) emp.base_salary = finalSalary;
+        if (shiftId || shift_id) emp.shift_id = shiftId || shift_id;
+        if (officeId || office_id) emp.office_id = officeId || office_id;
+      }
     }
 
-    await logAudit('UPDATE_EMPLOYEE', req.user, 'EMPLOYEE', id, req.body, req);
+    await logAudit('UPDATE_EMPLOYEE', req.user, 'EMPLOYEE', actualEmpId, req.body, req);
 
-    // Phát sự kiện lên Event Bus nếu có thay đổi lương hoặc phòng ban
+    // Phát sự kiện lên Event Bus để đồng bộ sang auth-service và các service khác
     events.publish('employee.updated', {
-      id,
-      code: newCode,
-      fullName: finalFullName,
+      id: actualEmpId,
+      empId: actualEmpId,
+      code: newCode || targetEmp?.code,
+      fullName: finalFullName || targetEmp?.full_name,
+      email: finalEmail || targetEmp?.email,
       departmentId: finalDept,
+      department_id: finalDept,
+      departmentName: deptName,
+      department_name: deptName,
+      department: deptName,
       positionId: finalPos,
+      position_id: finalPos,
+      positionTitle: posTitle,
+      position_title: posTitle,
+      position: posTitle,
       managerId: finalMgr,
+      manager_id: finalMgr,
       baseSalary: finalSalary,
-      status: finalStatus,
-      contractType: finalContract
+      status: resolvedStatus,
+      contractType: resolvedContract,
+      contract_type: resolvedContract
     }, { source: 'organization-service' });
 
-    let updatedData = { id, code: newCode, full_name: finalFullName, department_id: finalDept, status: finalStatus };
+    // Gọi API nội bộ đồng bộ trực tiếp sang auth-service
+    try {
+      const authPort = process.env.AUTH_PORT || 3001;
+      await fetch(`http://localhost:${authPort}/internal/auth/sync-employee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-key': process.env.INTERNAL_SERVICE_KEY || 'htqlns-internal-secret-key-2026'
+        },
+        body: JSON.stringify({
+          id: actualEmpId,
+          empId: actualEmpId,
+          code: newCode || targetEmp?.code,
+          email: finalEmail || targetEmp?.email,
+          fullName: finalFullName || targetEmp?.full_name,
+          departmentId: finalDept,
+          departmentName: deptName,
+          position: posTitle,
+          status: resolvedStatus
+        })
+      });
+    } catch (_) {}
+
+    let updatedData = {
+      id: actualEmpId,
+      code: newCode || targetEmp?.code,
+      full_name: finalFullName || targetEmp?.full_name,
+      fullName: finalFullName || targetEmp?.full_name,
+      email: finalEmail || targetEmp?.email,
+      phone: finalPhone || targetEmp?.phone,
+      departmentId: finalDept,
+      department_id: finalDept,
+      departmentName: deptName,
+      department_name: deptName,
+      department: deptName,
+      positionId: finalPos,
+      position_id: finalPos,
+      positionTitle: posTitle,
+      position_title: posTitle,
+      position: posTitle,
+      managerId: finalMgr,
+      manager_id: finalMgr,
+      status: resolvedStatus,
+      contractType: resolvedContract,
+      contract_type: resolvedContract
+    };
+
     if (useDb) {
       try {
-        const rows = await db.query('SELECT * FROM employees WHERE id = ? LIMIT 1', [id], DB_NAME);
-        if (rows && rows.length > 0) updatedData = rows[0];
+        const rows = await db.query(
+          `SELECT e.*, d.name AS department_name, p.title AS position_title, m.full_name AS manager_name
+           FROM employees e
+           LEFT JOIN departments d ON e.department_id = d.id
+           LEFT JOIN positions p ON e.position_id = p.id
+           LEFT JOIN employees m ON e.manager_id = m.id
+           WHERE e.id = ? LIMIT 1`,
+          [actualEmpId],
+          DB_NAME
+        );
+        if (rows && rows.length > 0) {
+          const r = rows[0];
+          updatedData = {
+            ...r,
+            departmentId: r.department_id,
+            department_id: r.department_id,
+            departmentName: r.department_name,
+            department_name: r.department_name,
+            department: r.department_name,
+            positionId: r.position_id,
+            position_id: r.position_id,
+            positionTitle: r.position_title,
+            position_title: r.position_title,
+            position: r.position_title,
+            managerId: r.manager_id,
+            manager_id: r.manager_id,
+            contractType: r.contract_type,
+            contract_type: r.contract_type
+          };
+        }
       } catch {}
     } else {
-      const emp = memoryEmployees.get(id);
-      if (emp) updatedData = { ...emp };
+      const emp = memoryEmployees.get(actualEmpId);
+      if (emp) {
+        const d = emp.department_id ? memoryDepartments.get(emp.department_id) : null;
+        const p = emp.position_id ? memoryPositions.get(emp.position_id) : null;
+        updatedData = {
+          ...emp,
+          departmentId: emp.department_id,
+          department_id: emp.department_id,
+          departmentName: d ? d.name : deptName,
+          department_name: d ? d.name : deptName,
+          department: d ? d.name : deptName,
+          positionId: emp.position_id,
+          position_id: emp.position_id,
+          positionTitle: p ? p.title : posTitle,
+          position_title: p ? p.title : posTitle,
+          position: p ? p.title : posTitle
+        };
+      }
     }
 
     return success(res, updatedData, 200, 'Cập nhật hồ sơ nhân sự thành công');
@@ -1242,15 +1570,62 @@ const onboardEmployeeHandler = async (req, res) => {
 
     await logAudit('ONBOARD_EMPLOYEE', req.user, 'EMPLOYEE', id, req.body, req);
 
+    let onboardDeptName = null;
+    if (finalDeptId) {
+      if (useDb) {
+        try {
+          const dRows = await db.query('SELECT name FROM departments WHERE id = ? LIMIT 1', [finalDeptId], DB_NAME);
+          if (dRows.length > 0) onboardDeptName = dRows[0].name;
+        } catch {}
+      }
+      if (!onboardDeptName) {
+        const d = memoryDepartments.get(finalDeptId);
+        if (d) onboardDeptName = d.name;
+      }
+    }
+    if (!onboardDeptName && deptInput) onboardDeptName = deptInput;
+
     events.publish('employee.onboarded', {
       id,
       code: emp.code,
       departmentId: emp.department_id,
+      departmentName: onboardDeptName,
       status: emp.status,
       contractType: emp.contract_type
     }, { source: 'organization-service' });
 
-    return success(res, emp, 200, 'Tiếp nhận nhân sự thành công');
+    // Đồng bộ trực tiếp sang auth-service
+    try {
+      const authPort = process.env.AUTH_PORT || 3001;
+      await fetch(`http://localhost:${authPort}/internal/auth/sync-employee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-key': process.env.INTERNAL_SERVICE_KEY || 'htqlns-internal-secret-key-2026'
+        },
+        body: JSON.stringify({
+          id,
+          empId: id,
+          code: emp.code,
+          email: emp.email,
+          fullName: emp.full_name,
+          departmentId: emp.department_id,
+          departmentName: onboardDeptName,
+          status: emp.status
+        })
+      });
+    } catch (_) {}
+
+    const formattedEmp = {
+      ...emp,
+      departmentId: emp.department_id,
+      department_id: emp.department_id,
+      departmentName: onboardDeptName,
+      department_name: onboardDeptName,
+      department: onboardDeptName
+    };
+
+    return success(res, formattedEmp, 200, 'Tiếp nhận nhân sự thành công');
   } catch (err) {
     console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
