@@ -42,6 +42,36 @@ function createServiceApp(serviceName = 'service', options = {}) {
   app.use(express.json({ limit: options.bodyLimit || '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: options.bodyLimit || '10mb' }));
 
+  // Only accept the identity forwarded by the Gateway when it carries the internal key.
+  app.use((req, res, next) => {
+    const forwardedUser = req.headers['x-user'];
+    if (!forwardedUser) return next();
+
+    if (req.headers['x-internal-key'] !== env.INTERNAL_API_KEY) {
+      return res.status(403).json({
+        success: false,
+        error: 'Thông tin người dùng chuyển tiếp chỉ được chấp nhận từ API Gateway',
+        code: 403
+      });
+    }
+
+    try {
+      const user = JSON.parse(Buffer.from(forwardedUser, 'base64').toString('utf8'));
+      if (!user || typeof user !== 'object' || Array.isArray(user)) {
+        throw new Error('Dữ liệu người dùng không hợp lệ');
+      }
+      req.user = user;
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        error: `Thông tin người dùng chuyển tiếp không hợp lệ: ${err.message}`,
+        code: 401
+      });
+    }
+
+    next();
+  });
+
   // 4. Request Logging Middleware (Ghi nhật ký thời gian xử lý yêu cầu)
   app.use((req, res, next) => {
     const start = Date.now();

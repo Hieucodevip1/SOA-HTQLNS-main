@@ -424,6 +424,25 @@ describe('Kiểm thử Cụm Hạ tầng SOA Cốt lõi (Registry, Event Bus, Ga
       assert.strictEqual(data.success, false);
     });
 
+    test('EMPLOYEE không thể chốt/phát hành lương qua Gateway', async () => {
+      const employeeToken = jwt.signToken({
+        userId: 'u004',
+        empId: 'e004',
+        username: 'emp_test',
+        role: 'EMPLOYEE'
+      });
+
+      const res = await fetch(`http://localhost:${GW_PORT}/api/v1/payrolls/publish`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${employeeToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ month: 1, year: 2026 })
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
     test('Manager được phép đi qua Gateway tới dashboard và luồng duyệt OT', async () => {
       const managerToken = jwt.signToken({
         userId: 'manager-user',
@@ -447,6 +466,20 @@ describe('Kiểm thử Cụm Hạ tầng SOA Cốt lõi (Registry, Event Bus, Ga
         body: JSON.stringify({ decision: 'APPROVED' })
       });
       assert.strictEqual(decisionRes.status, 503);
+    });
+
+    test('Manager được phép truy cập API phiếu lương cá nhân', async () => {
+      const managerToken = jwt.signToken({
+        userId: 'manager-user',
+        empId: 'manager-employee',
+        username: 'manager',
+        role: 'MANAGER'
+      });
+
+      const res = await fetch(`http://localhost:${GW_PORT}/api/v1/payslips`, {
+        headers: { Authorization: `Bearer ${managerToken}` }
+      });
+      assert.strictEqual(res.status, 503);
     });
 
     test('Trả về 503 Service Unavailable khi downstream service chưa online', async () => {

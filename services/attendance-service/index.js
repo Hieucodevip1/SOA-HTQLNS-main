@@ -124,7 +124,7 @@ app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAu
       return res.status(400).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự (empId)' });
     }
 
-    const { latitude, longitude, wifiSsid, method = 'GPS', bypassGeofence = false } = req.body;
+    const { latitude, longitude, wifiSsid, method = 'GPS' } = req.body;
     const now = new Date();
     const workDate = now.toISOString().slice(0, 10);
 
@@ -165,7 +165,7 @@ app.post(['/api/v1/attendances/check-in', '/api/attendance/check-in'], requireAu
       }
     }
 
-    if (!matchedLocation && !bypassGeofence) {
+    if (!matchedLocation) {
       return res.status(403).json({
         success: false,
         error: `Ngoài phạm vi chấm công cho phép (cách văn phòng gần nhất ${minDistance ?? '?'}m)`,
