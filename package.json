@@ -5,6 +5,7 @@
   "main": "scripts/run-all.js",
   "scripts": {
     "start": "node scripts/run-all.js",
+    "clean:test-data": "node scripts/clean-test-data.js",
     "test": "node --test --test-concurrency=1 tests/infra.test.js tests/auth-org.test.js tests/employee-scope.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/e2e.test.js",
     "test:infra": "node --test tests/infra.test.js",
     "test:auth-org": "node --test tests/auth-org.test.js",

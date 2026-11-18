@@ -159,6 +159,17 @@ function saveRegisteredUser(userObj) {
   safeSetStorage('htqlns_registered_users', JSON.stringify(list));
 }
 
+function removeRegisteredUser(identifier) {
+  if (!identifier) return;
+  const list = getRegisteredUsersList().filter(u =>
+    String(u.id) !== String(identifier) &&
+    u.username !== identifier &&
+    u.email !== identifier &&
+    u.fullName !== identifier
+  );
+  safeSetStorage('htqlns_registered_users', JSON.stringify(list));
+}
+
 // Đồng bộ trạng thái Onboarded (đã tiếp nhận ban phòng hay chưa) vào state.user
 function syncUserOnboardingState() {
   if (!state.user) return;
@@ -313,6 +324,17 @@ function saveRegisteredUser(userObj) {
   } else {
     list.push(userObj);
   }
+  safeSetStorage('htqlns_registered_users', JSON.stringify(list));
+}
+
+function removeRegisteredUser(identifier) {
+  if (!identifier) return;
+  const list = getRegisteredUsersList().filter(u =>
+    String(u.id) !== String(identifier) &&
+    u.username !== identifier &&
+    u.email !== identifier &&
+    u.fullName !== identifier
+  );
   safeSetStorage('htqlns_registered_users', JSON.stringify(list));
 }
 
@@ -2173,7 +2195,7 @@ async function loadEmployeesData() {
   const isEmployee = state.user?.role === 'EMPLOYEE';
 
   try {
-    const res = await apiCall('/api/organization/employees').catch(() => null);
+    const res = (await apiCall('/api/v1/employees').catch(() => null)) || (await apiCall('/api/organization/employees').catch(() => null));
     if (res && Array.isArray(res.data)) {
       state.employees = [...res.data];
     } else if (isDemo) {
@@ -2192,6 +2214,7 @@ async function loadEmployeesData() {
       if (authUsersRes && authUsersRes.success && Array.isArray(authUsersRes.data)) {
         authUsersRes.data.forEach(u => {
           if (['admin', 'hr_admin', 'manager', 'employee'].includes(u.username)) return;
+          if (['INACTIVE', 'DELETED', 'RESIGNED'].includes(u.status)) return;
           saveRegisteredUser({
             id: u.id,
             username: u.username,
@@ -2577,7 +2600,7 @@ function confirmDeleteEmployee(id, name) {
       <p style="font-size: 14px; color: #1e293b;">Bạn có chắc chắn muốn xóa nhân sự <strong>${name}</strong> khỏi hệ thống?</p>
       <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
         <button class="btn-secondary-outline" onclick="closeModal()">Hủy</button>
-        <button class="btn-reject-sm" style="padding: 8px 18px; font-weight: 700;" onclick="handleDeleteEmployee('${id}', '${name}')">🗑️ Xác nhận Xóa</button>
+        <button class="btn-reject-sm" style="padding: 8px 18px; font-weight: 700;" onclick="handleDeleteEmployee('${id}', '${name}')">Xác nhận Xóa</button>
       </div>
     </div>
     `
@@ -2586,8 +2609,12 @@ function confirmDeleteEmployee(id, name) {
 
 async function handleDeleteEmployee(id, name) {
   try {
-    await apiCall(`/api/organization/employees/${id}`, { method: 'DELETE' });
+    await apiCall(`/api/v1/employees/${id}`, { method: 'DELETE' });
     state.employees = (state.employees || []).filter(e => String(e.id) !== String(id));
+    if (typeof removeRegisteredUser === 'function') {
+      removeRegisteredUser(id);
+      removeRegisteredUser(name);
+    }
     closeModal();
     showToast(`Đã xóa nhân viên ${name} thành công`, 'success');
     renderEmployeesTable(state.employees);

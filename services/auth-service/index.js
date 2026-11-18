@@ -829,6 +829,31 @@ app.get('/api-docs.json', (req, res) => {
   res.json(spec);
 });
 
+// Webhook lắng nghe sự kiện từ Event Bus
+app.use(
+  '/events',
+  events.createWebhookRouter({
+    'employee.deleted': async (event) => {
+      const { id, email } = event.data || {};
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          if (id || email) {
+            await db.query('DELETE FROM users WHERE emp_id = ? OR email = ?', [id || null, email || null], DB_NAME);
+          }
+        } catch (err) {
+          console.warn('[AUTH-SERVICE] Lỗi xóa user khi nhận event employee.deleted:', err.message);
+        }
+      }
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((id && u.emp_id === id) || (email && u.email === email)) {
+          memoryUsers.delete(uid);
+        }
+      }
+    }
+  })
+);
+
 // Gắn bộ xử lý lỗi tiêu chuẩn
 app.useErrorHandler();
 

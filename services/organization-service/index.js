@@ -611,9 +611,12 @@ const getEmployeesHandler = async (req, res) => {
         sql += ' AND e.department_id = ?';
         params.push(department_id);
       }
-      if (status) {
+      if (status && status !== 'ALL') {
         sql += ' AND e.status = ?';
         params.push(status);
+      } else if (!status) {
+        // Mặc định lọc loại bỏ các nhân viên đã bị xóa mềm hoặc đã nghỉ việc (TERMINATED, DELETED, RESIGNED)
+        sql += " AND (e.status IS NULL OR e.status NOT IN ('TERMINATED', 'DELETED', 'RESIGNED'))";
       }
       if (keyword) {
         sql += ' AND (e.full_name LIKE ? OR e.code LIKE ? OR e.email LIKE ?)';
@@ -639,16 +642,19 @@ const getEmployeesHandler = async (req, res) => {
       if (department_id) {
         employees = employees.filter((e) => e.department_id === department_id);
       }
-      if (status) {
+      if (status && status !== 'ALL') {
         employees = employees.filter((e) => e.status === status);
+      } else if (!status) {
+        // Mặc định lọc loại bỏ các nhân viên đã bị xóa mềm hoặc đã nghỉ việc (TERMINATED, DELETED, RESIGNED)
+        employees = employees.filter((e) => !['TERMINATED', 'DELETED', 'RESIGNED'].includes(e.status));
       }
       if (keyword) {
         const kw = keyword.toLowerCase();
         employees = employees.filter(
           (e) =>
-            e.full_name.toLowerCase().includes(kw) ||
-            e.code.toLowerCase().includes(kw) ||
-            e.email.toLowerCase().includes(kw)
+            (e.full_name && e.full_name.toLowerCase().includes(kw)) ||
+            (e.code && e.code.toLowerCase().includes(kw)) ||
+            (e.email && e.email.toLowerCase().includes(kw))
         );
       }
     }
@@ -694,6 +700,7 @@ const getEmployeesHandler = async (req, res) => {
   }
 };
 
+app.get('/api/v1/employees', getEmployeesHandler);
 app.get('/api/organization/employees', getEmployeesHandler);
 app.get('/api/employees', getEmployeesHandler);
 
@@ -1140,41 +1147,69 @@ app.patch('/api/employees/:id', updateEmployeeHandler);
 const deleteEmployeeHandler = async (req, res) => {
   try {
     const id = req.params.id;
-    const isPermanent = req.query.permanent === 'true' || req.query.hard === 'true';
+    const isResignOnly = req.query.action === 'resign' || req.query.status === 'RESIGNED';
     const useDb = await isDbAvailable();
+    let targetEmail = null;
 
     if (useDb) {
-      if (isPermanent) {
-        try {
-          await db.query("UPDATE htqlns_auth.users SET status = 'INACTIVE' WHERE emp_id = ?");
-        } catch {}
-        await db.query("DELETE FROM employees WHERE id = ?", [id], DB_NAME);
-        await logAudit('DELETE_EMPLOYEE', req.user, 'EMPLOYEE', id, { action: 'PERMANENT_DELETE' }, req);
-        events.publish('employee.deleted', { id }, { source: 'organization-service' });
-        return success(res, { id, deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
-      } else {
+      try {
+        const rows = await db.query('SELECT id, email, code FROM employees WHERE id = ? LIMIT 1', [id], DB_NAME);
+        if (rows.length > 0) {
+          targetEmail = rows[0].email;
+        }
+      } catch {}
+
+      if (isResignOnly) {
         await db.query("UPDATE employees SET status = 'RESIGNED' WHERE id = ?", [id], DB_NAME);
+        try {
+          await db.query("UPDATE htqlns_auth.users SET status = 'INACTIVE' WHERE emp_id = ? OR email = ?", [id, targetEmail]);
+        } catch {}
+        await logAudit('RESIGN_EMPLOYEE', req.user, 'EMPLOYEE', id, { status: 'RESIGNED', email: targetEmail }, req);
+        events.publish('employee.resigned', { id, email: targetEmail }, { source: 'organization-service' });
+        return success(res, { id, status: 'RESIGNED' }, 200, 'Đã cập nhật trạng thái nhân sự thành Nghỉ việc (RESIGNED)');
+      } else {
+        // Mặc định thực hiện xóa thật bản ghi nhân sự và đồng bộ xóa tài khoản bên auth-service
+        try {
+          if (targetEmail) {
+            await db.query("DELETE FROM htqlns_auth.users WHERE emp_id = ? OR (email IS NOT NULL AND email = ?)", [id, targetEmail]);
+          } else {
+            await db.query("DELETE FROM htqlns_auth.users WHERE emp_id = ?", [id]);
+          }
+        } catch (authErr) {
+          console.warn('[ORG-SERVICE] Không thể đồng bộ xóa tài khoản auth:', authErr.message);
+        }
+
+        await db.query("DELETE FROM employees WHERE id = ?", [id], DB_NAME);
+        await logAudit('DELETE_EMPLOYEE', req.user, 'EMPLOYEE', id, { action: 'PERMANENT_DELETE', email: targetEmail }, req);
+        events.publish('employee.deleted', { id, email: targetEmail }, { source: 'organization-service' });
+        return success(res, { id, status: 'RESIGNED', deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
       }
     } else {
-      if (isPermanent) {
-        memoryEmployees.delete(id);
-        return success(res, { id, deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
-      } else {
-        const emp = memoryEmployees.get(id);
+      const emp = memoryEmployees.get(id);
+      if (emp) targetEmail = emp.email;
+
+      if (isResignOnly) {
         if (emp) emp.status = 'RESIGNED';
+        events.publish('employee.resigned', { id, email: targetEmail }, { source: 'organization-service' });
+        return success(res, { id, status: 'RESIGNED' }, 200, 'Đã cập nhật trạng thái nhân sự thành Nghỉ việc (RESIGNED)');
+      } else {
+        memoryEmployees.delete(id);
+        for (const [k, v] of memoryEmployees.entries()) {
+          if (v.id === id || (targetEmail && v.email === targetEmail)) {
+            memoryEmployees.delete(k);
+          }
+        }
+        events.publish('employee.deleted', { id, email: targetEmail }, { source: 'organization-service' });
+        return success(res, { id, status: 'RESIGNED', deleted: true }, 200, 'Đã xóa nhân sự thành công khỏi hệ thống');
       }
     }
-
-    await logAudit('RESIGN_EMPLOYEE', req.user, 'EMPLOYEE', id, { status: 'RESIGNED' }, req);
-
-    events.publish('employee.resigned', { id }, { source: 'organization-service' });
-    return success(res, { id, status: 'RESIGNED' }, 200, 'Đã cập nhật trạng thái nhân sự thành Nghỉ việc (RESIGNED)');
   } catch (err) {
     console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
 
+app.delete('/api/v1/employees/:id', deleteEmployeeHandler);
 app.delete('/api/organization/employees/:id', deleteEmployeeHandler);
 app.delete('/api/employees/:id', deleteEmployeeHandler);
 

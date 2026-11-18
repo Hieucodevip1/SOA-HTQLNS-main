@@ -43,7 +43,34 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     }
   });
 
-  after(() => {
+  let testUsername = null;
+  let testEmail = null;
+  let createdDeptId = null;
+  let createdEmpId = null;
+
+  after(async () => {
+    try {
+      const db = require('../shared/db');
+      const orgPool = db.getPool('htqlns_organization');
+      const authPool = db.getPool('htqlns_auth');
+
+      if (createdEmpId) {
+        await orgPool.query('DELETE FROM employees WHERE id = ?', [createdEmpId]).catch(() => {});
+      }
+      if (createdDeptId) {
+        await orgPool.query('DELETE FROM departments WHERE id = ?', [createdDeptId]).catch(() => {});
+      }
+      if (testUsername) {
+        await authPool.query('DELETE FROM users WHERE username = ?', [testUsername]).catch(() => {});
+      }
+      if (testEmail) {
+        await orgPool.query('DELETE FROM employees WHERE email = ?', [testEmail]).catch(() => {});
+      }
+      await orgPool.query("DELETE FROM employees WHERE email LIKE 'tester_%' OR email LIKE 'user_%' OR code LIKE 'EMP_SOA_%'").catch(() => {});
+      await authPool.query("DELETE FROM users WHERE username LIKE 'user_%' OR email LIKE 'tester_%' OR email LIKE 'user_%'").catch(() => {});
+      await db.closeAllPools().catch(() => {});
+    } catch {}
+
     if (authProcess) authProcess.kill();
     if (orgProcess) orgProcess.kill();
   });
@@ -52,8 +79,8 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
     let adminToken = null;
     let employeeToken = null;
     let refreshToken = null;
-    const testUsername = `user_${Date.now()}`;
-    const testEmail = `${testUsername}@htqlns.com`;
+    testUsername = `user_${Date.now()}`;
+    testEmail = `${testUsername}@htqlns.com`;
 
     test('Health check /health trả về trạng thái UP', async () => {
       const res = await fetch(`http://localhost:${AUTH_PORT}/health`);
@@ -195,8 +222,6 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
   });
 
   describe('2. Kiểm thử Organization Service (:3102)', () => {
-    let createdDeptId = null;
-    let createdEmpId = null;
     const adminUser = { userId: 'e001', username: 'admin', role: 'ADMIN' };
     const adminHeaders = {
       'Content-Type': 'application/json',
@@ -323,7 +348,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(getData.data.full_name, 'Vũ Văn Kiểm Thử (Chuẩn SOA)');
     });
 
-    test('Cập nhật trạng thái nhân viên nghỉ việc /api/organization/employees/:id (HTTP 200)', async () => {
+    test('Cập nhật trạng thái nhân viên nghỉ việc hoặc xóa nhân viên /api/organization/employees/:id (HTTP 200)', async () => {
       assert.ok(createdEmpId, 'Phải có createdEmpId');
       const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/${createdEmpId}`, {
         method: 'DELETE',
@@ -331,7 +356,21 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
-      assert.strictEqual(data.data.status, 'RESIGNED');
+      assert.strictEqual(data.success, true);
+      assert.ok(data.data.deleted || data.data.status === 'RESIGNED');
+
+      // Xác minh GET /api/v1/employees mặc định loại bỏ các nhân viên đã xóa mềm/nghỉ việc
+      const listRes = await fetch(`http://localhost:${ORG_PORT}/api/v1/employees`, {
+        headers: adminHeaders
+      });
+      assert.strictEqual(listRes.status, 200);
+      const listData = await listRes.json();
+      assert.ok(Array.isArray(listData.data));
+      assert.strictEqual(
+        listData.data.some((e) => e.id === createdEmpId),
+        false,
+        'Danh sách GET /api/v1/employees không được chứa nhân viên đã xóa'
+      );
     });
 
     test('Xóa phòng ban thử nghiệm /api/organization/departments/:id', async () => {
