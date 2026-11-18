@@ -345,6 +345,7 @@ const getDepartmentDetailHandler = async (req, res) => {
     if (!dept) return notFound(res, 'Không tìm thấy phòng ban');
     return success(res, dept);
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -426,6 +427,7 @@ const createDepartmentHandler = async (req, res) => {
       defaultShiftId: default_shift_id || null
     }, 'Tạo phòng ban thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -465,6 +467,7 @@ const updateDepartmentHandler = async (req, res) => {
     await logAudit('UPDATE_DEPARTMENT', req.user, 'DEPARTMENT', id, req.body, req);
     return success(res, { id }, 200, 'Cập nhật phòng ban thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -487,6 +490,7 @@ const deleteDepartmentHandler = async (req, res) => {
     await logAudit('DELETE_DEPARTMENT', req.user, 'DEPARTMENT', id, null, req);
     return success(res, { id }, 200, 'Xóa phòng ban thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -524,6 +528,7 @@ const getPositionsHandler = async (req, res) => {
 
     return success(res, positions);
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -569,6 +574,7 @@ const createPositionHandler = async (req, res) => {
     await logAudit('CREATE_POSITION', req.user, 'POSITION', id, { code, title }, req);
     return created(res, { id, code, title }, 'Tạo chức danh thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -720,6 +726,7 @@ app.get('/api/organization/employees/me/profile', async (req, res) => {
     if (!employee) return notFound(res, 'Chưa tìm thấy hồ sơ nhân sự liên kết với tài khoản này');
     return success(res, employee);
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 });
@@ -750,6 +757,7 @@ const getEmployeeDetailHandler = async (req, res) => {
     if (!emp) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
     return success(res, emp);
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -841,6 +849,7 @@ const createEmployeeHandler = async (req, res) => {
 
     return created(res, { id, code, full_name, email }, 'Tạo hồ sơ nhân sự thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -974,6 +983,7 @@ const updateEmployeeHandler = async (req, res) => {
 
     return success(res, updatedData, 200, 'Cập nhật hồ sơ nhân sự thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -1108,6 +1118,7 @@ const onboardEmployeeHandler = async (req, res) => {
 
     return success(res, emp, 200, 'Tiếp nhận nhân sự thành công');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -1159,6 +1170,7 @@ const deleteEmployeeHandler = async (req, res) => {
     events.publish('employee.resigned', { id }, { source: 'organization-service' });
     return success(res, { id, status: 'RESIGNED' }, 200, 'Đã cập nhật trạng thái nhân sự thành Nghỉ việc (RESIGNED)');
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 };
@@ -1262,6 +1274,7 @@ app.get(['/api/organization/invitations', '/api/invitations'], async (req, res) 
 
     return success(res, list, 200, 'Thành công', { total: list.length });
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 });
@@ -1281,6 +1294,7 @@ app.get(['/api/organization/invitations/my-pending', '/api/invitations/my-pendin
 
     return success(res, pending, 200, 'Thành công', { total: pending.length });
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 });
@@ -1475,6 +1489,7 @@ app.get('/internal/organization/employee-scope', async (req, res) => {
 
     return success(res, { isUnassigned: false, allowedEmpIds: [empId] });
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 });
@@ -1500,6 +1515,7 @@ app.get('/api/organization/audit-logs', async (req, res) => {
 
     return success(res, logs);
   } catch (err) {
+    console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);
   }
 });

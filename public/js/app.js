@@ -2860,40 +2860,73 @@ async function checkTodayAttendanceStatus() {
 
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
-    const res = await apiCall('/api/attendance');
-    if (res && res.success && Array.isArray(res.data)) {
-      const todayRecord = res.data.find(r => {
-        if (!r.work_date) return false;
-        const rDate = new Date(r.work_date).toISOString().slice(0, 10);
-        return rDate === todayStr;
-      });
+    let todayRecord = null;
 
-      if (todayRecord) {
-        if (todayRecord.check_in_time) {
-          const inTime = new Date(todayRecord.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-          checkinBtn.disabled = true;
-          checkinBtn.innerText = `Đã Check-in (${inTime})`;
-          checkinBtn.style.opacity = '0.7';
-          if (checkoutBtn) checkoutBtn.disabled = false;
+    // 1. Kiểm tra từ API
+    try {
+      const res = await apiCall('/api/attendance');
+      if (res && res.success && Array.isArray(res.data)) {
+        todayRecord = res.data.find(r => {
+          if (!r.work_date) return false;
+          const rDate = new Date(r.work_date).toISOString().slice(0, 10);
+          return rDate === todayStr;
+        });
+      }
+    } catch (_) {}
+
+    // 2. Fallback từ storage cá nhân nếu API chưa đồng bộ
+    if (!todayRecord && typeof getUserEntityList === 'function') {
+      const userAtts = getUserEntityList('attendances');
+      todayRecord = userAtts.find(l => l.work_date && l.work_date.startsWith(todayStr));
+    }
+
+    if (todayRecord) {
+      if (todayRecord.check_in_time) {
+        const inTime = new Date(todayRecord.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        checkinBtn.disabled = true;
+        checkinBtn.innerText = `Đã Check-in (${inTime})`;
+        checkinBtn.style.opacity = '0.7';
+        if (checkoutBtn) {
+          checkoutBtn.disabled = false;
+          checkoutBtn.innerText = 'Điểm danh ra ca';
+          checkoutBtn.style.opacity = '1';
         }
-        if (todayRecord.check_out_time) {
-          const outTime = new Date(todayRecord.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-          if (checkoutBtn) {
-            checkoutBtn.disabled = true;
-            checkoutBtn.innerText = `Đã Check-out (${outTime})`;
-            checkoutBtn.style.opacity = '0.7';
-          }
+      }
+      if (todayRecord.check_out_time) {
+        const outTime = new Date(todayRecord.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        if (checkoutBtn) {
+          checkoutBtn.disabled = true;
+          checkoutBtn.innerText = `Đã Check-out (${outTime})`;
+          checkoutBtn.style.opacity = '0.7';
         }
-      } else {
-        checkinBtn.disabled = false;
-        checkinBtn.innerText = 'Check In';
-        checkinBtn.style.opacity = '1';
-        if (checkoutBtn) checkoutBtn.disabled = true;
+      }
+    } else {
+      checkinBtn.disabled = false;
+      checkinBtn.innerText = 'Check In';
+      checkinBtn.style.opacity = '1';
+      if (checkoutBtn) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.innerText = 'Điểm danh ra ca';
+        checkoutBtn.style.opacity = '0.7';
       }
     }
   } catch (err) {
     console.warn('Lỗi kiểm tra trạng thái chấm công:', err.message);
   }
+}
+
+// Xử lý Check In từ màn hình Chấm công Cá nhân
+async function handleCheckIn() {
+  await handleDashboardCheckIn();
+  await checkTodayAttendanceStatus();
+  await loadMyAttendanceData();
+}
+
+// Xử lý Điểm danh ra ca từ màn hình Chấm công Cá nhân
+async function handleCheckOut() {
+  await handleDashboardCheckOut();
+  await checkTodayAttendanceStatus();
+  await loadMyAttendanceData();
 }
 
 // ==============================================================================

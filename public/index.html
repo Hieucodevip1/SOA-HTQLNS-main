@@ -3263,19 +3263,19 @@ input:checked + .slider:before {
           </div>
 
           <!-- WIDGET CHECK-IN / CHECK-OUT TRỰC TIẾP -->
-          <div class="figma-white-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #1e293b, #0f172a); color: #ffffff;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div class="personal-att-banner" id="personalAttendanceBanner">
+            <div class="personal-att-banner-inner">
               <div>
-                <div style="font-size: 13px; color: #94a3b8; font-weight: 600;">HỆ THỐNG ĐIỂM DANH THỜI GIAN THỰC</div>
-                <div style="font-size: 32px; font-weight: 800; color: #38bdf8; letter-spacing: 1px; margin: 4px 0;" id="liveClockText">08:00:00</div>
-                <div style="font-size: 13px; color: #cbd5e1;">📍 Tọa độ GPS: 10.762622, 106.660172 • Wi-Fi: <strong>HTQLNS-Community-5G</strong></div>
+                <div class="personal-att-subtitle">HỆ THỐNG ĐIỂM DANH THỜI GIAN THỰC</div>
+                <div class="personal-att-clock" id="liveClockText">08:00:00</div>
+                <div class="personal-att-meta">Tọa độ GPS: 10.762622, 106.660172 • Wi-Fi: <strong>HTQLNS-Community-5G</strong></div>
               </div>
-              <div style="display: flex; gap: 12px;">
-                <button type="button" class="btn-figma-dark" id="btnMyCheckIn" onclick="handleCheckIn()" style="background: #10b981; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
-                  🟢 Điểm danh vào ca
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="button" class="btn-personal-checkin" id="btnMyCheckIn" onclick="handleCheckIn()">
+                  Check In
                 </button>
-                <button type="button" class="btn-figma-dark" id="btnMyCheckOut" onclick="handleCheckOut()" style="background: #ef4444; border: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 9999px;">
-                  🔴 Điểm danh ra ca
+                <button type="button" class="btn-personal-checkout" id="btnMyCheckOut" onclick="handleCheckOut()">
+                  Điểm danh ra ca
                 </button>
               </div>
             </div>
@@ -3284,17 +3284,17 @@ input:checked + .slider:before {
           <!-- 3 THẺ TỔNG HỢP CÔNG CÁ NHÂN -->
           <div class="metrics-row-4" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tổng ngày công trong tháng</span><span>📅</span></div>
+              <div class="metric-header"><span>Tổng ngày công trong tháng</span></div>
               <div class="metric-value-huge metric-value-green" id="myAttSummaryWorkDays">--</div>
               <div class="metric-footer-note" id="myAttSummaryWorkDaysNote">Số ngày công thực tế ghi nhận</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏳</span></div>
+              <div class="metric-header"><span>Tổng giờ làm việc</span></div>
               <div class="metric-value-huge metric-value-blue" id="myAttSummaryWorkHours">--</div>
               <div class="metric-footer-note" id="myAttSummaryWorkHoursNote">Tích lũy giờ làm trong tháng</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Đi muộn / Về sớm / Thiếu công</span><span>⚠️</span></div>
+              <div class="metric-header"><span>Đi muộn / Về sớm / Thiếu công</span></div>
               <div class="metric-value-huge metric-value-orange" id="myAttSummaryExceptions">--</div>
               <div class="metric-footer-note" id="myAttSummaryExceptionsNote">Số lần cần giải trình công</div>
             </div>
@@ -3347,8 +3347,8 @@ input:checked + .slider:before {
                   </select>
                 </div>
 
-                <button type="button" class="btn-figma-dark" onclick="loadMyAttendanceData()" style="padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 9999px; cursor: pointer;" title="Tải lại bảng công">
-                  🔄 Làm mới
+                <button type="button" class="btn-figma-dark" onclick="loadMyAttendanceData()" style="padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer;" title="Tải lại bảng công">
+                  Làm mới
                 </button>
               </div>
             </div>
