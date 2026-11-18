@@ -701,6 +701,8 @@ function updateTopbarUser() {
       greetSub.innerText = `Xin chào ${displayName}, đây là tình hình đội nhóm và chuyên cần hôm nay.`;
     }
   }
+
+  renderTopbarNotifications();
 }
 
 // Phân quyền giao diện theo vai trò người dùng (RBAC Interface Guard)
@@ -3386,39 +3388,29 @@ async function loadEmployeeDashboardData() {
   const liveClock = document.getElementById('dashEmpLiveClock');
   const todayBadge = document.getElementById('dashEmpTodayBadge');
 
-  if (heroGreeting) heroGreeting.innerText = `👋 Xin chào, ${displayName}!`;
+  if (heroGreeting) heroGreeting.style.display = 'none';
   if (liveClock) liveClock.innerText = now.toLocaleTimeString('vi-VN');
 
   if (todayDateText) {
     if (isOnboarded) {
-      todayDateText.innerText = `📅 ${todayStr} • ${shiftName} (${shiftStart} - ${shiftEnd}) • ${positionTitle} (${deptName})`;
+      todayDateText.innerText = `${todayStr} • ${shiftName} (${shiftStart} - ${shiftEnd})`;
     } else {
-      todayDateText.innerText = `📅 ${todayStr} • ⏳ Trạng thái: Hồ sơ mới đăng ký — Đang chờ tiếp nhận vào ban/phòng`;
+      todayDateText.innerText = todayStr;
     }
   }
 
   if (gpsStatus) {
     if (isOnboarded) {
-      gpsStatus.innerHTML = `📡 Trạng thái định vị: <span style="color:#059669; font-weight:700;">✓ Đang trong vùng hợp lệ</span> — cách văn phòng 15m (Wi-Fi: QNU-Office)`;
+      const officeName = state.user.officeLocation || 'Văn phòng Quy Nhơn';
+      gpsStatus.innerHTML = `Trạng thái định vị: <span style="color:#059669; font-weight:600;">Hợp lệ (${officeName})</span>`;
     } else {
-      gpsStatus.innerHTML = `📡 Trạng thái: <span style="color:#d97706; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span> — Vui lòng chờ Admin/HR phân công ca làm việc`;
+      gpsStatus.innerHTML = 'Trạng thái định vị: <span style="color:#dc2626; font-weight:600;">Chưa gán văn phòng làm việc</span>';
     }
   }
 
   // 3. Khối Chấm công trong ngày (Thời gian thực & Cách ly theo tài khoản)
   let userAtts = getUserEntityList('attendances');
   const todayLog = userAtts.find(l => l.work_date && l.work_date.startsWith(today));
-
-  // Tọa độ và văn phòng làm việc
-  if (gpsStatus) {
-    if (isOnboarded) {
-      const officeName = state.user.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
-      const ssidName = state.user.officeSsid || 'QNU-Office';
-      gpsStatus.innerHTML = `📡 Trạng thái định vị: <span style="color:#059669; font-weight:700;">✓ Đang trong vùng hợp lệ</span> — cách văn phòng 15m (${officeName} • Wi-Fi: ${ssidName})`;
-    } else {
-      gpsStatus.innerHTML = '📡 Trạng thái định vị: <span style="color:#dc2626; font-weight:700;">⚠️ Chưa gán văn phòng làm việc</span> — Cần HR gán chi nhánh/văn phòng (office_locations) để lấy tọa độ Geofence (Tránh lỗi OUT_OF_RANGE)';
-    }
-  }
 
   const checkInVal = document.getElementById('dashEmpCheckInVal');
   const checkInNote = document.getElementById('dashEmpCheckInNote');
@@ -3433,7 +3425,7 @@ async function loadEmployeeDashboardData() {
     const inTime = new Date(todayLog.check_in_time).toLocaleTimeString('vi-VN');
     if (checkInVal) checkInVal.innerText = inTime;
     if (checkInNote) {
-      checkInNote.innerText = todayLog.status === 'LATE' ? `Đi muộn ${todayLog.late_minutes} phút` : 'Đúng giờ ✓';
+      checkInNote.innerText = todayLog.status === 'LATE' ? `Đi muộn ${todayLog.late_minutes} phút` : 'Đúng giờ';
       checkInNote.style.color = todayLog.status === 'LATE' ? '#d97706' : '#059669';
     }
 
@@ -3442,13 +3434,13 @@ async function loadEmployeeDashboardData() {
       if (checkOutVal) checkOutVal.innerText = outTime;
       if (checkOutNote) { checkOutNote.innerText = 'Đã hoàn tất ca'; checkOutNote.style.color = '#059669'; }
       if (hoursVal) hoursVal.innerText = `${todayLog.actual_working_hours || '8.5'} h`;
-      if (hoursNote) hoursNote.innerText = 'Đạt chuẩn 8.0 h ✓';
+      if (hoursNote) hoursNote.innerText = 'Đạt chuẩn 8.0 h';
       if (todayBadge) {
-        todayBadge.innerText = '🔵 Hoàn thành ca làm việc';
+        todayBadge.innerText = 'Hoàn thành ca làm việc';
         todayBadge.style.background = '#dbeafe';
         todayBadge.style.color = '#1e40af';
       }
-      if (checkInBtn) { checkInBtn.style.display = 'flex'; checkInBtn.className = 'btn-hero-action btn-hero-done'; checkInBtn.disabled = true; checkInBtn.innerHTML = '<span>✓</span><span>ĐÃ HOÀN TẤT HÔM NAY</span>'; }
+      if (checkInBtn) { checkInBtn.style.display = 'flex'; checkInBtn.className = 'btn-hero-action btn-hero-done'; checkInBtn.disabled = true; checkInBtn.innerHTML = '<span>ĐÃ HOÀN TẤT HÔM NAY</span>'; }
       if (checkOutBtn) { checkOutBtn.style.display = 'none'; }
     } else {
       if (checkOutVal) checkOutVal.innerText = '--:--:--';
@@ -3457,7 +3449,7 @@ async function loadEmployeeDashboardData() {
       if (hoursVal) hoursVal.innerText = `${Math.max(0.1, parseFloat(elapsedHours))} h`;
       if (hoursNote) hoursNote.innerText = 'Đang tích lũy...';
       if (todayBadge) {
-        todayBadge.innerText = todayLog.status === 'LATE' ? `⚠️ Đã vào ca (Đi muộn ${todayLog.late_minutes}p)` : '🟢 Đã vào ca (Đúng giờ)';
+        todayBadge.innerText = todayLog.status === 'LATE' ? `Đã vào ca (Đi muộn ${todayLog.late_minutes}p)` : 'Đã vào ca (Đúng giờ)';
         todayBadge.style.background = todayLog.status === 'LATE' ? '#fef3c7' : '#dcfce7';
         todayBadge.style.color = todayLog.status === 'LATE' ? '#b45309' : '#15803d';
       }
@@ -3466,7 +3458,7 @@ async function loadEmployeeDashboardData() {
         checkOutBtn.style.display = 'flex';
         checkOutBtn.disabled = false;
         checkOutBtn.className = 'btn-hero-action btn-hero-checkout';
-        checkOutBtn.innerHTML = '<span style="font-size: 20px;">🚪</span><span>CHECK-OUT (KẾT THÚC CA)</span>';
+        checkOutBtn.innerHTML = '<span>CHECK-OUT (KẾT THÚC CA)</span>';
       }
     }
   } else {
@@ -3479,11 +3471,11 @@ async function loadEmployeeDashboardData() {
     if (hoursNote) hoursNote.innerText = isOnboarded ? 'Tiêu chuẩn: 8.0 h' : 'Chưa xếp ca';
     if (todayBadge) {
       if (isOnboarded) {
-        todayBadge.innerText = '🟢 Sẵn sàng chấm công';
+        todayBadge.innerText = 'Sẵn sàng chấm công';
         todayBadge.style.background = '#dcfce7';
         todayBadge.style.color = '#15803d';
       } else {
-        todayBadge.innerText = '🟡 Chưa phân ca làm việc';
+        todayBadge.innerText = 'Chưa phân ca làm việc';
         todayBadge.style.background = '#fef3c7';
         todayBadge.style.color = '#b45309';
       }
@@ -3497,22 +3489,22 @@ async function loadEmployeeDashboardData() {
         checkInBtn.style.cursor = 'pointer';
         checkInBtn.style.opacity = '1';
         checkInBtn.title = 'Bấm để chấm công vào ca';
-        checkInBtn.innerHTML = '<span style="font-size: 20px;">📍</span><span>CHECK-IN NGAY</span>';
+        checkInBtn.innerHTML = '<span>CHECK-IN NGAY</span>';
       } else {
-        // TẠM KHÓA NÚT CHẤM CÔNG NẾU CHƯA ĐƯỢC PHÂN PHÒNG BAN ĐỂ TRÁNH LỖI OUT_OF_RANGE / THIẾU CA
+        // TẠM KHÓA NÚT CHẤM CÔNG NẾU CHƯA ĐƯỢC PHÂN PHÒNG BAN
         checkInBtn.disabled = true;
         checkInBtn.className = 'btn-hero-action btn-hero-locked';
         checkInBtn.style.background = '#94a3b8';
         checkInBtn.style.cursor = 'not-allowed';
         checkInBtn.style.opacity = '0.75';
-        checkInBtn.title = 'Tài khoản chưa được phân bổ vào phòng ban. Vui lòng liên hệ HR để được tiếp nhận và gán văn phòng GPS trước khi chấm công';
-        checkInBtn.innerHTML = '<span style="font-size: 20px;">🔒</span><span>CHỜ PHÂN PHÒNG BAN ĐỂ CHẤM CÔNG</span>';
+        checkInBtn.title = 'Tài khoản chưa được phân bổ vào phòng ban. Vui lòng liên hệ HR hoặc Quản lý trước khi chấm công';
+        checkInBtn.innerHTML = '<span>CHỜ PHÂN PHÒNG BAN ĐỂ CHẤM CÔNG</span>';
       }
     }
     if (checkOutBtn) { checkOutBtn.style.display = 'none'; }
   }
 
-  // 4. Cập nhật 4 KPI Cards (Hoàn toàn chính xác theo dữ liệu cá nhân)
+  // 4. Cập nhật 4 KPI Cards (Chỉ số ngắn gọn, súc tích)
   const kpiWork = document.getElementById('dashEmpKpiWorkDays');
   const kpiWorkSub = document.getElementById('dashEmpKpiWorkDaysSub');
   const kpiLeave = document.getElementById('dashEmpKpiLeaveBalance');
@@ -3523,36 +3515,34 @@ async function loadEmployeeDashboardData() {
   const kpiOtSub = document.getElementById('dashEmpKpiOtHoursSub');
 
   if (!isOnboarded) {
-    // Tài khoản mới chưa onboarded: 100% hiển thị 0 và ghi chú rõ ràng
     if (kpiWork) kpiWork.innerText = '0 / 22';
-    if (kpiWorkSub) kpiWorkSub.innerText = 'Tổng 0.0 giờ làm việc tích lũy →';
+    if (kpiWorkSub) kpiWorkSub.innerText = '0.0 giờ tích lũy';
     if (kpiLeave) kpiLeave.innerText = '0.0 ngày';
-    if (kpiLeaveSub) kpiLeaveSub.innerText = 'Chưa kích hoạt quỹ phép năm →';
+    if (kpiLeaveSub) kpiLeaveSub.innerText = 'Chưa kích hoạt quỹ phép';
     if (kpiLate) kpiLate.innerText = '0 lần';
-    if (kpiLateSub) kpiLateSub.innerText = 'Chưa có dữ liệu vi phạm →';
+    if (kpiLateSub) kpiLateSub.innerText = 'Không có vi phạm';
     if (kpiOt) kpiOt.innerText = '0.0 giờ';
-    if (kpiOtSub) kpiOtSub.innerText = 'Chưa có phiếu lương cá nhân →';
+    if (kpiOtSub) kpiOtSub.innerText = 'Chưa có giờ tăng ca';
   } else {
-    // Đã onboarded: hiển thị theo dữ liệu thực tế của nhân viên
     const actualDays = userAtts.filter(l => l.check_in_time).length;
     const totalHours = (actualDays * 8.0).toFixed(1);
     if (kpiWork) kpiWork.innerText = `${actualDays} / 22`;
-    if (kpiWorkSub) kpiWorkSub.innerText = `Tổng ${totalHours} giờ làm việc tích lũy →`;
+    if (kpiWorkSub) kpiWorkSub.innerText = `${totalHours} giờ tích lũy`;
 
     const leaveBal = state.user.leaveBalance || 12.0;
     if (kpiLeave) kpiLeave.innerText = `${leaveBal.toFixed(1)} ngày`;
-    if (kpiLeaveSub) kpiLeaveSub.innerText = 'Đã dùng 0.0 ngày • Sẵn sàng sử dụng →';
+    if (kpiLeaveSub) kpiLeaveSub.innerText = 'Sẵn sàng sử dụng';
 
     const lateCount = userAtts.filter(l => l.status === 'LATE').length;
     const totalLateMins = userAtts.reduce((sum, l) => sum + (l.late_minutes || 0), 0);
     if (kpiLate) kpiLate.innerText = `${lateCount < 10 ? '0' + lateCount : lateCount} lần`;
-    if (kpiLateSub) kpiLateSub.innerText = lateCount > 0 ? `Tổng ${totalLateMins} phút đi muộn (Cần lưu ý) →` : 'Chuyên cần xuất sắc (0 phút muộn) →';
+    if (kpiLateSub) kpiLateSub.innerText = lateCount > 0 ? `${totalLateMins} phút đi muộn` : 'Không có vi phạm';
 
     let userRequests = getUserEntityList('requests');
     const otList = userRequests.filter(r => (r.type && r.type.includes('OT')) && r.status === 'APPROVED');
     const otHours = otList.reduce((sum, o) => sum + (parseFloat(o.hours) || 2.5), 0);
     if (kpiOt) kpiOt.innerText = `${otHours.toFixed(1)} giờ`;
-    if (kpiOtSub) kpiOtSub.innerText = `${otList.length} đơn OT duyệt • Phiếu lương (SCR_PAY_01) →`;
+    if (kpiOtSub) kpiOtSub.innerText = otList.length > 0 ? `${otList.length} đơn đã duyệt` : 'Chưa có giờ tăng ca';
   }
 
   // 5. Cột trái: Lịch ca tuần này (7 ngày tới)
@@ -3560,12 +3550,10 @@ async function loadEmployeeDashboardData() {
   if (weekScheduleBody) {
     if (!isOnboarded) {
       weekScheduleBody.innerHTML = `
-        <div style="text-align: center; color: #64748b; padding: 36px 20px; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px;">
-          <div style="font-size: 32px; margin-bottom: 8px;">📋</div>
-          <div style="font-weight: 700; color: #334155; font-size: 14px;">Chưa có lịch phân ca làm việc</div>
-          <div style="font-size: 12.5px; color: #94a3b8; margin-top: 5px; line-height: 1.5;">
-            Tài khoản của bạn đang chờ Ban Quản trị phê duyệt tiếp nhận vào ban/phòng.
-            <br>Lịch ca trực 7 ngày sẽ tự động xuất hiện tại đây ngay sau khi được phân công.
+        <div style="text-align: center; color: #64748b; padding: 16px 14px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;">
+          <div style="font-weight: 600; color: #334155; font-size: 13px;">Chưa có lịch phân ca làm việc</div>
+          <div style="font-size: 11.5px; color: #94a3b8; margin-top: 3px;">
+            Lịch ca trực sẽ hiển thị sau khi được phân công vào ban/phòng.
           </div>
         </div>
       `;
@@ -3590,16 +3578,16 @@ async function loadEmployeeDashboardData() {
         }
 
         if (isWeekend) {
-          shiftLabel = '<span style="color: #94a3b8; font-weight: 500;">🏠 Nghỉ cuối tuần</span>';
+          shiftLabel = '<span style="color: #94a3b8; font-weight: 500;">Nghỉ cuối tuần</span>';
           bgColor = '#f8fafc';
         } else {
           shiftLabel = `<span style="font-weight: 600; color: #1e293b;">${shiftName}</span> <span style="color: #64748b; font-size: 12px;">(${shiftStart} - ${shiftEnd})</span>`;
         }
 
         weekHtml += `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 8px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; font-size: 12.5px;">
             <div style="font-weight: ${isToday ? '700' : '500'}; color: ${textColor};">
-              ${isToday ? '📌 Hôm nay: ' : ''}${dayLabel}
+              ${isToday ? 'Hôm nay: ' : ''}${dayLabel}
             </div>
             <div>${shiftLabel}</div>
           </div>
@@ -3616,20 +3604,16 @@ async function loadEmployeeDashboardData() {
     if (!userRequests.length) {
       recentReqTbody.innerHTML = `
         <tr>
-          <td colspan="4" style="text-align: center; color: #64748b; padding: 32px 16px;">
-            <div style="font-size: 26px; margin-bottom: 6px;">📄</div>
-            <div style="font-weight: 700; color: #334155; font-size: 13.5px;">Chưa có đơn từ nào được tạo</div>
-            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">
-              Nhấp vào <strong>"+ Tạo đơn mới"</strong> ở góc trên để gửi đơn xin nghỉ phép đầu tiên của bạn.
-            </div>
+          <td colspan="4" style="text-align: center; color: #94a3b8; padding: 18px 12px; font-size: 12.5px;">
+            Chưa có đơn từ nào được tạo.
           </td>
         </tr>
       `;
     } else {
       recentReqTbody.innerHTML = userRequests.slice(0, 4).map(req => {
-        let badge = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">⏳ Chờ duyệt</span>';
-        if (req.status === 'APPROVED') badge = '<span class="badge-status badge-approved">✓ Đã duyệt</span>';
-        if (req.status === 'REJECTED') badge = '<span class="badge-status badge-rejected">✕ Từ chối</span>';
+        let badge = '<span class="badge-status" style="background:#fef3c7; color:#b45309;">Chờ duyệt</span>';
+        if (req.status === 'APPROVED') badge = '<span class="badge-status badge-approved">Đã duyệt</span>';
+        if (req.status === 'REJECTED') badge = '<span class="badge-status badge-rejected">Từ chối</span>';
 
         return `
           <tr>
@@ -3643,51 +3627,8 @@ async function loadEmployeeDashboardData() {
     }
   }
 
-  // 7. Khu vực 4: Thông báo & Nhắc nhở cá nhân
-  let userNotifs = getUserEntityList('notifications');
-  if (!userNotifs.length) {
-    if (!isOnboarded) {
-      userNotifs = [
-        {
-          id: 'notif-welcome',
-          title: `Chào mừng ${displayName} gia nhập Hệ thống HTQLNS!`,
-          message: 'Tài khoản của bạn đã được khởi tạo thành công. Vui lòng chờ Ban Quản trị tiếp nhận vào ban/phòng, xếp ca trực và cấu hình mức lương.',
-          type: 'SYSTEM',
-          created_at: new Date().toISOString(),
-          is_read: false
-        }
-      ];
-      saveUserEntityList('notifications', userNotifs);
-    }
-  }
-
-  const unreadCount = userNotifs.filter(n => !n.is_read).length;
-  const notifCountBadge = document.getElementById('dashEmpNotifCountBadge');
-  if (notifCountBadge) notifCountBadge.innerText = `${unreadCount} mới`;
-
-  const notifBody = document.getElementById('dashEmpNotificationsBody');
-  if (notifBody) {
-    if (!userNotifs.length) {
-      notifBody.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 24px; font-size: 13px;">Không có thông báo mới nào.</div>';
-    } else {
-      notifBody.innerHTML = userNotifs.slice(0, 4).map(n => {
-        const isUnread = !n.is_read;
-        const icon = n.type === 'LEAVE_APPROVED' ? '✅' : (n.type === 'LEAVE_REJECTED' ? '❌' : (n.type === 'LATE_WARNING' ? '⏰' : (n.type === 'PAYSLIP_ISSUED' ? '💰' : '📢')));
-        const timeStr = n.created_at ? new Date(n.created_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Hôm nay';
-
-        return `
-          <div style="display: flex; gap: 12px; padding: 12px 16px; background: ${isUnread ? '#eff6ff' : '#f8fafc'}; border: 1px solid ${isUnread ? '#bfdbfe' : '#e2e8f0'}; border-radius: 10px; cursor: pointer; transition: all 0.2s;" onclick="markNotifRead('${n.id}')">
-            <div style="font-size: 20px; min-width: 26px; text-align: center;">${icon}</div>
-            <div style="flex: 1;">
-              <div style="font-size: 13.5px; font-weight: ${isUnread ? '700' : '500'}; color: #1e293b;">${n.title || n.message}</div>
-              <div style="font-size: 11.5px; color: #94a3b8; margin-top: 3px;">${timeStr}</div>
-            </div>
-            ${isUnread ? '<div style="width: 8px; height: 8px; background: #2563eb; border-radius: 50%; margin-top: 6px;"></div>' : ''}
-          </div>
-        `;
-      }).join('');
-    }
-  }
+  // 7. Cập nhật Thông báo trên Header
+  renderTopbarNotifications();
 }
 
 // ==============================================================================
@@ -3713,7 +3654,7 @@ async function loadPendingInvitationsForEmp() {
     listEl.innerHTML = invites.map(inv => `
       <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 14px; margin-top: 6px;">
         <div>
-          <div style="font-weight: 700; color: #1e293b; font-size: 13.5px;">🏢 ${inv.department_name || 'Phòng ban làm việc'}</div>
+          <div style="font-weight: 700; color: #1e293b; font-size: 13.5px;">${inv.department_name || 'Phòng ban làm việc'}</div>
           <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
             Người mời: <strong>${inv.manager_name || 'Quản lý'}</strong> • Mã mời: <code style="font-weight:700; color:#2563eb;">${inv.invite_code}</code>
           </div>
@@ -4034,13 +3975,101 @@ async function submitCreateTeam() {
   }
 }
 
+// Dropdown Thông Báo trên Header
+function toggleTopbarNotifDropdown(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const dropdown = document.getElementById('topbarNotifDropdown');
+  if (!dropdown) return;
+  const isShown = dropdown.style.display === 'block';
+  dropdown.style.display = isShown ? 'none' : 'block';
+}
+
+function openNotificationsModal(e) {
+  toggleTopbarNotifDropdown(e);
+}
+
+function closeTopbarNotifDropdown() {
+  const dropdown = document.getElementById('topbarNotifDropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function renderTopbarNotifications() {
+  if (!state.user) return;
+  const isEmployee = (state.user.role === 'EMPLOYEE');
+  const isOnboarded = state.user.isOnboarded;
+  const displayName = state.user.fullName || state.user.username || 'Nhân viên';
+
+  let userNotifs = getUserEntityList('notifications');
+  if (!userNotifs.length && isEmployee && !isOnboarded) {
+    userNotifs = [
+      {
+        id: 'notif-welcome',
+        title: `Chào mừng ${displayName} gia nhập Hệ thống HTQLNS!`,
+        message: 'Tài khoản của bạn đã được khởi tạo thành công. Vui lòng chờ Ban Quản trị tiếp nhận vào ban/phòng, xếp ca trực và cấu hình mức lương.',
+        type: 'SYSTEM',
+        created_at: new Date().toISOString(),
+        is_read: false
+      }
+    ];
+    saveUserEntityList('notifications', userNotifs);
+  }
+
+  const unreadCount = userNotifs.filter(n => !n.is_read).length;
+  const topbarBadge = document.getElementById('topbarNotifCountBadge');
+  if (topbarBadge) topbarBadge.innerText = `${unreadCount} mới`;
+
+  const topbarDot = document.getElementById('topbarNotifBadgeDot');
+  if (topbarDot) topbarDot.style.display = unreadCount > 0 ? 'block' : 'none';
+
+  const topbarList = document.getElementById('topbarNotifList');
+  if (topbarList) {
+    if (!userNotifs.length) {
+      topbarList.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 12.5px;">Không có thông báo mới nào.</div>';
+    } else {
+      topbarList.innerHTML = userNotifs.map(n => {
+        const isUnread = !n.is_read;
+        const d = n.created_at ? new Date(n.created_at) : new Date();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const MM = String(d.getMonth() + 1).padStart(2, '0');
+        const timeStr = `${hh}:${mm} ${dd}-${MM}`;
+        const titleText = n.title || n.message;
+
+        return `
+          <div class="topbar-notif-item ${isUnread ? 'unread' : ''}" onclick="markNotifRead('${n.id}')">
+            <div style="flex: 1;">
+              <div style="font-size: 13px; font-weight: ${isUnread ? '700' : '500'}; color: #1e293b; line-height: 1.4;">${titleText} - ${timeStr}</div>
+              ${n.title && n.message && n.title !== n.message ? `<div style="font-size: 11.5px; color: #64748b; margin-top: 3px; line-height: 1.35;">${n.message}</div>` : ''}
+            </div>
+            ${isUnread ? '<div style="width: 7px; height: 7px; background: #2563eb; border-radius: 50%; margin-top: 5px; flex-shrink: 0;"></div>' : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const wrapper = document.querySelector('.topbar-notif-wrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    closeTopbarNotifDropdown();
+  }
+});
+
 // Đánh dấu đã đọc thông báo
 function markNotifRead(notifId) {
   let userNotifs = getUserEntityList('notifications');
   const target = userNotifs.find(n => n.id === notifId);
   if (target) target.is_read = true;
   saveUserEntityList('notifications', userNotifs);
-  loadEmployeeDashboardData();
+  renderTopbarNotifications();
+  if (state.currentView === 'dashboard' && state.user?.role === 'EMPLOYEE') {
+    loadEmployeeDashboardData();
+  }
 }
 
 function markAllEmployeeNotifsRead() {
@@ -4049,8 +4078,11 @@ function markAllEmployeeNotifsRead() {
   saveUserEntityList('notifications', userNotifs);
   const badge = document.getElementById('dashEmpNotifCountBadge');
   if (badge) badge.innerText = '0 mới';
+  renderTopbarNotifications();
   showToast('Đã đánh dấu tất cả thông báo là đã đọc', 'success');
-  loadEmployeeDashboardData();
+  if (state.currentView === 'dashboard' && state.user?.role === 'EMPLOYEE') {
+    loadEmployeeDashboardData();
+  }
 }
 
 function scrollToCreateLeaveForm() {
@@ -4117,13 +4149,13 @@ async function handleDashboardCheckIn() {
       console.warn('API Check-in backend offline, sử dụng cơ chế cách ly client storage:', err.message);
     });
 
-    showToast(`📍 Check-in thành công lúc ${timeStr}! Chúc bạn làm việc hiệu quả.`, 'success');
+    showToast(`Check-in thành công lúc ${timeStr}! Chúc bạn làm việc hiệu quả.`, 'success');
     loadEmployeeDashboardData();
   } catch (err) {
     showToast(err.message, 'error');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span style="font-size: 20px;">📍</span><span>CHECK-IN NGAY</span>';
+      btn.innerHTML = '<span>CHECK-IN NGAY</span>';
     }
   }
 }
@@ -4165,13 +4197,13 @@ async function handleDashboardCheckOut() {
       console.warn('API Check-out backend offline, sử dụng cơ chế cách ly client storage:', err.message);
     });
 
-    showToast(`🚪 Check-out thành công lúc ${timeStr}! Hẹn gặp lại bạn vào ngày mai.`, 'success');
+    showToast(`Check-out thành công lúc ${timeStr}! Hẹn gặp lại bạn vào ngày mai.`, 'success');
     loadEmployeeDashboardData();
   } catch (err) {
     showToast(err.message, 'error');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span style="font-size: 20px;">🚪</span><span>CHECK-OUT (KẾT THÚC CA)</span>';
+      btn.innerHTML = '<span>CHECK-OUT (KẾT THÚC CA)</span>';
     }
   }
 }

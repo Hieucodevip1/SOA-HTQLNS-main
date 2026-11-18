@@ -1511,49 +1511,49 @@ input:checked + .slider:before {
 
       <nav class="sidebar-nav-list">
         <a class="figma-nav-item active" id="nav-dashboard" onclick="navigateToView('dashboard')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🏠</span> Tổng quan
+          Tổng quan
         </a>
         <a class="figma-nav-item" id="nav-employees" onclick="navigateToView('employees')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📋</span> Nhân viên
+          Nhân viên
         </a>
         <a class="figma-nav-item" id="nav-departments" onclick="navigateToView('departments')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🏢</span> Cơ cấu phòng ban
+          Cơ cấu phòng ban
         </a>
         <a class="figma-nav-item" id="nav-attendance-history" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📄</span> Lịch sử chấm công NV
+          Lịch sử chấm công NV
         </a>
         <a class="figma-nav-item" id="nav-my-attendance" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
-          <span class="figma-nav-icon">👤</span> Lịch sử chấm công
+          Lịch sử chấm công
         </a>
         <a class="figma-nav-item" id="nav-rbac" onclick="navigateToView('rbac')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🔐</span> Quản lý phân quyền
+          Quản lý phân quyền
         </a>
         <a class="figma-nav-item" id="nav-stats" onclick="navigateToView('stats')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📈</span> Thống kê
+          Thống kê
         </a>
         <a class="figma-nav-item" id="nav-requests" onclick="navigateToView('requests')" style="cursor: pointer;">
-          <span class="figma-nav-icon">📝</span> Đơn từ
+          Đơn từ
         </a>
         <a class="figma-nav-item" id="nav-shifts" onclick="navigateToView('shifts')" style="cursor: pointer;">
-          <span class="figma-nav-icon">⏰</span> Phân ca &amp; Tăng ca (OT)
+          Phân ca &amp; Tăng ca (OT)
         </a>
         <a class="figma-nav-item" id="nav-payroll" onclick="navigateToView('payroll')" style="cursor: pointer;">
-          <span class="figma-nav-icon">💰</span> Bảng lương &amp; Phiếu lương
+          Bảng lương &amp; Phiếu lương
         </a>
         <a class="figma-nav-item" id="nav-settings" onclick="navigateToView('settings')" style="cursor: pointer;">
-          <span class="figma-nav-icon">⚙️</span> Thiết lập chấm công
+          Thiết lập chấm công
         </a>
         <a class="figma-nav-item" id="nav-profile" onclick="navigateToView('profile')" style="cursor: pointer;">
-          <span class="figma-nav-icon">👤</span> Hồ sơ cá nhân
+          Hồ sơ cá nhân
         </a>
         <a class="figma-nav-item" id="nav-soa-monitor" onclick="navigateToView('soa-monitor')" style="cursor: pointer;">
-          <span class="figma-nav-icon">🌐</span> Hạ tầng SOA
+          Hạ tầng SOA
         </a>
       </nav>
 
       <div style="padding: 10px 14px; border-top: 1px solid var(--border-light);">
         <button type="button" onclick="handleLogoutClick()" style="width: 100%; background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
-          <span>🚪</span> Đăng xuất
+          Đăng xuất
         </button>
       </div>
 
@@ -1570,14 +1570,38 @@ input:checked + .slider:before {
       <header class="figma-topbar">
         <div class="topbar-search-wrap">
           <input type="text" class="topbar-search-input" placeholder="Tìm kiếm trong hệ thống (nhấn Enter)" onkeydown="handleTopbarSearch(event)">
-          <span class="topbar-search-icon">🔍</span>
+          <span class="topbar-search-icon" style="display: flex; align-items: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </span>
         </div>
 
         <div class="topbar-right-profile" style="display: flex; align-items: center; gap: 14px;">
-          <button class="notif-bell-btn" title="Thông báo mới" onclick="openNotificationsModal()" style="cursor: pointer;">
-            🔔
-            <span class="notif-badge-dot"></span>
-          </button>
+          <!-- Dropdown Popover Thông Báo -->
+          <div class="topbar-notif-wrapper" style="position: relative;">
+            <button class="notif-bell-btn" id="topbarNotifBellBtn" title="Thông báo" onclick="toggleTopbarNotifDropdown(event)" style="cursor: pointer;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              <span class="notif-badge-dot" id="topbarNotifBadgeDot" style="display: none;"></span>
+            </button>
+
+            <div id="topbarNotifDropdown" class="topbar-notif-dropdown" style="display: none;">
+              <div class="topbar-notif-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-weight: 700; font-size: 13.5px; color: #0f172a;">Thông báo</span>
+                  <span class="badge-status" style="background: #fef3c7; color: #b45309; font-size: 11px; padding: 2px 7px; font-weight: 700;" id="topbarNotifCountBadge">0 mới</span>
+                </div>
+                <button type="button" class="btn-notif-mark-read" onclick="markAllEmployeeNotifsRead()">Đánh dấu đã đọc tất cả</button>
+              </div>
+              <div id="topbarNotifList" class="topbar-notif-list">
+                <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 12.5px;">Đang tải thông báo...</div>
+              </div>
+            </div>
+          </div>
 
           <div class="user-info-box" onclick="navigateToView('profile')" style="cursor: pointer;" title="Nhấp để xem hồ sơ cá nhân">
             <div class="user-text-meta">
@@ -1590,7 +1614,7 @@ input:checked + .slider:before {
           </div>
 
           <button type="button" class="btn-logout-header" onclick="handleLogoutClick()" title="Đăng xuất khỏi hệ thống" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
-            <span>🚪</span> Đăng xuất
+            Đăng xuất
           </button>
         </div>
       </header>
@@ -1870,35 +1894,33 @@ input:checked + .slider:before {
           <div id="dashEmployeeOverviewSection" style="display: none;">
 
             <!-- Sảnh chờ Tham gia Phòng ban & Thông Báo Hồ Sơ Chờ Tiếp Nhận -->
-            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 14px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(245,158,11,0.08);">
-              <div style="display: flex; gap: 16px; align-items: flex-start;">
-                <div style="font-size: 32px; line-height: 1;"></div>
+            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(245,158,11,0.06);">
+              <div style="display: flex; gap: 12px; align-items: flex-start;">
                 <div style="flex: 1;">
-                  <div style="font-size: 16px; font-weight: 700; color: #92400e;">
-                    Bạn chưa gia nhập phòng ban/nhóm làm việc (Nút chấm công tạm khóa)
+                  <div style="font-size: 14px; font-weight: 700; color: #92400e;">
+                    Bạn chưa gia nhập phòng ban (Nút chấm công tạm khóa)
                   </div>
-                  <div style="font-size: 13px; color: #b45309; margin-top: 6px; line-height: 1.55;">
-                    Chào mừng bạn đến với hệ thống HTQLNS! Để bắt đầu chấm công và gửi đơn từ, bạn cần thuộc một phòng ban.
-                    <br>Vui lòng <strong>nhập mã mời (Invite Code)</strong> từ Quản lý của bạn (ví dụ: <code style="background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:700;">TEAM-TECH</code>) hoặc bấm <strong>Tham gia</strong> nếu có thư mời đang chờ dưới đây:
+                  <div style="font-size: 12.5px; color: #b45309; margin-top: 4px; line-height: 1.5;">
+                    Chào mừng bạn đến với hệ thống HTQLNS! Vui lòng nhập mã mời từ Quản lý của bạn (ví dụ: <code style="background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:700;">TEAM-TECH</code>) hoặc bấm Tham gia nếu có thư mời đang chờ:
                   </div>
 
-                  <!-- Form nhập mã mời phòng ban: thiết kế hàng ngang nhỏ gọn -->
-                  <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 520px;">
-                    <input type="text" id="inputJoinInviteCode" class="figma-pill-input" placeholder="Nhập mã mời (ví dụ: TEAM-TECH)..." style="width: 250px; max-width: 100%; padding: 8px 16px; font-size: 13px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; height: 38px; margin: 0;">
-                    <button type="button" class="btn-figma-dark" style="width: auto !important; max-width: fit-content; flex-shrink: 0; padding: 0 18px; height: 38px; font-size: 13px; font-weight: 600; border-radius: 9999px; margin: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.12);" onclick="handleJoinDepartmentByCode()">
+                  <!-- Form nhập mã mời phòng ban -->
+                  <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: 520px;">
+                    <input type="text" id="inputJoinInviteCode" class="figma-pill-input" placeholder="Nhập mã mời (ví dụ: TEAM-TECH)..." style="width: 250px; max-width: 100%; padding: 6px 14px; font-size: 12.5px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; height: 34px; margin: 0;">
+                    <button type="button" class="btn-figma-dark" style="width: auto !important; max-width: fit-content; flex-shrink: 0; padding: 0 16px; height: 34px; font-size: 12.5px; font-weight: 600; border-radius: 9999px; margin: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" onclick="handleJoinDepartmentByCode()">
                        Tham gia phòng ban
                     </button>
                   </div>
 
                   <!-- Khối hiển thị lời mời đang chờ gửi tới nhân viên này -->
-                  <div id="empPendingInvitationsSection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px dashed #fde68a;">
-                    <div style="font-size: 13px; font-weight: 700; color: #78350f; margin-bottom: 8px;">📬 Lời mời phòng ban đang chờ bạn:</div>
-                    <div id="empPendingInvitationsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                  <div id="empPendingInvitationsSection" style="display: none; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fde68a;">
+                    <div style="font-size: 12.5px; font-weight: 700; color: #78350f; margin-bottom: 6px;">Lời mời phòng ban đang chờ bạn:</div>
+                    <div id="empPendingInvitationsList" style="display: flex; flex-direction: column; gap: 6px;"></div>
                   </div>
 
-                  <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
-                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 700; font-size: 11.5px; padding: 4px 10px;">🟡 Chờ tham gia ban/phòng</span>
-                    <span style="font-size: 12px; color: #78350f;">• Mọi dữ liệu ca trực, quỹ phép, chấm công và phiếu lương sẽ kích hoạt ngay khi tham gia</span>
+                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 600; font-size: 11px; padding: 3px 8px;">Chờ tham gia ban/phòng</span>
+                    <span style="font-size: 11.5px; color: #78350f;">Ca trực, quỹ phép, chấm công và phiếu lương sẽ kích hoạt sau khi tham gia phòng ban.</span>
                   </div>
                 </div>
               </div>
@@ -1907,23 +1929,22 @@ input:checked + .slider:before {
             <!-- ===== KHU VỰC 1: HERO CARD — Thao tác nhanh & Chấm công trong ngày (SCR_ATT_01 + SCR_SHIFT_01) ===== -->
             <div class="emp-hero-card">
               <div class="emp-hero-top">
-                <div style="flex: 1; min-width: 280px;">
-                  <div class="emp-hero-greeting-title" id="dashEmpHeroGreeting">Xin chào, Vũ Đức Hiếu!</div>
-                  <div class="emp-hero-submeta" id="dashEmpTodayDateText">Thứ Hai, 15/11/2026 • Ca Hành Chính (08:00 - 17:30) • Kỹ sư phần mềm SOA</div>
+                <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; justify-content: center; gap: 6px;">
+                  <div class="emp-hero-submeta" id="dashEmpTodayDateText" style="font-size: 13px; font-weight: 600; color: #1e293b;"></div>
                   <div class="emp-hero-gps-tag" id="dashEmpGpsStatus">
-                    📡 Trạng thái định vị: <span style="color:#059669; font-weight:700;">✓ Đang trong vùng hợp lệ</span> — cách văn phòng 15m (Wi-Fi: QNU-Office)
+                    Trạng thái định vị: Chưa gán văn phòng làm việc
                   </div>
                 </div>
                 <div class="emp-live-clock-box">
                   <div class="emp-clock-date-label">Đồng hồ thời gian thực</div>
                   <div class="emp-live-clock-digits" id="dashEmpLiveClock">--:--:--</div>
                   <div style="margin-top: 4px;">
-                    <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 11.5px; font-weight: 700;">🟢 Sẵn sàng chấm công</span>
+                    <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 11.5px; font-weight: 600;">Sẵn sàng chấm công</span>
                   </div>
                 </div>
               </div>
 
-              <!-- Đồng hồ & Khối Check-in / Check-out lớn (Thao tác trong 5 giây) -->
+              <!-- Đồng hồ & Khối Check-in / Check-out lớn -->
               <div class="emp-checkin-row">
                 <div class="emp-time-stat-box">
                   <div class="emp-time-stat-label">Giờ vào ca</div>
@@ -1942,98 +1963,89 @@ input:checked + .slider:before {
                 </div>
                 <div style="display: flex; align-items: center; justify-content: center;">
                   <button type="button" class="btn-hero-action btn-hero-checkin" id="dashEmpCheckInBtn" onclick="handleDashboardCheckIn()">
-                    <span style="font-size: 20px;">📍</span>
                     <span>CHECK-IN NGAY</span>
                   </button>
                   <button type="button" class="btn-hero-action btn-hero-checkout" id="dashEmpCheckOutBtn" onclick="handleDashboardCheckOut()" style="display: none;">
-                    <span style="font-size: 20px;">🚪</span>
                     <span>CHECK-OUT (KẾT THÚC CA)</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Lối tắt nhanh (Quick Actions — 3 nút bấm một chạm) -->
+              <!-- Lối tắt nhanh (Quick Actions) -->
               <div class="emp-quick-actions-bar">
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-leave" onclick="scrollToCreateLeaveForm()">
-                  <span style="font-size: 16px;"></span>
                   <span>Xin nghỉ phép</span>
                 </button>
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-ot" onclick="openCreateOtModal()">
-                  <span style="font-size: 16px;"></span>
                   <span>Đăng ký OT</span>
                 </button>
                 <button type="button" class="btn-emp-quick-action btn-emp-qa-adj" onclick="openSubmitAdjustmentModal('', '', '')">
-                  <span style="font-size: 16px;"></span>
                   <span>Giải trình công</span>
                 </button>
               </div>
             </div>
 
-            <!-- ===== KHU VỰC 2: 4 KPI CARDS — Chỉ số cá nhân trong tháng (attendance + leave + payroll) ===== -->
-            <div class="metrics-row-4" style="margin-bottom: 24px;">
+            <!-- ===== KHU VỰC 2: 4 KPI CARDS — Chỉ số cá nhân trong tháng ===== -->
+            <div class="metrics-row-4" style="margin-bottom: 16px;">
               <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem bảng công chi tiết cá nhân">
                 <div class="metric-header">
                   <span>Ngày công thực tế</span>
-                  <span></span>
                 </div>
-                <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">18 / 22</div>
-                <div class="metric-footer-note" id="dashEmpKpiWorkDaysSub">Tổng 144.0 giờ làm việc tích lũy →</div>
+                <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">0 / 22</div>
+                <div class="metric-footer-note" id="dashEmpKpiWorkDaysSub">0.0 giờ tích lũy</div>
               </div>
 
               <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Xem chi tiết quỹ phép năm">
                 <div class="metric-header">
                   <span>Quỹ phép năm còn lại</span>
-                  <span></span>
                 </div>
-                <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">10.0 ngày</div>
-                <div class="metric-footer-note" id="dashEmpKpiLeaveBalanceSub">Đã dùng 2.0 ngày • Chờ duyệt 1 đơn →</div>
+                <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">0.0 ngày</div>
+                <div class="metric-footer-note" id="dashEmpKpiLeaveBalanceSub">Chưa kích hoạt quỹ phép</div>
               </div>
 
               <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem chi tiết vi phạm chuyên cần">
                 <div class="metric-header">
                   <span>Tình trạng chuyên cần</span>
-                  <span>⏰</span>
                 </div>
-                <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">01 lần</div>
-                <div class="metric-footer-note" id="dashEmpKpiLateCountSub">Tổng 12 phút đi muộn (Cần lưu ý) →</div>
+                <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">0 lần</div>
+                <div class="metric-footer-note" id="dashEmpKpiLateCountSub">Không có vi phạm</div>
               </div>
 
               <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;" title="Xem phiếu lương và chi tiết tăng ca">
                 <div class="metric-header">
                   <span>Giờ tăng ca (OT) &amp; Lương</span>
-                  <span>⚡</span>
                 </div>
-                <div class="metric-value-huge" style="color: #7c3aed;" id="dashEmpKpiOtHours">6.5 giờ</div>
-                <div class="metric-footer-note" id="dashEmpKpiOtHoursSub">2 đơn OT duyệt • Phiếu lương (SCR_PAY_01) →</div>
+                <div class="metric-value-huge" style="color: #7c3aed;" id="dashEmpKpiOtHours">0.0 giờ</div>
+                <div class="metric-footer-note" id="dashEmpKpiOtHoursSub">Chưa có giờ tăng ca</div>
               </div>
             </div>
 
-            <!-- ===== KHU VỰC 3: Lịch làm việc & Đơn từ đang theo dõi (2 cột song song — SCR_SHIFT_01 + SCR_LEAVE_02) ===== -->
-            <div class="middle-grid-2" style="margin-bottom: 24px;">
-              <!-- Cột trái: Lịch ca tuần này (7 ngày tới) (SCR_SHIFT_01) -->
+            <!-- ===== KHU VỰC 3: Lịch làm việc & Đơn từ đang theo dõi ===== -->
+            <div class="middle-grid-2" style="margin-bottom: 16px;">
+              <!-- Cột trái: Lịch ca tuần này (SCR_SHIFT_01) -->
               <div class="figma-white-card">
                 <div class="card-title-flex">
                   <div>
-                    <div class="card-title-text">📋 Lịch ca tuần này (7 ngày tới)</div>
-                    <div style="font-size: 12px; color: #64748b;">Ca phân công thực tế từ shift-service</div>
+                    <div class="card-title-text">Lịch ca tuần này</div>
+                    <div style="font-size: 11.5px; color: #64748b;">Ca phân công thực tế</div>
                   </div>
-                  <a class="link-action-blue" style="font-size: 12.5px; cursor: pointer;" onclick="navigateToView('shifts')">Xem chi tiết ca trực →</a>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('shifts')">Xem chi tiết →</a>
                 </div>
-                <div id="dashEmpWeekScheduleBody" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-                  <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 13px;">Đang tải lịch ca làm việc...</div>
+                <div id="dashEmpWeekScheduleBody" style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+                  <div style="text-align: center; color: #94a3b8; padding: 14px; font-size: 12.5px;">Đang tải lịch ca làm việc...</div>
                 </div>
               </div>
 
-              <!-- Cột phải: Đơn từ gần đây & Trạng thái duyệt (SCR_LEAVE_02) -->
+              <!-- Cột phải: Đơn từ gần đây (SCR_LEAVE_02) -->
               <div class="figma-white-card">
                 <div class="card-title-flex">
                   <div>
-                    <div class="card-title-text">📄 Đơn từ gần đây của bạn</div>
-                    <div style="font-size: 12px; color: #64748b;">Theo dõi tiến độ phê duyệt từ cấp quản lý</div>
+                    <div class="card-title-text">Đơn từ gần đây</div>
+                    <div style="font-size: 11.5px; color: #64748b;">Theo dõi tiến độ phê duyệt</div>
                   </div>
-                  <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12px; border-radius: 9999px;" onclick="scrollToCreateLeaveForm()">+ Tạo đơn mới</button>
+                  <button type="button" class="btn-primary-blue" style="padding: 4px 12px; font-size: 12px; border-radius: 9999px;" onclick="scrollToCreateLeaveForm()">+ Tạo đơn mới</button>
                 </div>
-                <div style="overflow-x: auto; margin-top: 10px;">
+                <div style="overflow-x: auto; margin-top: 8px;">
                   <table class="figma-table">
                     <thead>
                       <tr>
@@ -2044,30 +2056,13 @@ input:checked + .slider:before {
                       </tr>
                     </thead>
                     <tbody id="dashEmpRecentRequestsBody">
-                      <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 16px;">Đang tải danh sách đơn từ...</td></tr>
+                      <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 14px; font-size: 12.5px;">Đang tải danh sách đơn từ...</td></tr>
                     </tbody>
                   </table>
                 </div>
-                <div style="margin-top: 12px; text-align: right;">
-                  <a class="link-action-blue" style="font-size: 12.5px; cursor: pointer;" onclick="navigateToView('requests')">Xem toàn bộ lịch sử đơn từ →</a>
+                <div style="margin-top: 8px; text-align: right;">
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem lịch sử đơn từ →</a>
                 </div>
-              </div>
-            </div>
-
-            <!-- ===== KHU VỰC 4: Thông báo & Nhắc nhở cá nhân (SCR_NOTIF_01 — notification-service) ===== -->
-            <div class="figma-white-card" style="margin-bottom: 24px;">
-              <div class="card-title-flex">
-                <div>
-                  <div class="card-title-text">🔔 Thông báo &amp; Nhắc nhở cá nhân</div>
-                  <div style="font-size: 12px; color: #64748b;">Cảnh báo chấm công, thông báo duyệt đơn và phiếu lương mới</div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span class="badge-status" style="background: #fef3c7; color: #b45309;" id="dashEmpNotifCountBadge">3 mới</span>
-                  <button type="button" class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="markAllEmployeeNotifsRead()">Đánh dấu đã đọc tất cả</button>
-                </div>
-              </div>
-              <div id="dashEmpNotificationsBody" style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
-                <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 13px;">Đang tải thông báo cá nhân...</div>
               </div>
             </div>
 
