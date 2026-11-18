@@ -91,6 +91,10 @@ class PayrollService {
     // Lấy cấu hình lương của tất cả nhân sự
     const configs = await payrollRepository.getPayrollConfigs();
 
+    // Lấy danh sách phiếu lương hiện có của kỳ (nếu có) để giữ nguyên ID khóa chính
+    const existingSlips = await payrollRepository.getPayslips({ periodId });
+    const existingIdMap = new Map((existingSlips || []).map((p) => [p.emp_id, p.id]));
+
     // Thu thập dữ liệu từ các service phụ trợ (với fallback an toàn)
     const [attSummary, leaveSummary, otSummary] = await Promise.all([
       fetchInternalJson(`${ATTENDANCE_URL}/internal/attendances/summary?month=${m}&year=${y}`),
@@ -155,7 +159,7 @@ class PayrollService {
 
       const netSalary = Math.max(0, grossSalary - insuranceDeduction - lateDeduction - taxDeduction);
 
-      const payslipId = `ps-${y}-${String(m).padStart(2, '0')}-${empId.substring(empId.length - 4)}`;
+      const payslipId = existingIdMap.get(empId) || `ps-${y}-${String(m).padStart(2, '0')}-${empId.substring(empId.length - 4)}`;
       calculatedPayslips.push({
         id: payslipId,
         period_id: periodId,

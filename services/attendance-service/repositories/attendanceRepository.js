@@ -484,6 +484,35 @@ class AttendanceRepository {
     return null;
   }
 
+  async ensureInitialLogsSeeded() {
+    if (this._seeded) return;
+    try {
+      for (const log of initialLogs) {
+        await pool.query(
+          `INSERT IGNORE INTO attendance_logs (id, emp_id, work_date, shift_id, location_id, check_in_time, check_out_time, late_minutes, early_leave_minutes, actual_working_hours, status, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            log.id,
+            log.emp_id,
+            log.work_date,
+            log.shift_id || null,
+            log.location_id || null,
+            log.check_in_time ? new Date(log.check_in_time) : null,
+            log.check_out_time ? new Date(log.check_out_time) : null,
+            log.late_minutes || 0,
+            log.early_leave_minutes || 0,
+            log.actual_working_hours || 0,
+            log.status === 'MISSING_CHECKOUT' ? 'ON_TIME' : (log.status || 'ON_TIME'),
+            log.note || null
+          ]
+        );
+      }
+      this._seeded = true;
+    } catch {
+      // ignore
+    }
+  }
+
   /**
    * Truy vấn lịch sử chấm công cá nhân (phục vụ GET /api/v1/attendances/history)
    * Bắt buộc lọc theo empId của chính người gọi (Data Isolation)
@@ -491,6 +520,7 @@ class AttendanceRepository {
   async getEmployeeHistory(empId, { month, year, status }) {
     const useDb = await this.isDbAvailable();
     if (useDb) {
+      await this.ensureInitialLogsSeeded();
       try {
         const conditions = ['a.emp_id = ?'];
         const params = [empId];
@@ -613,7 +643,31 @@ class AttendanceRepository {
       }
     }
 
-    return Array.from(memoryAttendanceLogs.values());
+    let logs = Array.from(memoryAttendanceLogs.values()).map((l) => {
+      const loc = memoryWorkLocations.get(l.location_id);
+      return {
+        ...l,
+        location_name: l.location_name || loc?.name || 'Trụ sở chính HTQLNS',
+        emp_name: l.emp_name || (l.emp_id === defaultEmpId ? 'Phạm Văn Tuấn' : (l.emp_id === otherEmpId ? 'Nguyễn Văn An' : l.emp_id)),
+        emp_code: l.emp_code || (l.emp_id === defaultEmpId ? 'NV-004' : 'NV-' + String(l.emp_id).slice(-4)),
+        dept_name: l.dept_name || 'Phòng Kỹ Thuật'
+      };
+    });
+
+    conditions.forEach((cond, idx) => {
+      const p = params[idx];
+      if (!p) return;
+      if (cond.includes('work_date =')) {
+        const target = String(p).slice(0, 10);
+        logs = logs.filter((l) => (l.work_date ? String(l.work_date).slice(0, 10) === target : false));
+      } else if (cond.includes('emp_id =')) {
+        logs = logs.filter((l) => l.emp_id === p);
+      } else if (cond.includes('status =')) {
+        logs = logs.filter((l) => l.status === p);
+      }
+    });
+
+    return logs;
   }
 
   /**

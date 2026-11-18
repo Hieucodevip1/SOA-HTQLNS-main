@@ -1158,6 +1158,7 @@ async function handleCreateLeaveSubmit(e) {
 
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
     loadEmployeeDashboardData();
   } catch (err) {
     showToast(`Lỗi gửi đơn: ${err.message}`, 'error');
@@ -1218,6 +1219,7 @@ async function handleDirectApproveLeave(id) {
     showToast(`Đã phê duyệt thành công đơn ${id}!`, 'success');
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
   } catch (err) {
     showToast(`Lỗi phê duyệt đơn: ${err.message}`, 'error');
   }
@@ -1270,6 +1272,7 @@ async function handleDirectRejectLeave(id) {
     showToast(`Đã từ chối đơn ${id} thành công!`, 'warning');
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
   } catch (err) {
     showToast(`Lỗi từ chối đơn: ${err.message}`, 'error');
   }
@@ -1565,6 +1568,7 @@ async function handleCreateLeaveSubmit(e) {
 
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
     loadEmployeeDashboardData();
   } catch (err) {
     showToast(`Lỗi gửi đơn: ${err.message}`, 'error');
@@ -1587,6 +1591,7 @@ async function handleDirectApproveLeave(id) {
     showToast(`Đã phê duyệt thành công đơn ${id}!`, 'success');
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
     
     const detailSec = document.getElementById('view-request-detail');
     if (detailSec && detailSec.style.display !== 'none') {
@@ -1609,6 +1614,7 @@ async function handleDirectRejectLeave(id) {
     showToast(`Đã từ chối đơn ${id}!`, 'warning');
     await loadRequestsData();
     await loadDashboardPendingRequests();
+    loadDashboardOverview();
 
     const detailSec = document.getElementById('view-request-detail');
     if (detailSec && detailSec.style.display !== 'none') {
@@ -1871,7 +1877,7 @@ async function loadDashboardPendingRequests() {
       }
 
       if (!pendingList.length) {
-        pendingTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #10b981; padding: 24px; font-weight: 600;">🎉 Tuyệt vời! Hiện không có đơn nào đang chờ duyệt.</td></tr>`;
+        pendingTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #10b981; padding: 24px; font-weight: 600;">Hiện không có đơn nào đang chờ duyệt.</td></tr>`;
       } else {
         pendingTbody.innerHTML = pendingList.map(r => {
           const rangeStr = `${formatLeaveDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? ' → ' + formatLeaveDate(r.end_date) : ''} • ${r.total_days || 1} ngày`;
@@ -1929,14 +1935,193 @@ async function loadDashboardData() {
   if (adminAlert) {
     if (pendingUsers.length > 0) {
       adminAlert.style.display = 'block';
-      if (alertTitle) alertTitle.innerText = `🔔 Có ${pendingUsers.length} nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!`;
+      if (alertTitle) alertTitle.innerText = `Có ${pendingUsers.length} nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!`;
       if (alertSub) alertSub.innerText = `Bao gồm: ${pendingUsers.map(u => u.fullName || u.username).join(', ')}. Nhấp để phân bổ ban phòng, ca trực và kích hoạt mức lương.`;
     } else {
       adminAlert.style.display = 'none';
     }
   }
 
-  await Promise.all([loadDepartmentsData(), loadEmployeesData(), loadDashboardPendingRequests()]);
+  await Promise.all([
+    loadDepartmentsData(),
+    loadEmployeesData(),
+    loadDashboardPendingRequests(),
+    loadDashboardOverview()
+  ]);
+}
+
+async function loadDashboardOverview(date, departmentId) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  if (role === 'EMPLOYEE') return;
+
+  const targetDate = date || state.selectedDashboardDate || (new Date().toLocaleDateString('en-CA'));
+  const targetDept = departmentId !== undefined ? departmentId : state.selectedDashboardDeptId;
+
+  let url = `/api/v1/analytics/overview?date=${encodeURIComponent(targetDate)}`;
+  if (targetDept && targetDept !== 'ALL') {
+    url += `&departmentId=${encodeURIComponent(targetDept)}`;
+  }
+
+  try {
+    const res = await apiCall(url);
+    if (res && res.success && res.data) {
+      renderDashboardOverview(res.data);
+    }
+  } catch (err) {
+    console.warn('[DashboardOverview] Không tải được dữ liệu tổng quan:', err);
+  }
+}
+
+function renderDashboardOverview(overview) {
+  if (!overview) return;
+  const m = overview.metrics || {};
+  const d = overview.donut || {};
+  const lates = overview.lateEmployees || [];
+
+  // 1. Cập nhật Pills
+  const datePill = document.getElementById('currentDatePillText');
+  if (datePill) {
+    const rawDate = overview.date || '';
+    const [y, mon, day] = rawDate.split('-');
+    const dateFormatted = (day && mon && y) ? `${day}/${mon}/${y}` : rawDate;
+    datePill.innerText = `${dateFormatted} • Hôm nay`;
+  }
+
+  const deptPill = document.getElementById('currentDeptPillText');
+  if (deptPill) {
+    const deptName = overview.departmentName || 'Toàn công ty';
+    deptPill.innerText = `${deptName} • ${m.totalEmployees || 0} người`;
+  }
+
+  // 2. 4 Thẻ KPI
+  const metricPresent = document.getElementById('dashMetricPresent');
+  const metricPresentSub = document.getElementById('dashMetricPresentSub');
+  if (metricPresent) {
+    metricPresent.innerText = `${m.presentCount || 0} / ${m.totalEmployees || 0}`;
+  }
+  if (metricPresentSub) {
+    if (m.totalEmployees === 0) {
+      metricPresentSub.innerText = 'Chưa có nhân sự trong phạm vi quản lý';
+    } else {
+      metricPresentSub.innerText = `${m.attendanceRate || 0}% nhân sự • Gồm ${m.lateCount || 0} người đi muộn →`;
+    }
+  }
+
+  const metricLeave = document.getElementById('dashMetricLeave');
+  const metricLeaveSub = document.getElementById('dashMetricLeaveSub');
+  if (metricLeave) {
+    metricLeave.innerText = String(m.leaveCount || 0).padStart(2, '0');
+  }
+  if (metricLeaveSub) {
+    metricLeaveSub.innerText = m.leaveCount > 0 ? 'Đã được duyệt nghỉ hôm nay →' : 'Không có ai nghỉ hôm nay →';
+  }
+
+  const metricLate = document.getElementById('dashMetricLate');
+  const metricLateSub = document.getElementById('dashMetricLateSub');
+  if (metricLate) {
+    metricLate.innerText = String(m.lateCount || 0).padStart(2, '0');
+  }
+  if (metricLateSub) {
+    if (m.totalEmployees === 0) {
+      metricLateSub.innerText = 'Không có dữ liệu';
+    } else if (m.lateCount === 0) {
+      metricLateSub.innerText = 'Không có ai đi muộn hôm nay ↓';
+    } else {
+      metricLateSub.innerText = `Là một phần trong ${m.presentCount || 0} người đi làm ↓`;
+    }
+  }
+
+  const metricPending = document.getElementById('dashMetricPending');
+  const metricPendingSub = document.getElementById('dashMetricPendingSub');
+  if (metricPending) {
+    metricPending.innerText = String(m.pendingRequestsCount || 0).padStart(2, '0');
+  }
+  if (metricPendingSub) {
+    metricPendingSub.innerText = m.pendingRequestsCount > 0 ? `${m.pendingRequestsCount} đơn cần xử lý →` : 'Hiện không có đơn chờ duyệt →';
+  }
+
+  // 3. Donut Chart (chu vi SVG C = 2 * PI * 15.915 = 100)
+  const donutNum = document.getElementById('donutCenterNumber');
+  if (donutNum) {
+    donutNum.innerText = String(d.total !== undefined ? d.total : (m.totalEmployees || 0));
+  }
+
+  const pOntime = d.onTime?.percent || 0;
+  const pLate = d.late?.percent || 0;
+  const pLeave = d.leave?.percent || 0;
+  const pAbsent = d.absent?.percent || 0;
+
+  const circleOntime = document.getElementById('donutCircleOntime');
+  const circleLate = document.getElementById('donutCircleLate');
+  const circleLeave = document.getElementById('donutCircleLeave');
+  const circleAbsent = document.getElementById('donutCircleAbsent');
+
+  if (circleOntime) {
+    circleOntime.setAttribute('stroke-dasharray', `${pOntime} ${Math.max(0, 100 - pOntime)}`);
+    circleOntime.setAttribute('stroke-dashoffset', '0');
+  }
+  if (circleLate) {
+    circleLate.setAttribute('stroke-dasharray', `${pLate} ${Math.max(0, 100 - pLate)}`);
+    circleLate.setAttribute('stroke-dashoffset', String(-pOntime));
+  }
+  if (circleLeave) {
+    circleLeave.setAttribute('stroke-dasharray', `${pLeave} ${Math.max(0, 100 - pLeave)}`);
+    circleLeave.setAttribute('stroke-dashoffset', String(-(pOntime + pLate)));
+  }
+  if (circleAbsent) {
+    circleAbsent.setAttribute('stroke-dasharray', `${pAbsent} ${Math.max(0, 100 - pAbsent)}`);
+    circleAbsent.setAttribute('stroke-dashoffset', String(-(pOntime + pLate + pLeave)));
+  }
+
+  const legOntime = document.getElementById('donutLegendOntime');
+  const legLate = document.getElementById('donutLegendLate');
+  const legLeave = document.getElementById('donutLegendLeave');
+  const legAbsent = document.getElementById('donutLegendAbsent');
+
+  if (legOntime) legOntime.innerText = String(d.onTime?.count || 0).padStart(2, '0');
+  if (legLate) legLate.innerText = String(d.late?.count || 0).padStart(2, '0');
+  if (legLeave) legLeave.innerText = String(d.leave?.count || 0).padStart(2, '0');
+  if (legAbsent) legAbsent.innerText = String(d.absent?.count || 0).padStart(2, '0');
+
+  const donutFoot = document.getElementById('donutSummaryFoot');
+  if (donutFoot) {
+    if (m.totalEmployees === 0) {
+      donutFoot.innerText = 'Chưa có nhân viên nào trong phạm vi phòng ban/đội nhóm này.';
+    } else {
+      donutFoot.innerText = `${d.onTime?.count || 0} đúng giờ + ${d.late?.count || 0} đi muộn + ${d.leave?.count || 0} nghỉ phép + ${d.absent?.count || 0} chưa chấm công = ${m.totalEmployees} nhân viên.`;
+    }
+  }
+
+  // 4. Bảng Nhân viên đi muộn
+  const lateBadge = document.getElementById('dashLateCountBadge');
+  const lateTbody = document.getElementById('dashLateEmployeesTableBody');
+
+  if (lateBadge) {
+    if (lates.length > 0) {
+      lateBadge.style.display = 'inline-block';
+      lateBadge.innerText = `• ${lates.length} người`;
+    } else {
+      lateBadge.style.display = 'none';
+    }
+  }
+
+  if (lateTbody) {
+    if (lates.length === 0) {
+      lateTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #10b981; padding: 20px; font-weight: 600;">Không có nhân viên nào đi muộn hôm nay</td></tr>`;
+    } else {
+      lateTbody.innerHTML = lates.map(l => `
+        <tr>
+          <td>
+            <div style="font-weight: 700;">${l.empName || 'Nhân viên'}</div>
+            <div style="font-size: 11px; color: #94a3b8;">${l.empCode || ''}</div>
+          </td>
+          <td>${l.checkInTime || '--:--'}</td>
+          <td><span style="color: #d97706; font-weight: 600;">${l.lateMinutes || 0} phút</span></td>
+          <td><a class="link-action-blue" style="cursor: pointer;" onclick="openLateDetailModal('${l.empName || ''}', '${l.empCode || ''}', '${l.lateMinutes || 0} phút', '${l.checkInTime || ''}', '${l.departmentName || ''}')">Xem xét →</a></td>
+        </tr>
+      `).join('');
+    }
+  }
 }
 
 async function loadDepartmentsData() {
@@ -3061,47 +3246,74 @@ function scrollToLateTable() {
 }
 
 function openDateFilterModal() {
-  const options = [
-    { label: '📅 Hôm nay (30/10/2026)', value: '30/10/2026 • Hôm nay' },
-    { label: '📅 Hôm qua (29/10/2026)', value: '29/10/2026 • Hôm qua' },
-    { label: '📅 7 ngày qua (24/10 - 30/10)', value: '7 ngày qua' },
-    { label: '📅 Tháng này (10/2026)', value: 'Tháng 10/2026' }
-  ];
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-CA');
+  const d1 = String(today.getDate()).padStart(2, '0');
+  const m1 = String(today.getMonth() + 1).padStart(2, '0');
+  const y1 = today.getFullYear();
+
+  const yesterday = new Date(today.getTime() - 86400000);
+  const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+  const d0 = String(yesterday.getDate()).padStart(2, '0');
+  const m0 = String(yesterday.getMonth() + 1).padStart(2, '0');
+  const y0 = yesterday.getFullYear();
+
   const html = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn khoảng thời gian theo dõi dữ liệu:</p>
-      ${options.map(opt => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600;" onclick="selectDateFilter('${opt.value}')">
-          ${opt.label}
-        </button>
-      `).join('')}
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 2px;">Chọn ngày xem báo cáo tổng quan:</p>
+      <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600;" onclick="selectDateFilter('${todayStr}', '${d1}/${m1}/${y1} • Hôm nay')">
+        Hôm nay (${d1}/${m1}/${y1})
+      </button>
+      <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600;" onclick="selectDateFilter('${yesterdayStr}', '${d0}/${m0}/${y0} • Hôm qua')">
+        Hôm qua (${d0}/${m0}/${y0})
+      </button>
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 12.5px; font-weight: 600; color: #475569;">Hoặc chọn ngày tùy chỉnh:</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="date" id="customFilterDateInput" value="${todayStr}" class="form-input-figma" style="flex: 1;" />
+          <button type="button" class="btn-primary-blue" style="padding: 6px 14px; border-radius: 8px;" onclick="applyCustomDateFilter()">Xem</button>
+        </div>
+      </div>
     </div>
   `;
-  openModal('Lọc dữ liệu theo thời gian', html);
+  openModal('Lọc dữ liệu theo ngày', html);
 }
 
-function selectDateFilter(val) {
-  const el = document.getElementById('currentDatePillText');
-  if (el) el.innerText = val;
+async function selectDateFilter(isoDate, label) {
   closeModal();
-  showToast(`Đã lọc dữ liệu theo: ${val}`, 'success');
+  const el = document.getElementById('currentDatePillText');
+  if (el) el.innerText = label;
+  state.selectedDashboardDate = isoDate;
+  await loadDashboardOverview(isoDate, state.selectedDashboardDeptId);
+  showToast(`Đã lọc dữ liệu ngày: ${label}`, 'success');
+}
+
+async function applyCustomDateFilter() {
+  const inp = document.getElementById('customFilterDateInput');
+  if (!inp || !inp.value) return;
+  const isoDate = inp.value;
+  const [y, m, d] = isoDate.split('-');
+  await selectDateFilter(isoDate, `${d}/${m}/${y}`);
 }
 
 function openDeptFilterModal() {
+  const activeEmps = (state.employees || []).filter((e) => e.status === 'ACTIVE');
   const depts = [
-    { name: 'Toàn cơ quan', count: 95 },
-    { name: 'Phòng Kỹ Thuật', count: 40 },
-    { name: 'Phòng Nhân sự', count: 12 },
-    { name: 'Phòng Tài Chính - Kế Toán', count: 15 },
-    { name: 'Phòng Kinh Doanh', count: 28 }
+    { id: 'ALL', name: 'Toàn công ty', count: activeEmps.length },
+    ...(state.departments || []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      count: activeEmps.filter((e) => e.department_id === d.id).length
+    }))
   ];
+
   const html = `
     <div style="display: flex; flex-direction: column; gap: 10px;">
       <p style="font-size: 13px; color: #64748b; margin-bottom: 6px;">Chọn đơn vị / phòng ban để xem thống kê:</p>
-      ${depts.map(d => `
-        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between;" onclick="selectDeptFilter('${d.name}', ${d.count})">
-          <span>🏢 ${d.name}</span>
-          <span style="color: #64748b; font-size: 12px;">${d.count} người</span>
+      ${depts.map((d) => `
+        <button type="button" class="btn-figma-dark" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; text-align: left; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between;" onclick="selectDeptFilter('${d.name}', '${d.id}', ${d.count})">
+          <span>${d.name}</span>
+          <span style="color: #64748b; font-size: 12px;">${d.count} nhân sự</span>
         </button>
       `).join('')}
     </div>
@@ -3109,119 +3321,11 @@ function openDeptFilterModal() {
   openModal('Lọc theo Phòng ban', html);
 }
 
-function selectDeptFilter(name, count) {
-  const el = document.getElementById('currentDeptPillText');
-  if (el) el.innerText = `🏢 ${name} • ${count} người`;
+async function selectDeptFilter(name, deptId, count) {
   closeModal();
-
-  // Cập nhật các chỉ số KPI Dashboard theo phòng ban đã chọn
-  const role = state.user?.role || 'EMPLOYEE';
-  if (role !== 'EMPLOYEE') {
-    const val1 = document.getElementById('dashMetricVal1');
-    const sub1 = document.getElementById('dashMetricSub1');
-    const val2 = document.getElementById('dashMetricVal2');
-    const sub2 = document.getElementById('dashMetricSub2');
-    const val3 = document.getElementById('dashMetricVal3');
-    const sub3 = document.getElementById('dashMetricSub3');
-    const val4 = document.getElementById('dashMetricVal4');
-    const sub4 = document.getElementById('dashMetricSub4');
-
-    const donutNum = document.getElementById('donutCenterNumber');
-    const legOntime = document.getElementById('donutLegendOntime');
-    const legLate = document.getElementById('donutLegendLate');
-    const legLeave = document.getElementById('donutLegendLeave');
-    const legAbsent = document.getElementById('donutLegendAbsent');
-    const donutFoot = document.getElementById('donutSummaryFoot');
-
-    if (count === 95) {
-      // Toàn cơ quan (95 người)
-      if (val1) val1.innerText = '82 / 95';
-      if (sub1) sub1.innerText = '86.3% nhân sự • Gồm 6 người đi muộn';
-      if (val2) val2.innerText = '08';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '06';
-      if (sub3) sub3.innerText = 'Là một phần trong 82 người đi làm';
-      if (val4) val4.innerText = '12';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '95';
-      if (legOntime) legOntime.innerText = '76';
-      if (legLate) legLate.innerText = '06';
-      if (legLeave) legLeave.innerText = '08';
-      if (legAbsent) legAbsent.innerText = '05';
-      if (donutFoot) donutFoot.innerText = '76 đúng giờ + 6 đi muộn + 8 nghỉ phép + 5 chưa chấm công = 95 nhân viên';
-    } else if (count === 28) {
-      // Phòng Kinh Doanh (28 người)
-      if (val1) val1.innerText = '24 / 28';
-      if (sub1) sub1.innerText = '85.7% nhân sự • Gồm 2 người đi muộn';
-      if (val2) val2.innerText = '02';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '02';
-      if (sub3) sub3.innerText = 'Là một phần trong 24 người đi làm';
-      if (val4) val4.innerText = '03';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '28';
-      if (legOntime) legOntime.innerText = '22';
-      if (legLate) legLate.innerText = '02';
-      if (legLeave) legLeave.innerText = '02';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '22 đúng giờ + 2 đi muộn + 2 nghỉ phép + 2 chưa chấm công = 28 nhân viên';
-    } else if (count === 15) {
-      // Phòng Tài Chính (15 người)
-      if (val1) val1.innerText = '14 / 15';
-      if (sub1) sub1.innerText = '93.3% nhân sự • Đúng giờ';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '00';
-      if (sub3) sub3.innerText = 'Không có nhân sự đi muộn';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '15';
-      if (legOntime) legOntime.innerText = '14';
-      if (legLate) legLate.innerText = '00';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '00';
-      if (donutFoot) donutFoot.innerText = '14 đúng giờ + 0 đi muộn + 1 nghỉ phép + 0 chưa chấm công = 15 nhân viên';
-    } else if (count === 12) {
-      // Phòng Nhân Sự (12 người)
-      if (val1) val1.innerText = '10 / 12';
-      if (sub1) sub1.innerText = '83.3% nhân sự • Gồm 1 người đi muộn';
-      if (val2) val2.innerText = '01';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '01';
-      if (sub3) sub3.innerText = 'Là một phần trong 10 người đi làm';
-      if (val4) val4.innerText = '01';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '12';
-      if (legOntime) legOntime.innerText = '09';
-      if (legLate) legLate.innerText = '01';
-      if (legLeave) legLeave.innerText = '01';
-      if (legAbsent) legAbsent.innerText = '01';
-      if (donutFoot) donutFoot.innerText = '9 đúng giờ + 1 đi muộn + 1 nghỉ phép + 1 chưa chấm công = 12 nhân viên';
-    } else {
-      // Mặc định: Phòng Kỹ Thuật (40 người)
-      if (val1) val1.innerText = '34 / 40';
-      if (sub1) sub1.innerText = '85% nhân sự • Gồm 3 người đi muộn';
-      if (val2) val2.innerText = '04';
-      if (sub2) sub2.innerText = 'Đã được duyệt nghỉ hôm nay';
-      if (val3) val3.innerText = '03';
-      if (sub3) sub3.innerText = 'Là một phần trong 34 người đi làm';
-      if (val4) val4.innerText = '07';
-      if (sub4) sub4.innerText = 'Tất cả ngày yêu cầu • Cần xử lý';
-
-      if (donutNum) donutNum.innerText = '40';
-      if (legOntime) legOntime.innerText = '31';
-      if (legLate) legLate.innerText = '03';
-      if (legLeave) legLeave.innerText = '04';
-      if (legAbsent) legAbsent.innerText = '02';
-      if (donutFoot) donutFoot.innerText = '31 đúng giờ + 3 đi muộn + 4 nghỉ phép + 2 chưa chấm công = 40 nhân viên';
-    }
-  }
-
-  showToast(`Đã lọc dữ liệu theo: ${name} (${count} nhân sự)`, 'success');
+  state.selectedDashboardDeptId = deptId === 'ALL' ? null : deptId;
+  await loadDashboardOverview(state.selectedDashboardDate, state.selectedDashboardDeptId);
+  showToast(`Đã lọc dữ liệu theo: ${name}`, 'success');
 }
 
 function openOnTimeDetailModal(name, code, checkinTime, checkoutTime, dept) {

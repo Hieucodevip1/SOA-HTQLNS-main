@@ -169,9 +169,9 @@ describe('1. Kiểm thử Unit Test: shared/employee-scope.js', () => {
   });
 });
 
-describe('2. Kiểm thử Tích hợp API: Cơ chế Mời & Tham gia phòng ban (:3102)', () => {
+describe('2. Kiểm thử Tích hợp API: Cơ chế Mời & Tham gia phòng ban (:3107)', () => {
   let orgProcess = null;
-  const TEST_ORG_PORT = 3105;
+  const TEST_ORG_PORT = 3107;
 
   const managerToken = jwt.signToken({
     userId: 'u_mgr_test',

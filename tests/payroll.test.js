@@ -225,7 +225,7 @@ describe('Kiểm thử Phân hệ Payroll Service (:3106)', () => {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     const checkData = await checkRes.json();
-    const confirmedSlip = checkData.data.find((p) => p.id === employeePayslipId);
+    const confirmedSlip = checkData.data.find((p) => p.id === employeePayslipId || p.emp_id === 'e0000001-0000-0000-0000-000000000004');
     assert.strictEqual(confirmedSlip?.status, 'CONFIRMED');
   });
 

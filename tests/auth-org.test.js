@@ -296,11 +296,12 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
 
     test('Admin sửa thông tin nhân viên qua endpoint /api/v1/employees/:id chuẩn SOA (HTTP 200)', async () => {
       assert.ok(createdEmpId, 'Phải có createdEmpId');
+      const soaCode = 'EMP_SOA_' + Date.now();
       const res = await fetch(`http://localhost:${ORG_PORT}/api/v1/employees/${createdEmpId}`, {
         method: 'PUT',
         headers: adminHeaders,
         body: JSON.stringify({
-          employeeCode: 'EMP_SOA_999',
+          employeeCode: soaCode,
           fullName: 'Vũ Văn Kiểm Thử (Chuẩn SOA)',
           phone: '0988776655',
           status: 'ACTIVE',
@@ -310,7 +311,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.strictEqual(data.success, true);
-      assert.strictEqual(data.data.code, 'EMP_SOA_999');
+      assert.strictEqual(data.data.code, soaCode);
 
       // Xác minh tra cứu lại trả về thông tin đã cập nhật
       const getRes = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/${createdEmpId}`, {
@@ -318,7 +319,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       });
       assert.strictEqual(getRes.status, 200);
       const getData = await getRes.json();
-      assert.strictEqual(getData.data.code, 'EMP_SOA_999');
+      assert.strictEqual(getData.data.code, soaCode);
       assert.strictEqual(getData.data.full_name, 'Vũ Văn Kiểm Thử (Chuẩn SOA)');
     });
 

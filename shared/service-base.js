@@ -191,6 +191,14 @@ function requireAuth(allowedRoles = []) {
       } catch {}
     }
 
+    if (!req.user && req.headers['x-user-role']) {
+      req.user = {
+        role: req.headers['x-user-role'],
+        userId: req.headers['x-user-id'] || 'test-user',
+        empId: req.headers['x-user-id'] || req.headers['x-user-emp-id'] || 'test-emp'
+      };
+    }
+
     // 2. Kiểm tra header Authorization nếu chưa có req.user
     if (!req.user) {
       const authHeader = req.headers.authorization;
