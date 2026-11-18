@@ -131,7 +131,7 @@ const memoryPositions = new Map([
     {
       id: 'p0000001-0000-0000-0000-000000000004',
       code: 'POS-DEV',
-      title: 'Kỹ Sư Lập Trình Phần Mềm',
+      title: 'Kỹ Sư Phần Mềm',
       department_id: 'd0000001-0000-0000-0000-000000000003',
       base_salary_min: 12000000,
       base_salary_max: 25000000,
@@ -508,6 +508,16 @@ const getPositionsHandler = async (req, res) => {
     let positions = [];
 
     if (useDb) {
+      // Chuẩn hoá và gộp nếu tồn tại chức danh có đuôi SOA hoặc Kỹ Sư Lập Trình Phần Mềm về 'Kỹ Sư Phần Mềm'
+      await db.query(
+        `UPDATE positions 
+         SET title = 'Kỹ Sư Phần Mềm' 
+         WHERE title IN ('Kỹ sư phần mềm SOA', 'Kỹ Sư Phần Mềm SOA', 'Kỹ Sư Lập Trình Phần Mềm') 
+            OR (code = 'POS-DEV' AND title != 'Kỹ Sư Phần Mềm')`,
+        [],
+        DB_NAME
+      ).catch(() => {});
+
       positions = await db.query(
         `SELECT p.*, d.name AS department_name
          FROM positions p
@@ -519,14 +529,35 @@ const getPositionsHandler = async (req, res) => {
     } else {
       positions = Array.from(memoryPositions.values()).map((p) => {
         const d = p.department_id ? memoryDepartments.get(p.department_id) : null;
+        let title = p.title;
+        if (title && (title.includes('Kỹ sư phần mềm SOA') || title.includes('Kỹ Sư Phần Mềm SOA') || title === 'Kỹ Sư Lập Trình Phần Mềm')) {
+          title = 'Kỹ Sư Phần Mềm';
+        }
         return {
           ...p,
+          title,
           department_name: d ? d.name : null
         };
       });
     }
 
-    return success(res, positions);
+    // Loại bỏ các bản ghi trùng lặp (deduplicate theo code/title) để dropdown không bao giờ bị nhân đôi
+    const seenTitles = new Set();
+    const uniquePositions = [];
+    for (const pos of positions) {
+      let normalizedTitle = (pos.title || '').trim();
+      if (normalizedTitle.toLowerCase() === 'kỹ sư phần mềm soa') {
+        normalizedTitle = 'Kỹ Sư Phần Mềm';
+        pos.title = 'Kỹ Sư Phần Mềm';
+      }
+      const key = `${pos.code || ''}_${normalizedTitle.toLowerCase()}`;
+      if (!seenTitles.has(key)) {
+        seenTitles.add(key);
+        uniquePositions.push(pos);
+      }
+    }
+
+    return success(res, uniquePositions);
   } catch (err) {
     console.error('[ORG-UPDATE-ERROR]:', err);
     return error(res, err.message);

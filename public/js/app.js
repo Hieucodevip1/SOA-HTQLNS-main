@@ -205,7 +205,7 @@ function syncUserOnboardingState() {
     // Tài khoản demo Vũ Đức Hiếu
     state.user.isOnboarded = true;
     state.user.department = 'Phòng Kỹ Thuật';
-    state.user.position = 'Kỹ sư phần mềm SOA';
+    state.user.position = 'Kỹ sư phần mềm';
     state.user.managerName = 'Nguyễn Thanh Lâm (Trưởng ban Công nghệ)';
     state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương • Bán kính 100m)';
     state.user.officeLatitude = 13.7587;
@@ -226,7 +226,11 @@ function syncUserOnboardingState() {
   if (assignment && assignment.status === 'ACTIVE') {
     state.user.isOnboarded = true;
     state.user.department = assignment.department;
-    state.user.position = assignment.position;
+    let pos = assignment.position;
+    if (pos && (pos.includes('Kỹ sư phần mềm SOA') || pos.includes('Kỹ Sư Phần Mềm SOA'))) {
+      pos = 'Kỹ sư phần mềm';
+    }
+    state.user.position = pos;
     state.user.managerName = assignment.managerName || 'Nguyễn Thanh Lâm';
     state.user.officeLocation = assignment.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
     state.user.officeLatitude = assignment.officeLatitude || 13.7587;
@@ -349,7 +353,7 @@ let state = {
 
 // Dữ liệu mẫu phong phú
 const MOCK_EMPLOYEES = [
-  { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm SOA', contract_type: 'OFFICIAL', status: 'ACTIVE' },
+  { id: 1, code: 'NV-001', full_name: 'Vũ Đức Hiếu', email: 'hieu.vd@htqlns.com', phone: '0901000001', department_name: 'Phòng Kỹ Thuật', position_title: 'Kỹ sư phần mềm', contract_type: 'OFFICIAL', status: 'ACTIVE' },
   { id: 2, code: 'NV-002', full_name: 'Huỳnh Gia Kiệt', email: 'kiet.hg@htqlns.com', phone: '0901000002', department_name: 'Phòng Kỹ Thuật', position_title: 'Backend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
   { id: 3, code: 'NV-003', full_name: 'Nguyễn Gia Hảo', email: 'hao.ng@htqlns.com', phone: '0901000003', department_name: 'Phòng Kỹ Thuật', position_title: 'Frontend Developer', contract_type: 'OFFICIAL', status: 'ACTIVE' },
   { id: 4, code: 'NV-004', full_name: 'Nguyễn Thanh Lâm (Quản lý)', email: 'lam.nt@htqlns.com', phone: '0901000004', department_name: 'Phòng Công nghệ & Phần mềm', position_title: 'Trưởng ban Công nghệ', contract_type: 'OFFICIAL', status: 'ACTIVE' },
@@ -646,7 +650,7 @@ function showScreenView(screen) {
       empCode: 'NV-001',
       empId: 1,
       department: 'Phòng Kỹ Thuật',
-      position: 'Kỹ sư phần mềm SOA',
+      position: 'Kỹ sư phần mềm',
       email: 'hieu.vd@htqlns.com'
     };
     state.token = 'demo-token-employee-2026';
@@ -2333,6 +2337,11 @@ function renderEmployeesTable(list) {
       }
     }
 
+    let posTitle = e.position_title || e.position_name || '-';
+    if (posTitle.includes('Kỹ sư phần mềm SOA') || posTitle.includes('Kỹ Sư Phần Mềm SOA')) {
+      posTitle = 'Kỹ sư phần mềm';
+    }
+
     return `
       <tr style="${e.status === 'PENDING_ASSIGNMENT' ? 'background: #fffbeb;' : ''}">
         <td><strong>${e.code || e.employee_code}</strong></td>
@@ -2340,7 +2349,7 @@ function renderEmployeesTable(list) {
         <td>${e.email}</td>
         <td>${e.phone || '-'}</td>
         <td>${e.department_name || '-'}</td>
-        <td>${e.position_title || e.position_name || '-'}</td>
+        <td>${posTitle}</td>
         <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
         <td>${statusBadge}</td>
         <td style="text-align: center;">${actionBtn}</td>
@@ -2379,7 +2388,8 @@ function openEditEmployeeModal(empId) {
   const currentManager = emp.manager_name || assignment.managerName || 'Nguyễn Thanh Lâm (Trưởng ban Công nghệ)';
   const currentOffice = assignment.officeLocation || 'Văn phòng Quy Nhơn (170 An Dương Vương)';
   const currentShift = assignment.shiftName || 'Ca Hành Chính';
-  const currentPosition = emp.position_title || emp.position_name || assignment.position || 'Kỹ sư phần mềm SOA';
+  const rawPos = emp.position_title || emp.position_name || assignment.position || 'Kỹ sư phần mềm';
+  const currentPosition = (rawPos.includes('Kỹ sư phần mềm SOA') || rawPos.includes('Kỹ Sư Phần Mềm SOA')) ? 'Kỹ sư phần mềm' : rawPos;
   const currentSalary = assignment.baseSalary || 15000000;
   const currentStatus = emp.status || 'ACTIVE';
 
@@ -2467,7 +2477,7 @@ function openEditEmployeeModal(empId) {
           <div>
             <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Chức danh / Vị trí (position) *</label>
             <select id="editEmpPosition" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
-              <option value="Kỹ sư phần mềm SOA" ${currentPosition.includes('SOA') ? 'selected' : ''}>Kỹ sư phần mềm SOA</option>
+              <option value="Kỹ sư phần mềm" ${(currentPosition === 'Kỹ sư phần mềm' || currentPosition.includes('phần mềm') || currentPosition.includes('SOA')) ? 'selected' : ''}>Kỹ sư phần mềm</option>
               <option value="Chuyên viên Phát triển Hệ thống" ${currentPosition.includes('Hệ thống') ? 'selected' : ''}>Chuyên viên Phát triển Hệ thống</option>
               <option value="Frontend & UI Developer" ${currentPosition.includes('Frontend') ? 'selected' : ''}>Frontend & UI Developer</option>
               <option value="Backend Developer" ${currentPosition.includes('Backend') ? 'selected' : ''}>Backend Developer</option>
@@ -3366,7 +3376,12 @@ function loadProfileData() {
   }
 
   if (posEl) {
-    posEl.innerText = state.user.position || (isOnboarded ? 'Nhân viên chính thức' : 'Nhân sự mới (Chờ bổ nhiệm)');
+    let p = state.user.position;
+    if (p && (p.includes('Kỹ sư phần mềm SOA') || p.includes('Kỹ Sư Phần Mềm SOA'))) {
+      p = 'Kỹ sư phần mềm';
+      state.user.position = 'Kỹ sư phần mềm';
+    }
+    posEl.innerText = p || (isOnboarded ? 'Nhân viên chính thức' : 'Nhân sự mới (Chờ bổ nhiệm)');
   }
 
   if (mgrEl) {
@@ -4647,7 +4662,7 @@ function openOnboardEmployeeModal(username, fullName, email, id = '') {
           <div>
             <label style="display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">5. Chức danh / Vị trí *</label>
             <select id="onboardPosition" class="input-filter-select" style="width: 100%; height: 42px; border-radius: 8px;" required>
-              <option value="Kỹ sư phần mềm SOA">Kỹ sư phần mềm SOA</option>
+              <option value="Kỹ sư phần mềm">Kỹ sư phần mềm</option>
               <option value="Chuyên viên Phát triển Hệ thống">Chuyên viên Phát triển Hệ thống</option>
               <option value="Frontend &amp; UI Developer">Frontend &amp; UI Developer</option>
               <option value="Backend Developer">Backend Developer</option>

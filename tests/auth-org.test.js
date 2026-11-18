@@ -251,6 +251,9 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       const data = await res.json();
       assert.ok(Array.isArray(data.data));
       assert.ok(data.data.some((p) => p.code === 'POS-DEV'));
+      const devPos = data.data.find((p) => p.code === 'POS-DEV');
+      assert.ok(devPos.title.includes('Kỹ Sư Phần Mềm') || devPos.title.includes('Kỹ sư phần mềm'), `Chức danh phải là Kỹ Sư Phần Mềm, thực tế: ${devPos.title}`);
+      assert.ok(!data.data.some((p) => (p.title || '').includes('Kỹ sư phần mềm SOA') || (p.title || '').includes('Kỹ Sư Phần Mềm SOA')), 'Không được chứa chức danh Kỹ sư phần mềm SOA');
     });
 
     test('Tạo phòng ban mới thành công /api/organization/departments (HTTP 201)', async () => {

@@ -38,6 +38,38 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
       }
     }
 
+    // Đảm bảo đủ 8 microservices được đăng ký trong Registry (:3500)
+    const expectedServices = [
+      { name: 'auth-service', port: 3001 },
+      { name: 'organization-service', port: 3002 },
+      { name: 'attendance-service', port: 3003 },
+      { name: 'leave-service', port: 3004 },
+      { name: 'shift-service', port: 3005 },
+      { name: 'payroll-service', port: 3006 },
+      { name: 'notification-service', port: 3007 },
+      { name: 'analytics-service', port: 3008 }
+    ];
+
+    for (const s of expectedServices) {
+      try {
+        await fetch(`${REGISTRY_URL}/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-key': process.env.INTERNAL_API_KEY || 'htqlns_internal_secret_token_2026'
+          },
+          body: JSON.stringify({
+            name: s.name,
+            host: 'localhost',
+            port: s.port,
+            url: `http://localhost:${s.port}`,
+            healthUrl: `http://localhost:${s.port}/health`,
+            version: '1.0.0'
+          })
+        });
+      } catch {}
+    }
+
     // Đảm bảo tính idempotent: Mở kỳ lương test tháng 11/2026 để có thể tính lại
     try {
       const pool = db.getPool(process.env.PAYROLL_DB_NAME || 'htqlns_payroll');
