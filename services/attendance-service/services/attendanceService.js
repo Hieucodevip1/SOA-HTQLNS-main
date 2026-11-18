@@ -486,6 +486,29 @@ class AttendanceService {
   }
 
   /**
+   * Lấy danh sách đơn giải trình
+   */
+  async getAdjustments(req) {
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const currentEmpId = getEmpIdFromUser(req.user);
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+    const isManager = callerRole === 'MANAGER';
+    const scope = req.query.scope;
+    const status = req.query.status;
+    const empId = req.query.empId;
+
+    return await repository.getAdjustments({
+      callerRole,
+      currentEmpId,
+      isAdminOrHr,
+      isManager,
+      scope,
+      status,
+      empId
+    });
+  }
+
+  /**
    * Tạo đơn giải trình
    */
   async createAdjustment({ user, body }) {
@@ -539,18 +562,39 @@ class AttendanceService {
     }
 
     const approverId = getEmpIdFromUser(user);
+    const callerRole = (user?.role || '').toUpperCase();
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+    const isManager = callerRole === 'MANAGER';
+
+    // 1. Chặn tự duyệt: Bất kỳ tài khoản nào (kể cả MANAGER và HR_ADMIN) đều không được phép tự duyệt đơn do chính mình tạo
+    if (adj.emp_id === approverId || (user?.id && adj.emp_id === user.id)) {
+      const err = new Error('Không được phép tự duyệt đơn do chính mình tạo');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // 2. MANAGER chỉ được phép duyệt đơn của nhân viên thuộc phòng ban mình quản lý
+    if (isManager) {
+      const isSubordinate = await repository.isEmployeeInManagerScope(adj.emp_id, approverId, user);
+      if (!isSubordinate) {
+        const err = new Error('Quản lý chỉ được phép duyệt đơn của nhân viên thuộc phòng ban/đội nhóm do mình quản lý');
+        err.statusCode = 403;
+        throw err;
+      }
+    } else if (!isAdminOrHr) {
+      const err = new Error('Bạn không có quyền duyệt đơn giải trình công');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // 3. Cập nhật quyết định duyệt đơn
     const updated = await repository.updateAdjustmentDecision(id, decision, approverId, rejectReason);
 
-    // Nếu APPROVED -> cập nhật lại log thành ON_TIME
+    // 4. Đồng bộ tự động sau khi duyệt đơn Giải trình chấm công (Requirement 3)
     if (decision === 'APPROVED') {
-      const log = adj.attendance_id ? await repository.findLogById(adj.attendance_id) : null;
-      if (log) {
-        log.status = 'ON_TIME';
-        log.late_minutes = 0;
-        log.early_leave_minutes = 0;
-        if (adj.requested_check_in) log.check_in_time = adj.requested_check_in;
-        if (adj.requested_check_out) log.check_out_time = adj.requested_check_out;
-      }
+      await repository.syncApprovedAdjustment(adj, approverId, callerRole);
+    } else {
+      await repository.notifyRejectedAdjustment(adj, approverId, rejectReason);
     }
 
     return updated;

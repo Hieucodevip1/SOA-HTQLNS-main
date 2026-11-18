@@ -171,7 +171,8 @@ class ShiftController {
 
   async decideOtRequest(req, res, next) {
     try {
-      let { decision, rejectReason = null } = req.body || {};
+      let { decision, status, rejectReason = null, note = null } = req.body || {};
+      decision = (decision || status || '').toUpperCase();
       if (!decision) {
         if (req.path.includes('/approve')) decision = 'APPROVED';
         else if (req.path.includes('/reject')) decision = 'REJECTED';
@@ -184,7 +185,7 @@ class ShiftController {
         });
       }
 
-      const updated = await shiftService.decideOtRequest(req.params.id, decision, req.user, rejectReason);
+      const updated = await shiftService.decideOtRequest(req.params.id, decision, req.user, rejectReason || note);
       return res.status(200).json({
         success: true,
         message: decision === 'APPROVED' ? 'Đã phê duyệt đơn tăng ca' : 'Đã từ chối đơn tăng ca',

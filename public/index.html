@@ -2043,20 +2043,31 @@ input:checked + .slider:before {
              VIEW: QUẢN LÝ ĐƠN TỪ & NGHỈ PHÉP (TẠO ĐƠN & PHÊ DUYỆT)
              ==================================================================== -->
         <section id="view-requests" class="figma-view-section" style="display: none;">
-          <div class="breadcrumb-trail">Trang chủ / Đơn từ &amp; Nghỉ phép</div>
+          <div class="breadcrumb-trail" id="requestsBreadcrumbTrail">Trang chủ / Đơn từ &amp; Nghỉ phép</div>
           <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
             <div>
-              <h1 class="page-heading-title">Quản lý Đơn từ &amp; Nghỉ phép</h1>
-              <div class="page-heading-desc">Nhân viên tạo và gửi đơn xin nghỉ phép; Quản trị viên duyệt và quản lý lịch sử đơn từ.</div>
+              <h1 class="page-heading-title" id="requestsMainTitle">Quản lý Đơn từ &amp; Nghỉ phép</h1>
+              <div class="page-heading-desc" id="requestsMainDesc">Nhân viên tạo và gửi đơn xin nghỉ phép; Quản trị viên duyệt và quản lý lịch sử đơn từ.</div>
             </div>
             <div style="display: flex; gap: 10px;">
-              <button class="btn-primary-blue" onclick="scrollToCreateForm()">+ Tạo đơn mới</button>
+              <button class="btn-primary-blue" id="btnRequestsCreateNew" onclick="scrollToCreateForm()">+ Tạo đơn mới</button>
               <button class="btn-secondary-outline" onclick="loadRequestsData()">↻ Làm mới</button>
             </div>
           </div>
 
+          <!-- THANH TAB PHÂN TÁCH GIAO DIỆN THEO VAI TRÒ (ADMIN vs MANAGER vs EMPLOYEE) -->
+          <div class="requests-role-tabs-bar" id="requestsRoleTabsBar" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+            <button type="button" class="btn-role-tab active" id="tabReqDepartment" onclick="switchRequestsTab('department')" style="padding: 8px 18px; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1.5px solid #2563eb; background: #eff6ff; color: #1d4ed8; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+              <span id="tabReqDeptLabel">Duyệt đơn bộ phận</span>
+              <span class="badge-count" id="badgeDeptPendingCount" style="background: #f59e0b; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; display: none;">0</span>
+            </button>
+            <button type="button" class="btn-role-tab" id="tabReqPersonal" onclick="switchRequestsTab('personal')" style="padding: 8px 18px; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1.5px solid #e2e8f0; background: #fff; color: #64748b; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+              <span id="tabReqPersonalLabel">Đơn cá nhân của tôi</span>
+            </button>
+          </div>
+
           <!-- PHẦN TRÊN: FORM TẠO ĐƠN & QUỸ PHÉP NĂM 2026 -->
-          <div style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 20px; margin-bottom: 24px;">
+          <div id="requestsTopSection" style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 20px; margin-bottom: 24px;">
             <!-- FORM TẠO ĐƠN NGHỈ PHÉP (DÀNH CHO NHÂN VIÊN GỬI QUẢN TRỊ) -->
             <div class="figma-white-card" id="cardCreateLeaveForm">
               <div class="card-title-flex">
@@ -2202,9 +2213,9 @@ input:checked + .slider:before {
                   <th>Mã đơn</th>
                   <th>Nhân viên gửi đơn</th>
                   <th>Phòng ban</th>
-                  <th>Loại nghỉ phép</th>
-                  <th>Thời gian xin nghỉ</th>
-                  <th>Số ngày</th>
+                  <th>Loại đơn</th>
+                  <th>Thời gian yêu cầu</th>
+                  <th>Thời lượng</th>
                   <th>Lý do</th>
                   <th>Ngày gửi</th>
                   <th>Trạng thái</th>

@@ -287,6 +287,64 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     assert.strictEqual(data.data.status, 'APPROVED');
   });
 
+  // 11b. Chặn tự duyệt đơn tăng ca OT (HTTP 403) và quyền duyệt thay của Admin
+  test('Chặn tự duyệt đơn đăng ký tăng ca OT (HTTP 403) và quyền duyệt thay của Admin', async () => {
+    // 1. Manager gửi đơn OT cá nhân
+    const createOtRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/ot-requests`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-25',
+        startTime: '18:00:00',
+        endTime: '21:00:00',
+        totalHours: 3.0,
+        otType: 'WEEKDAY',
+        reason: 'Hỗ trợ release hệ thống phiên bản mới'
+      })
+    });
+    assert.strictEqual(createOtRes.status, 201);
+    const createOtData = await createOtRes.json();
+    const mgrOtId = createOtData.data?.id;
+    assert.ok(mgrOtId);
+
+    // 2. Manager cố tình tự duyệt đơn OT của chính mình -> HTTP 403
+    const selfApproveRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/ot-requests/${mgrOtId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        status: 'APPROVED',
+        note: 'Tự duyệt OT của chính mình'
+      })
+    });
+    assert.strictEqual(selfApproveRes.status, 403);
+    const selfErr = await selfApproveRes.json();
+    assert.strictEqual(selfErr.success, false);
+    assert.match(selfErr.error || selfErr.message, /Không được phép tự duyệt đơn/);
+
+    // 3. Admin duyệt thay (Override) đơn OT của Manager -> HTTP 200
+    const adminOverrideRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/ot-requests/${mgrOtId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        status: 'APPROVED',
+        note: 'Admin phê duyệt thay hợp lệ'
+      })
+    });
+    assert.strictEqual(adminOverrideRes.status, 200);
+    const adminData = await adminOverrideRes.json();
+    assert.strictEqual(adminData.success, true);
+    assert.strictEqual(adminData.data.status, 'APPROVED');
+  });
+
   // 12. Internal API: Lấy ca làm việc cho attendance-service (HTTP 200)
   test('Internal API /internal/shifts/schedule bảo mật x-internal-key (HTTP 403 & HTTP 200)', async () => {
     // Không có key -> 403

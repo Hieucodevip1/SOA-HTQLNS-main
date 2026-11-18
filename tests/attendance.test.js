@@ -254,7 +254,7 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
   });
 
   // 11. Quản lý duyệt đơn giải trình công (SCR_ATT_04)
-  test('Quản trị viên / Quản lý phê duyệt đơn giải trình công (HTTP 200)', async () => {
+  test('Quản trị viên / Quản lý phê duyệt đơn giải trình công (HTTP 200) và đồng bộ trạng thái chấm công', async () => {
     assert.ok(adjustmentId);
     const res = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendance-adjustments/${adjustmentId}/decision`, {
       method: 'PATCH',
@@ -263,13 +263,99 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        decision: 'APPROVED'
+        decision: 'APPROVED',
+        comment: 'Quản trị viên phê duyệt giải trình'
       })
     });
     assert.strictEqual(res.status, 200);
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.status, 'APPROVED');
+
+    // Kiểm tra bản ghi chấm công đã được tự động đồng bộ sang ON_TIME với 8.0h chuẩn
+    const historyRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/history`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    if (historyRes.ok) {
+      const histData = await historyRes.json();
+      const logs = histData.data?.logs || histData.data || [];
+      const updatedLog = logs.find(l => l.work_date === new Date().toISOString().slice(0, 10));
+      if (updatedLog) {
+        assert.strictEqual(updatedLog.status, 'ON_TIME');
+        assert.strictEqual(Number(updatedLog.work_hours), 8);
+      }
+    }
+  });
+
+  // 11b. Chặn tự duyệt đơn giải trình và kiểm tra phạm vi phòng ban
+  test('Chặn tự duyệt đơn giải trình chấm công (HTTP 403) và quyền duyệt thay của Admin', async () => {
+    // 1. Manager gửi đơn giải trình của chính mình
+    const createAdjRes = await fetch(`http://localhost:${ATT_PORT}/api/attendance/adjustments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-18',
+        adjustmentType: 'FORGOT_CHECK_OUT',
+        requestedCheckIn: '2026-11-18 08:30:00',
+        requestedCheckOut: '2026-11-18 17:30:00',
+        reason: 'Quên checkout khi họp đối tác cuối giờ'
+      })
+    });
+    assert.strictEqual(createAdjRes.status, 201);
+    const createAdjData = await createAdjRes.json();
+    const mgrAdjId = createAdjData.data?.id;
+    assert.ok(mgrAdjId);
+
+    // 2. Manager cố tình tự duyệt đơn giải trình của chính mình -> HTTP 403
+    const selfApproveRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendance-adjustments/${mgrAdjId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Tự duyệt đơn giải trình'
+      })
+    });
+    assert.strictEqual(selfApproveRes.status, 403);
+    const selfErr = await selfApproveRes.json();
+    assert.strictEqual(selfErr.success, false);
+    assert.match(selfErr.error || selfErr.message, /Không được phép tự duyệt đơn/);
+
+    // 3. Manager không có quyền trên phòng ban khác cố duyệt -> HTTP 403
+    const otherMgrApproveRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendance-adjustments/${mgrAdjId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${emptyManagerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Duyệt trái thẩm quyền'
+      })
+    });
+    assert.strictEqual(otherMgrApproveRes.status, 403);
+
+    // 4. Admin duyệt thay (Override) đơn giải trình của Manager -> HTTP 200
+    const adminOverrideRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendance-adjustments/${mgrAdjId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Admin duyệt thay hợp lệ'
+      })
+    });
+    assert.strictEqual(adminOverrideRes.status, 200);
+    const adminData = await adminOverrideRes.json();
+    assert.strictEqual(adminData.success, true);
+    assert.strictEqual(adminData.data.status, 'APPROVED');
   });
 
   // 12. Internal monthly summary API (bảo mật bằng x-internal-key)

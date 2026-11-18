@@ -128,7 +128,7 @@ app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'
 // 3. Danh sách đơn xin nghỉ phép (SCR_LEAVE_02, SCR_REQ_01)
 app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
-    const { status, empId } = req.query;
+    const { status, empId, scope } = req.query;
     const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
     const currentEmpId = getEmpIdFromUser(req.user);
     const conditions = [];
@@ -157,11 +157,27 @@ app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), 
       conditions.push('lr.emp_id = ?');
       params.push(currentEmpId);
     } else if (callerRole === 'MANAGER') {
-      conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
-      params.push(currentEmpId, currentEmpId);
-    } else if (empId) {
-      conditions.push('lr.emp_id = ?');
-      params.push(empId);
+      const isPersonal = scope === 'ME' || scope === 'personal' || (empId && empId === currentEmpId);
+      if (isPersonal) {
+        // Tab Đơn cá nhân: Manager xem đơn của chính mình
+        conditions.push('lr.emp_id = ?');
+        params.push(currentEmpId);
+      } else {
+        // Tab Duyệt đơn bộ phận: chỉ hiển thị đơn từ của nhân viên thuộc phòng ban/đội nhóm do Manager quản lý
+        conditions.push('(e.manager_id = ? OR d.manager_id = ? OR e.department_id = (SELECT department_id FROM htqlns_organization.employees WHERE id = ?))');
+        conditions.push('lr.emp_id != ?');
+        params.push(currentEmpId, currentEmpId, currentEmpId, currentEmpId);
+        if (empId) {
+          conditions.push('lr.emp_id = ?');
+          params.push(empId);
+        }
+      }
+    } else {
+      // ADMIN / HR: Xem toàn bộ đơn từ của công ty
+      if (empId) {
+        conditions.push('lr.emp_id = ?');
+        params.push(empId);
+      }
     }
     if (status) {
       conditions.push('lr.status = ?');
@@ -218,9 +234,15 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
 app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
     const empId = getEmpIdFromUser(req.user);
-    const { leaveTypeId, startDate, endDate, totalDays, session = 'FULL_DAY', reason, attachmentUrl = null } = req.body;
+    const leaveTypeId = req.body.leaveTypeId || req.body.leave_type_id;
+    const startDate = req.body.startDate || req.body.start_date;
+    const endDate = req.body.endDate || req.body.end_date || startDate;
+    const totalDays = req.body.totalDays ?? req.body.total_days;
+    const session = req.body.session || 'FULL_DAY';
+    const reason = req.body.reason;
+    const attachmentUrl = req.body.attachmentUrl || req.body.attachment_url || null;
 
-    if (!empId || !leaveTypeId || !startDate || !endDate || !totalDays || !reason) {
+    if (!empId || !leaveTypeId || !startDate || !endDate || totalDays === undefined || totalDays === null || !reason) {
       return res.status(400).json({ success: false, error: 'Thiếu thông tin bắt buộc' });
     }
 
@@ -267,7 +289,13 @@ const handleLeaveDecision = async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT lr.*, lt.is_paid FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id WHERE lr.id = ?`,
+      `SELECT lr.*, lt.is_paid, e.department_id, e.manager_id, e.full_name AS emp_name,
+              d.manager_id AS dept_manager_id
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       WHERE lr.id = ?`,
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
@@ -275,6 +303,40 @@ const handleLeaveDecision = async (req, res, next) => {
     if (leave.status !== 'PENDING') return res.status(400).json({ success: false, error: 'Đơn đã được xử lý' });
 
     const approverId = getEmpIdFromUser(req.user);
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+
+    // 1. Chặn tự duyệt: Bất kỳ tài khoản nào (kể cả MANAGER và HR_ADMIN) đều không được phép tự duyệt đơn do chính mình tạo
+    if (leave.emp_id === approverId || (req.user?.id && leave.emp_id === req.user.id)) {
+      return res.status(403).json({ success: false, error: 'Không được phép tự duyệt đơn do chính mình tạo' });
+    }
+
+    // 2. Quy tắc thẩm quyền duyệt:
+    // MANAGER chỉ được phép duyệt các đơn thuộc phạm vi nhân viên phòng ban của mình
+    if (callerRole === 'MANAGER') {
+      let managerDeptId = req.user?.departmentId || req.user?.department_id || null;
+      if (!managerDeptId && approverId) {
+        try {
+          const [mRows] = await pool.query('SELECT department_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1', [approverId]);
+          if (mRows.length) managerDeptId = mRows[0].department_id;
+        } catch {}
+      }
+
+      const isSubordinate = (leave.manager_id && leave.manager_id === approverId) ||
+                            (leave.dept_manager_id && leave.dept_manager_id === approverId) ||
+                            (managerDeptId && leave.department_id && leave.department_id === managerDeptId);
+
+      if (!isSubordinate) {
+        return res.status(403).json({
+          success: false,
+          error: 'Quản lý chỉ được phép duyệt đơn của nhân viên thuộc phòng ban/đội nhóm do mình quản lý'
+        });
+      }
+    } else if (!isAdminOrHr) {
+      return res.status(403).json({ success: false, error: 'Bạn không có quyền duyệt đơn từ' });
+    }
+
+    // 3. ADMIN và HR_ADMIN có quyền duyệt thay (Override) bất kỳ đơn nào đang ở trạng thái PENDING
     await pool.query(
       `UPDATE leave_requests SET status = ?, approver_id = ?, approved_at = NOW(), reject_reason = ? WHERE id = ?`,
       [decision, approverId, decision === 'REJECTED' ? rejectReason : null, leave.id]
@@ -304,7 +366,11 @@ const handleLeaveDecision = async (req, res, next) => {
       startDate: leave.start_date,
       endDate: leave.end_date,
       totalDays: leave.total_days,
-      isPaid: Boolean(leave.is_paid)
+      isPaid: Boolean(leave.is_paid),
+      approvedBy: approverId,
+      approverId,
+      approverRole: callerRole,
+      isOverride: isAdminOrHr
     }).catch(() => {});
 
     const [updated] = await pool.query(
@@ -319,6 +385,10 @@ const handleLeaveDecision = async (req, res, next) => {
        WHERE lr.id = ?`,
       [leave.id]
     );
+    if (updated[0]) {
+      updated[0].override = isAdminOrHr;
+      updated[0].approver_role = callerRole;
+    }
     res.json({ success: true, message: `Đã ${decision === 'APPROVED' ? 'duyệt' : 'từ chối'} đơn nghỉ phép`, data: updated[0] });
   } catch (err) {
     next(err);

@@ -133,6 +133,18 @@ async function seed() {
       `, [id, code, name, startTime, endTime, breakMin, graceLate, graceEarly, workingHours, minStaff, maxStaff, status]);
     }
     console.log('[SEED] Chuẩn hoá và dọn dẹp ca làm việc (shifts) hoàn tất thành công!');
+
+    // Chuẩn hoá ENUM adjustment_type trong attendance_adjustments
+    try {
+      const attPool = db.getPool('htqlns_attendance');
+      await attPool.query(`
+        ALTER TABLE attendance_adjustments 
+        MODIFY COLUMN adjustment_type ENUM('FORGOT_CHECK_IN', 'FORGOT_CHECK_OUT', 'GPS_ERROR', 'LATE_EXPLANATION', 'OTHER') NOT NULL DEFAULT 'FORGOT_CHECK_IN'
+      `);
+      console.log('[SEED] Chuẩn hoá bảng attendance_adjustments hoàn tất!');
+    } catch (attErr) {
+      console.warn('[SEED] Cảnh báo khi cập nhật attendance_adjustments:', attErr.message);
+    }
   } catch (err) {
     console.warn('[SEED] Cảnh báo khi dọn dẹp ca làm việc:', err.message);
   }

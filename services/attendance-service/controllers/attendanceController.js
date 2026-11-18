@@ -258,9 +258,8 @@ class AttendanceController {
         }
       }
 
-      const rows = await repository.getAttendanceLogs();
-      const list = Array.from(rows);
-      return success(res, list, 200, 'Thành công');
+      const rows = await attendanceService.getAdjustments(req);
+      return success(res, rows, 200, 'Thành công');
     } catch (err) {
       next(err);
     }

@@ -30,6 +30,13 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     role: 'EMPLOYEE'
   });
 
+  const managerToken = jwt.signToken({
+    userId: 'u_mgr_test',
+    empId: 'e0000001-0000-0000-0000-000000000003',
+    username: 'manager',
+    role: 'MANAGER'
+  });
+
   before(async () => {
     // Khởi chạy leave-service trên cổng kiểm thử độc lập :3104
     leaveProcess = fork(path.resolve(__dirname, '..', 'services', 'leave-service', 'index.js'), [], {
@@ -261,5 +268,63 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     const data = await resWithKey.json();
     assert.strictEqual(data.success, true);
     assert.ok(Array.isArray(data.data));
+  });
+
+  // 13. Chặn tự duyệt đơn nghỉ phép của chính mình (HTTP 403)
+  test('Chặn người dùng (Manager) tự phê duyệt đơn nghỉ phép của chính mình (HTTP 403)', async () => {
+    // Manager gửi đơn xin nghỉ cá nhân
+    const createRes = await fetch(`http://localhost:${LEAVE_PORT}/api/leave`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        leave_type_id: 'lt000001-0000-0000-0000-000000000001',
+        start_date: '2026-12-01',
+        end_date: '2026-12-01',
+        total_days: 1.0,
+        reason: 'Nghỉ cá nhân giải quyết việc riêng'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    const managerLeaveId = createData.data?.id || createData.id;
+    assert.ok(managerLeaveId);
+
+    // Manager cố tình tự duyệt đơn của chính mình -> phải bị chặn HTTP 403
+    const approveRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${managerLeaveId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Tự duyệt đơn của mình'
+      })
+    });
+    assert.strictEqual(approveRes.status, 403);
+    const approveErr = await approveRes.json();
+    assert.strictEqual(approveErr.success, false);
+    assert.match(approveErr.error || approveErr.message, /Không được phép tự duyệt đơn/);
+
+    // 14. Admin có quyền duyệt thay (Override) đơn nghỉ phép của Manager (HTTP 200)
+    const overrideRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${managerLeaveId}/decision`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Admin duyệt thay cấp quản lý'
+      })
+    });
+    assert.strictEqual(overrideRes.status, 200);
+    const overrideData = await overrideRes.json();
+    assert.strictEqual(overrideData.success, true);
+    assert.strictEqual(overrideData.data.status, 'APPROVED');
+    assert.strictEqual(overrideData.data.override, true);
   });
 });

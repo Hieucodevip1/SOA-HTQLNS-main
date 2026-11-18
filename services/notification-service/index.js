@@ -91,6 +91,26 @@ function setupEventSubscriptions() {
     });
   });
 
+  events.subscribe('ADJUSTMENT_REQUEST_APPROVED', async (payload) => {
+    await createNotification({
+      empId: payload.empId,
+      type: 'ATTENDANCE_ALERT',
+      title: 'Đơn giải trình chấm công đã được duyệt',
+      content: `Đơn giải trình ngày ${payload.workDate} của bạn đã được phê duyệt hợp lệ (hệ thống đã tự động cập nhật công đủ 8.0h / đúng giờ).`,
+      referenceId: payload.adjustmentId
+    });
+  });
+
+  events.subscribe('ADJUSTMENT_REQUEST_REJECTED', async (payload) => {
+    await createNotification({
+      empId: payload.empId,
+      type: 'ATTENDANCE_ALERT',
+      title: 'Đơn giải trình chấm công bị từ chối',
+      content: `Đơn giải trình ngày ${payload.workDate} của bạn đã bị từ chối.${payload.rejectReason ? ` Lý do: ${payload.rejectReason}` : ''}`,
+      referenceId: payload.adjustmentId
+    });
+  });
+
   events.subscribe('PAYSLIP_PUBLISHED', async (payload) => {
     await createNotification({
       targetRole: 'EMPLOYEE',

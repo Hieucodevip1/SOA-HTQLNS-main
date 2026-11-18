@@ -142,9 +142,15 @@ class ShiftService {
     if (scope.isEmployee) {
       allowedEmpIds = [scope.empId];
     } else if (scope.isManager) {
-      managerId = scope.empId;
-      if (Array.isArray(scope.allowedEmpIds)) {
-        allowedEmpIds = scope.allowedEmpIds;
+      const isPersonal = req.query.scope === 'ME' || req.query.scope === 'personal' || (empId && empId === scope.empId);
+      if (isPersonal) {
+        allowedEmpIds = [scope.empId];
+        managerId = null;
+      } else {
+        managerId = scope.empId;
+        if (Array.isArray(scope.allowedEmpIds)) {
+          allowedEmpIds = scope.allowedEmpIds.filter(id => id !== scope.empId);
+        }
       }
     } else if (empId) {
       allowedEmpIds = [empId];
@@ -349,9 +355,15 @@ class ShiftService {
     if (scope.isEmployee) {
       allowedEmpIds = [scope.empId];
     } else if (scope.isManager) {
-      managerId = scope.empId;
-      if (Array.isArray(scope.allowedEmpIds)) {
-        allowedEmpIds = scope.allowedEmpIds;
+      const isPersonal = req.query.scope === 'ME' || req.query.scope === 'personal' || (empId && empId === scope.empId);
+      if (isPersonal) {
+        allowedEmpIds = [scope.empId];
+        managerId = null;
+      } else {
+        managerId = scope.empId;
+        if (Array.isArray(scope.allowedEmpIds)) {
+          allowedEmpIds = scope.allowedEmpIds.filter(id => id !== scope.empId);
+        }
       }
     } else if (empId) {
       allowedEmpIds = [empId];
@@ -505,25 +517,59 @@ class ShiftService {
   }
 
   async decideOtRequest(id, decision, user, rejectReason = null) {
-    const approverId = user?.empId || user?.emp_id || user?.id || null;
-    const result = await shiftRepository.updateOtDecision(id, decision, approverId, rejectReason);
+    if (!['APPROVED', 'REJECTED'].includes(decision)) {
+      const err = new Error('decision phải là APPROVED hoặc REJECTED');
+      err.statusCode = 400;
+      throw err;
+    }
 
-    if (result.error === 'NOT_FOUND') {
+    const ot = await shiftRepository.getOtRequestById(id);
+    if (!ot) {
       const err = new Error('Không tìm thấy đơn đăng ký tăng ca');
       err.statusCode = 404;
       throw err;
     }
-    if (result.error === 'ALREADY_PROCESSED') {
+    if (ot.status !== 'PENDING') {
       const err = new Error('Đơn đã được xử lý trước đó');
       err.statusCode = 400;
       throw err;
     }
+
+    const approverId = user?.empId || user?.emp_id || user?.id || null;
+    const callerRole = (user?.role || '').toUpperCase();
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+    const isManager = callerRole === 'MANAGER';
+
+    // 1. Chặn tự duyệt: Bất kỳ tài khoản nào (kể cả MANAGER và HR_ADMIN) đều không được phép tự duyệt đơn do chính mình tạo
+    if (ot.emp_id === approverId || (user?.id && ot.emp_id === user.id)) {
+      const err = new Error('Không được phép tự duyệt đơn do chính mình tạo');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // 2. MANAGER chỉ được phép duyệt đơn của nhân viên thuộc phạm vi quản lý
+    if (isManager) {
+      const scope = await resolveEmployeeScope({ user, headers: { 'x-user-role': callerRole, 'x-user-id': approverId } });
+      if (Array.isArray(scope.allowedEmpIds) && !scope.allowedEmpIds.includes(ot.emp_id)) {
+        const err = new Error('Quản lý chỉ được phép duyệt đơn của nhân viên thuộc phạm vi quản lý');
+        err.statusCode = 403;
+        throw err;
+      }
+    } else if (!isAdminOrHr) {
+      const err = new Error('Bạn không có quyền duyệt đơn tăng ca');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const result = await shiftRepository.updateOtDecision(id, decision, approverId, rejectReason);
 
     // Bắn sự kiện sang Event Bus
     events.publish(`OT_REQUEST_${decision}`, {
       requestId: id,
       empId: result.data.emp_id,
       approverId,
+      approverRole: callerRole,
+      isOverride: isAdminOrHr,
       workDate: result.data.work_date,
       totalHours: result.data.total_hours
     }).catch(() => {});

@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 const db = require('../../../shared/db');
+const events = require('../../../shared/events');
 
 const DB_NAME = process.env.ATTENDANCE_DB_NAME || 'htqlns_attendance';
 const pool = db.getPool(DB_NAME);
@@ -790,6 +791,249 @@ class AttendanceRepository {
       return adj;
     }
     return null;
+  }
+
+  /**
+   * Lấy danh sách đơn giải trình chấm công theo phân quyền vai trò
+   */
+  async getAdjustments({ callerRole, currentEmpId, isAdminOrHr, isManager, scope, status, empId }) {
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        const conditions = [];
+        const params = [];
+
+        if (callerRole === 'EMPLOYEE') {
+          conditions.push('adj.emp_id = ?');
+          params.push(currentEmpId);
+        } else if (isManager) {
+          const isPersonal = scope === 'ME' || scope === 'personal' || (empId && empId === currentEmpId);
+          if (isPersonal) {
+            conditions.push('adj.emp_id = ?');
+            params.push(currentEmpId);
+          } else {
+            conditions.push('(e.manager_id = ? OR d.manager_id = ? OR e.department_id = (SELECT department_id FROM htqlns_organization.employees WHERE id = ?))');
+            conditions.push('adj.emp_id != ?');
+            params.push(currentEmpId, currentEmpId, currentEmpId, currentEmpId);
+            if (empId) {
+              conditions.push('adj.emp_id = ?');
+              params.push(empId);
+            }
+          }
+        } else {
+          // ADMIN / HR
+          if (empId) {
+            conditions.push('adj.emp_id = ?');
+            params.push(empId);
+          }
+        }
+
+        if (status) {
+          conditions.push('adj.status = ?');
+          params.push(status);
+        }
+
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        const [rows] = await pool.query(
+          `SELECT adj.*,
+                  COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+                  COALESCE(e.code, adj.emp_id) AS emp_code,
+                  COALESCE(d.name, 'Phòng ban') AS department_name,
+                  COALESCE(m.full_name, 'Quản lý') AS approver_name
+           FROM attendance_adjustments adj
+           LEFT JOIN htqlns_organization.employees e ON adj.emp_id = e.id
+           LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+           LEFT JOIN htqlns_organization.employees m ON adj.approver_id = m.id
+           ${where}
+           ORDER BY adj.created_at DESC`,
+          params
+        );
+        return rows;
+      } catch (err) {
+        console.warn('[ATT-REPO] Lỗi getAdjustments DB, fallback memory:', err.message);
+      }
+    }
+
+    // In-memory fallback
+    let list = Array.from(memoryAdjustments.values());
+    if (callerRole === 'EMPLOYEE') {
+      list = list.filter((a) => a.emp_id === currentEmpId);
+    } else if (isManager) {
+      const isPersonal = scope === 'ME' || scope === 'personal' || (empId && empId === currentEmpId);
+      if (isPersonal) {
+        list = list.filter((a) => a.emp_id === currentEmpId);
+      } else {
+        list = list.filter((a) => a.emp_id !== currentEmpId);
+      }
+    } else if (empId) {
+      list = list.filter((a) => a.emp_id === empId);
+    }
+    if (status) {
+      list = list.filter((a) => a.status === status);
+    }
+    return list;
+  }
+
+  /**
+   * Kiểm tra xem nhân sự có thuộc phạm vi quản lý của Manager không
+   */
+  async isEmployeeInManagerScope(empId, managerEmpId, user = null) {
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        let managerDeptId = user?.departmentId || user?.department_id || null;
+        if (!managerDeptId && managerEmpId) {
+          const [mRows] = await pool.query('SELECT department_id FROM htqlns_organization.employees WHERE id = ? LIMIT 1', [managerEmpId]);
+          if (mRows.length) managerDeptId = mRows[0].department_id;
+        }
+
+        const [empRows] = await pool.query(
+          `SELECT e.department_id, e.manager_id, d.manager_id AS dept_manager_id
+           FROM htqlns_organization.employees e
+           LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+           WHERE e.id = ? LIMIT 1`,
+          [empId]
+        );
+        if (empRows.length > 0) {
+          const emp = empRows[0];
+          return (
+            (emp.manager_id && emp.manager_id === managerEmpId) ||
+            (emp.dept_manager_id && emp.dept_manager_id === managerEmpId) ||
+            (managerDeptId && emp.department_id && emp.department_id === managerDeptId)
+          );
+        }
+      } catch (err) {
+        console.warn('[ATT-REPO] Lỗi kiểm tra manager scope DB:', err.message);
+      }
+    }
+    return empId !== managerEmpId;
+  }
+
+  /**
+   * Đồng bộ tự động sau khi duyệt đơn Giải trình chấm công (APPROVED):
+   * Cập nhật bản ghi chấm công sang ON_TIME, đủ công, và phát thông báo
+   */
+  async syncApprovedAdjustment(adj, approverId, approverRole = 'MANAGER') {
+    const workDate = String(adj.work_date).slice(0, 10);
+    const useDb = await this.isDbAvailable();
+
+    const targetCheckIn = adj.requested_check_in || `${workDate} 08:00:00`;
+    const targetCheckOut = adj.requested_check_out || `${workDate} 17:30:00`;
+
+    if (useDb) {
+      try {
+        let logId = adj.attendance_id;
+        let logRows = [];
+        if (logId) {
+          const [rows] = await pool.query('SELECT * FROM attendance_logs WHERE id = ? LIMIT 1', [logId]);
+          logRows = rows;
+        }
+        if (!logRows.length) {
+          const [rows] = await pool.query('SELECT * FROM attendance_logs WHERE emp_id = ? AND work_date = ? LIMIT 1', [adj.emp_id, workDate]);
+          logRows = rows;
+        }
+
+        if (logRows.length > 0) {
+          logId = logRows[0].id;
+          await pool.query(
+            `UPDATE attendance_logs
+             SET status = 'ON_TIME',
+                 late_minutes = 0,
+                 early_leave_minutes = 0,
+                 check_in_time = ?,
+                 check_out_time = ?,
+                 actual_working_hours = 8.00
+             WHERE id = ?`,
+            [targetCheckIn, targetCheckOut, logId]
+          );
+          if (!adj.attendance_id) {
+            await pool.query('UPDATE attendance_adjustments SET attendance_id = ? WHERE id = ?', [logId, adj.id]);
+          }
+        } else {
+          logId = crypto.randomUUID();
+          await pool.query(
+            `INSERT INTO attendance_logs
+             (id, emp_id, work_date, check_in_time, check_out_time, late_minutes, early_leave_minutes, actual_working_hours, status)
+             VALUES (?, ?, ?, ?, ?, 0, 0, 8.00, 'ON_TIME')`,
+            [logId, adj.emp_id, workDate, targetCheckIn, targetCheckOut]
+          );
+          await pool.query('UPDATE attendance_adjustments SET attendance_id = ? WHERE id = ?', [logId, adj.id]);
+        }
+
+        // Tự động phát thông báo tới nhân viên
+        try {
+          await pool.query(
+            `INSERT INTO htqlns_notification.notifications
+             (id, emp_id, target_role, type, title, content, reference_id)
+             VALUES (UUID(), ?, 'EMPLOYEE', 'ATTENDANCE_ALERT', ?, ?, ?)`,
+            [
+              adj.emp_id,
+              'Đơn giải trình chấm công đã được duyệt',
+              `Đơn giải trình ngày ${workDate} của bạn đã được phê duyệt hợp lệ (hệ thống đã tự động cập nhật công đủ 8.0h / đúng giờ).`,
+              adj.id
+            ]
+          );
+        } catch (notifErr) {
+          console.warn('[ATT-REPO] Không thể ghi bảng notifications:', notifErr.message);
+        }
+      } catch (dbErr) {
+        console.warn('[ATT-REPO] Lỗi syncApprovedAdjustment DB:', dbErr.message);
+      }
+    }
+
+    // Cập nhật in-memory fallback
+    const memLog = Array.from(memoryAttendanceLogs.values()).find(
+      (l) => (adj.attendance_id && l.id === adj.attendance_id) || (l.emp_id === adj.emp_id && String(l.work_date).slice(0, 10) === workDate)
+    );
+    if (memLog) {
+      memLog.status = 'ON_TIME';
+      memLog.late_minutes = 0;
+      memLog.early_leave_minutes = 0;
+      memLog.check_in_time = targetCheckIn;
+      memLog.check_out_time = targetCheckOut;
+      memLog.actual_working_hours = 8.00;
+    }
+
+    // Bắn sự kiện lên Event Bus
+    events.publish('ADJUSTMENT_REQUEST_APPROVED', {
+      adjustmentId: adj.id,
+      empId: adj.emp_id,
+      workDate,
+      approvedBy: approverId,
+      approverId,
+      approverRole
+    }).catch(() => {});
+  }
+
+  /**
+   * Phát thông báo khi đơn giải trình bị từ chối
+   */
+  async notifyRejectedAdjustment(adj, approverId, rejectReason = null) {
+    const workDate = String(adj.work_date).slice(0, 10);
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        await pool.query(
+          `INSERT INTO htqlns_notification.notifications
+           (id, emp_id, target_role, type, title, content, reference_id)
+           VALUES (UUID(), ?, 'EMPLOYEE', 'ATTENDANCE_ALERT', ?, ?, ?)`,
+          [
+            adj.emp_id,
+            'Đơn giải trình chấm công bị từ chối',
+            `Đơn giải trình ngày ${workDate} của bạn đã bị từ chối.${rejectReason ? ` Lý do: ${rejectReason}` : ''}`,
+            adj.id
+          ]
+        );
+      } catch (_) {}
+    }
+
+    events.publish('ADJUSTMENT_REQUEST_REJECTED', {
+      adjustmentId: adj.id,
+      empId: adj.emp_id,
+      workDate,
+      rejectReason,
+      approverId
+    }).catch(() => {});
   }
 
   /**
