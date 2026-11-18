@@ -201,7 +201,7 @@ class ShiftService {
       throw err;
     }
 
-    const { empIds, shiftId, workDates, note } = req.body;
+    const { empIds, shiftId, workDates, clearUnselectedDates, startTime, endTime, note } = req.body;
     if (!Array.isArray(empIds) || !empIds.length || !shiftId || !Array.isArray(workDates) || !workDates.length) {
       const err = new Error('Yêu cầu danh sách empIds, shiftId và danh sách workDates');
       err.statusCode = 400;
@@ -222,6 +222,9 @@ class ShiftService {
       empIds,
       shiftId,
       workDates,
+      clearUnselectedDates,
+      startTime,
+      endTime,
       note,
       assignedBy
     });

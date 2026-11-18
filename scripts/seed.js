@@ -97,6 +97,12 @@ async function seed() {
     try {
       await shiftPool.query('ALTER TABLE shifts ADD COLUMN max_staff INT NULL DEFAULT NULL AFTER min_staff');
     } catch {}
+    try {
+      await shiftPool.query('ALTER TABLE shift_assignments ADD COLUMN custom_start_time TIME NULL AFTER work_date');
+    } catch {}
+    try {
+      await shiftPool.query('ALTER TABLE shift_assignments ADD COLUMN custom_end_time TIME NULL AFTER custom_start_time');
+    } catch {}
 
     await shiftPool.query(`
       DELETE FROM shift_assignments 

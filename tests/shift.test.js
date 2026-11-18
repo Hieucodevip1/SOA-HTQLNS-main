@@ -199,28 +199,34 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
       body: JSON.stringify({
         empIds: ['e0000001-0000-0000-0000-000000000004'],
         shiftId: createdShiftId,
-        workDates: ['2026-11-20'],
-        note: 'Kiểm thử phân ca dự án'
+        workDates: ['2026-11-20', '2026-11-21'],
+        clearUnselectedDates: ['2026-11-22'],
+        startTime: '07:45:00',
+        endTime: '16:45:00',
+        note: 'Kiểm thử phân ca theo khoảng ngày và thứ trong tuần'
       })
     });
     assert.strictEqual(res.status, 201);
     const data = await res.json();
     assert.strictEqual(data.success, true);
+    assert.strictEqual(data.data.affectedCount, 2);
   });
 
   // 8. Tra cứu lịch phân ca có đầy đủ thông tin nhân viên & ca (HTTP 200)
   test('Tra cứu lịch phân ca trả về dữ liệu chuẩn hoá (HTTP 200)', async () => {
-    const res = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shift-assignments?fromDate=2026-11-20&toDate=2026-11-20`, {
+    const res = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shift-assignments?fromDate=2026-11-20&toDate=2026-11-21`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     assert.strictEqual(res.status, 200);
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.ok(Array.isArray(data.data));
-    const assigned = data.data.find((a) => a.emp_id === 'e0000001-0000-0000-0000-000000000004');
+    const assigned = data.data.find((a) => a.emp_id === 'e0000001-0000-0000-0000-000000000004' && a.work_date.slice(0, 10) === '2026-11-20');
     assert.ok(assigned, 'Phải tìm thấy ca đã phân');
     assert.ok(assigned.emp_name);
     assert.ok(assigned.shift_name);
+    assert.strictEqual(assigned.start_time.slice(0, 5), '07:45');
+    assert.strictEqual(assigned.end_time.slice(0, 5), '16:45');
   });
 
   // 9. Nhân viên gửi đơn đăng ký tăng ca OT (HTTP 201)

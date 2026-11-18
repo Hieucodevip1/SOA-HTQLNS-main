@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS shift_assignments (
   emp_id VARCHAR(36) NOT NULL COMMENT 'ID nhân viên (tham chiếu logic employees.id)',
   shift_id VARCHAR(36) NOT NULL COMMENT 'ID ca làm việc',
   work_date DATE NOT NULL COMMENT 'Ngày làm việc áp dụng',
+  custom_start_time TIME NULL COMMENT 'Giờ bắt đầu tùy chỉnh cho phân ca',
+  custom_end_time TIME NULL COMMENT 'Giờ kết thúc tùy chỉnh cho phân ca',
   note TEXT NULL COMMENT 'Ghi chú phân ca',
   assigned_by VARCHAR(36) NULL COMMENT 'ID người phân ca',
   status ENUM('SCHEDULED', 'SWAPPED', 'CANCELLED') NOT NULL DEFAULT 'SCHEDULED' COMMENT 'Trạng thái lịch trực',

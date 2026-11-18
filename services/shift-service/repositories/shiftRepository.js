@@ -443,7 +443,9 @@ class ShiftRepository {
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const [rows] = await pool.query(
           `SELECT sa.*, s.code AS shift_code, s.name AS shift_name,
-                  s.start_time, s.end_time, s.grace_late_minutes, s.working_hours,
+                  COALESCE(sa.custom_start_time, s.start_time) AS start_time,
+                  COALESCE(sa.custom_end_time, s.end_time) AS end_time,
+                  s.grace_late_minutes, s.working_hours,
                   COALESCE(e.full_name, 'Nhân viên') AS emp_name,
                   COALESCE(e.code, sa.emp_id) AS emp_code,
                   COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
@@ -490,8 +492,8 @@ class ShiftRepository {
         ...a,
         shift_code: shift.code || 'CA-HC',
         shift_name: shift.name || 'Ca Hành Chính',
-        start_time: shift.start_time || '08:00:00',
-        end_time: shift.end_time || '17:30:00',
+        start_time: a.custom_start_time || shift.start_time || '08:00:00',
+        end_time: a.custom_end_time || shift.end_time || '17:30:00',
         grace_late_minutes: shift.grace_late_minutes || 15,
         working_hours: shift.working_hours || 8.0,
         emp_name: emp.full_name || 'Nhân viên',
@@ -501,7 +503,7 @@ class ShiftRepository {
     }).sort((a, b) => b.work_date.localeCompare(a.work_date));
   }
 
-  async createShiftAssignments({ empIds, shiftId, workDates, note = null, assignedBy = null }) {
+  async createShiftAssignments({ empIds, shiftId, workDates, clearUnselectedDates = null, startTime = null, endTime = null, note = null, assignedBy = null }) {
     const shift = await this.getShiftById(shiftId);
     if (!shift || shift.status !== 'ACTIVE') {
       const err = new Error('Ca làm việc không tồn tại hoặc đã ngưng hoạt động');
@@ -509,18 +511,35 @@ class ShiftRepository {
       throw err;
     }
 
+    const cStart = startTime || null;
+    const cEnd = endTime || null;
+
     const useDb = await this.isDbAvailable();
     if (useDb) {
       try {
+        // Tùy chọn dọn sạch ca cũ ở các ngày không chọn trong khoảng áp dụng
+        if (Array.isArray(clearUnselectedDates) && clearUnselectedDates.length > 0 && Array.isArray(empIds) && empIds.length > 0) {
+          await pool.query(
+            `DELETE FROM shift_assignments 
+             WHERE emp_id IN (?) AND work_date IN (?)`,
+            [empIds, clearUnselectedDates]
+          );
+        }
+
         let count = 0;
         for (const empId of empIds) {
           for (const workDate of workDates) {
             const id = crypto.randomUUID();
             await pool.query(
-              `INSERT INTO shift_assignments (id, emp_id, shift_id, work_date, note, assigned_by, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'SCHEDULED')
-               ON DUPLICATE KEY UPDATE shift_id = VALUES(shift_id), note = VALUES(note), assigned_by = VALUES(assigned_by), status = 'SCHEDULED'`,
-              [id, empId, shiftId, workDate, note, assignedBy]
+              `INSERT INTO shift_assignments (id, emp_id, shift_id, work_date, custom_start_time, custom_end_time, note, assigned_by, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SCHEDULED')
+               ON DUPLICATE KEY UPDATE shift_id = VALUES(shift_id),
+                                       custom_start_time = VALUES(custom_start_time),
+                                       custom_end_time = VALUES(custom_end_time),
+                                       note = VALUES(note),
+                                       assigned_by = VALUES(assigned_by),
+                                       status = 'SCHEDULED'`,
+              [id, empId, shiftId, workDate, cStart, cEnd, note, assignedBy]
             );
             count++;
           }
@@ -532,6 +551,14 @@ class ShiftRepository {
     }
 
     // Memory fallback
+    if (Array.isArray(clearUnselectedDates) && clearUnselectedDates.length > 0 && Array.isArray(empIds) && empIds.length > 0) {
+      for (const [k, item] of memoryAssignments.entries()) {
+        if (empIds.includes(item.emp_id) && clearUnselectedDates.includes(item.work_date)) {
+          memoryAssignments.delete(k);
+        }
+      }
+    }
+
     let count = 0;
     for (const empId of empIds) {
       for (const workDate of workDates) {
@@ -547,6 +574,8 @@ class ShiftRepository {
           emp_id: empId,
           shift_id: shiftId,
           work_date: workDate,
+          custom_start_time: cStart,
+          custom_end_time: cEnd,
           note,
           assigned_by: assignedBy,
           status: 'SCHEDULED',

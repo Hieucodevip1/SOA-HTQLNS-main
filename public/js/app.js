@@ -5647,75 +5647,113 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
         <div class="schedule-day-cards">
     `;
 
-    activeShifts.forEach(s => {
-      const assigned = assignments.filter(a => {
+    if (isEmployee) {
+      const myShiftsToday = assignments.filter(a => {
         const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
-        return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+        return (wDate === curDateStr) && (a.status === 'SCHEDULED');
       });
 
-      const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
-      const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
-      const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
-        ? Number(rawMax)
-        : null;
-
-      // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
-      const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
-
-      const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
-      const quotaBadge = isSufficient
-        ? `<span class="shift-quota-badge shift-quota-sufficient">✓ Đã đủ nhân sự</span>`
-        : `<span class="shift-quota-badge shift-quota-deficit">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
-
-      const ratioText = (maxStaff && maxStaff > 0)
-        ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
-        : `<strong>${assigned.length}</strong> nhân viên`;
-
-      const cleanName = getCleanShiftName(s);
-      const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
-
-      html += `
-        <div class="schedule-shift-card">
-          <div class="shift-card-header">
-            <div>
-              <div class="shift-card-title">${cleanName}</div>
-              <span class="shift-card-time">${timeStr}</span>
-            </div>
+      if (!myShiftsToday.length) {
+        html += `
+          <div class="schedule-day-off-card">
+            <div style="font-size: 26px; line-height: 1;">☕</div>
+            <div style="font-weight: 700; font-size: 13px; color: #475569;">Ngày nghỉ / Không có ca</div>
+            <div style="font-size: 11px; color: #94a3b8;">Không có ca làm việc nào được phân bổ</div>
           </div>
+        `;
+      } else {
+        myShiftsToday.forEach(a => {
+          const s = cachedShiftsList.find(x => x.id === (a.shift_id || a.shiftId)) || {};
+          const cleanName = getCleanShiftName(s) || a.shift_name || 'Ca làm việc';
+          const startTime = (a.start_time || s.start_time || '08:00:00').slice(0, 5);
+          const endTime = (a.end_time || s.end_time || '17:30:00').slice(0, 5);
+          const timeStr = `${startTime} - ${endTime}`;
 
-          <div class="shift-card-quota">
-            <span>${ratioText}</span>
-            <span style="font-size: 10.5px; color: #64748b;">Tối thiểu: ${effectiveMin}</span>
-          </div>
-
-          <div style="margin-top: -2px;">
-            ${quotaBadge}
-          </div>
-
-          <div class="shift-employee-list">
-            ${assigned.length ? assigned.map(a => `
-              <div class="shift-employee-item">
-                <div class="emp-info">
-                  <span class="emp-name" title="${a.emp_name || 'Nhân viên'}">${a.emp_name || 'Nhân viên'}</span>
-                  <span class="emp-dept">${a.department_name || a.emp_code || ''}</span>
+          html += `
+            <div class="schedule-shift-card" style="border-left: 3.5px solid #2563eb; background: #ffffff;">
+              <div class="shift-card-header">
+                <div>
+                  <div class="shift-card-title" style="color: #1e40af; font-size: 13px;">${cleanName}</div>
+                  <span class="shift-card-time" style="font-size: 12px; font-weight: 600; color: #2563eb;">⏰ ${timeStr}</span>
                 </div>
-                ${(!isEmployee) ? `
-                  <button type="button" class="shift-employee-delete-btn" onclick="handleCancelShiftAssignment('${a.id}')" title="Hủy phân ca">Xóa</button>
-                ` : ''}
+                <span class="shift-quota-badge shift-quota-sufficient">Được phân ca</span>
               </div>
-            `).join('') : `
-              <div style="font-size: 11px; color: #94a3b8; font-style: italic; padding: 4px 0; text-align: center;">Chưa phân nhân sự</div>
-            `}
-          </div>
+              <div style="font-size: 11.5px; color: #475569; margin-top: 8px; padding: 6px 8px; background: #f0f7ff; border-radius: 6px;">
+                <div>👤 <strong>${a.emp_name || 'Nhân viên'}</strong> (${a.emp_code || a.emp_id})</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">🏢 ${a.department_name || ''}</div>
+                ${a.note ? `<div style="font-size: 10.5px; color: #64748b; margin-top: 4px; font-style: italic;">📝 ${a.note}</div>` : ''}
+              </div>
+            </div>
+          `;
+        });
+      }
+    } else {
+      activeShifts.forEach(s => {
+        const assigned = assignments.filter(a => {
+          const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+          return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+        });
 
-          ${(!isEmployee) ? `
+        const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
+        const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
+        const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
+          ? Number(rawMax)
+          : null;
+
+        // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
+        const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
+
+        const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
+        const quotaBadge = isSufficient
+          ? `<span class="shift-quota-badge shift-quota-sufficient">✓ Đã đủ nhân sự</span>`
+          : `<span class="shift-quota-badge shift-quota-deficit">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
+
+        const ratioText = (maxStaff && maxStaff > 0)
+          ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
+          : `<strong>${assigned.length}</strong> nhân viên`;
+
+        const cleanName = getCleanShiftName(s);
+        const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
+
+        html += `
+          <div class="schedule-shift-card">
+            <div class="shift-card-header">
+              <div>
+                <div class="shift-card-title">${cleanName}</div>
+                <span class="shift-card-time">${timeStr}</span>
+              </div>
+            </div>
+
+            <div class="shift-card-quota">
+              <span>${ratioText}</span>
+              <span style="font-size: 10.5px; color: #64748b;">Tối thiểu: ${effectiveMin}</span>
+            </div>
+
+            <div style="margin-top: -2px;">
+              ${quotaBadge}
+            </div>
+
+            <div class="shift-employee-list">
+              ${assigned.length ? assigned.map(a => `
+                <div class="shift-employee-item">
+                  <div class="emp-info">
+                    <span class="emp-name" title="${a.emp_name || 'Nhân viên'}">${a.emp_name || 'Nhân viên'}</span>
+                    <span class="emp-dept">${a.department_name || a.emp_code || ''}</span>
+                  </div>
+                  <button type="button" class="shift-employee-delete-btn" onclick="handleCancelShiftAssignment('${a.id}')" title="Hủy phân ca">Xóa</button>
+                </div>
+              `).join('') : `
+                <div style="font-size: 11px; color: #94a3b8; font-style: italic; padding: 4px 0; text-align: center;">Chưa phân nhân sự</div>
+              `}
+            </div>
+
             <button type="button" class="shift-card-assign-btn" onclick="openAssignShiftModal('${s.id}', '${curDateStr}')">
               ➕ Phân nhân viên
             </button>
-          ` : ''}
-        </div>
-      `;
-    });
+          </div>
+        `;
+      });
+    }
 
     html += `
         </div>
@@ -5749,80 +5787,124 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
     <div class="schedule-day-view-container">
   `;
 
-  activeShifts.forEach(s => {
-    const assigned = assignments.filter(a => {
+  if (isEmployee) {
+    const myDayAssignments = assignments.filter(a => {
       const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
-      return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+      return (wDate === curDateStr) && (a.status === 'SCHEDULED');
     });
 
-    const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
-    const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
-    const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
-      ? Number(rawMax)
-      : null;
-
-    // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
-    const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
-
-    const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
-    const quotaBadge = isSufficient
-      ? `<span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Đã đủ nhân sự</span>`
-      : `<span class="shift-quota-badge shift-quota-deficit" style="font-size: 11px;">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
-
-    const ratioText = (maxStaff && maxStaff > 0)
-      ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
-      : `<strong>${assigned.length}</strong> nhân viên`;
-
-    const cleanName = getCleanShiftName(s);
-    const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
-
-    html += `
-      <div class="schedule-day-shift-card">
-        <div class="schedule-day-shift-header">
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="badge-status badge-pending" style="font-weight: 700;">${s.code}</span>
-              <strong style="font-size: 14px; color: #0f172a;">${cleanName}</strong>
-            </div>
-            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-              Khung giờ: <strong>${timeStr}</strong> • Tiêu chuẩn: ${Number(s.working_hours).toFixed(1)}h
-            </div>
-          </div>
-          <div>${quotaBadge}</div>
+    if (!myDayAssignments.length) {
+      html += `
+        <div style="grid-column: 1 / -1; padding: 48px 16px; text-align: center; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 10px; color: #64748b;">
+          <div style="font-size: 32px; margin-bottom: 8px;">☕</div>
+          <div style="font-size: 15px; font-weight: 700; color: #334155;">Hôm nay là ngày nghỉ / Không có ca làm việc</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Bạn không có lịch làm việc được phân bổ vào ngày này (${formatLeaveDate(curDateStr)}).</div>
         </div>
+      `;
+    } else {
+      myDayAssignments.forEach(a => {
+        const s = cachedShiftsList.find(x => x.id === (a.shift_id || a.shiftId)) || {};
+        const cleanName = getCleanShiftName(s) || a.shift_name || 'Ca làm việc';
+        const startTime = (a.start_time || s.start_time || '08:00:00').slice(0, 5);
+        const endTime = (a.end_time || s.end_time || '17:30:00').slice(0, 5);
+        const timeStr = `${startTime} - ${endTime}`;
 
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 6px;">
-          <span>Định biên phân bổ: ${ratioText}</span>
-          <span>Yêu cầu tối thiểu: <strong>${effectiveMin}</strong></span>
-        </div>
-
-        <div>
-          <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Danh sách nhân viên được phân ca (${assigned.length}):</div>
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            ${assigned.length ? assigned.map(a => `
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px;">
-                <div>
-                  <div style="font-weight: 600; color: #0f172a; font-size: 12.5px;">${a.emp_name || 'Nhân viên'} <span style="font-size: 11.5px; color: #64748b; font-weight: normal;">(${a.emp_code || a.emp_id})</span></div>
-                  <div style="font-size: 11px; color: #64748b;">${a.department_name || '-'} • ${a.note || 'Lịch làm việc'}</div>
+        html += `
+          <div class="schedule-day-shift-card" style="border-left: 4px solid #2563eb;">
+            <div class="schedule-day-shift-header">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="badge-status badge-active" style="font-weight: 700;">${a.shift_code || s.code || 'CA'}</span>
+                  <strong style="font-size: 15px; color: #0f172a;">${cleanName}</strong>
                 </div>
-                ${(!isEmployee) ? `
-                  <button type="button" class="btn-secondary-outline" style="padding: 3px 8px; font-size: 11px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Xóa</button>
-                ` : ''}
+                <div style="font-size: 12.5px; font-weight: 600; color: #2563eb; margin-top: 4px;">
+                  ⏰ Khung giờ: ${timeStr} • ${s.working_hours ? Number(s.working_hours).toFixed(1) + 'h' : 'Chuẩn ca'}
+                </div>
               </div>
-            `).join('') : `
-              <div style="text-align: center; color: #94a3b8; font-size: 12px; padding: 16px; background: #f8fafc; border-radius: 6px;">Chưa có nhân sự nào được phân vào ca này</div>
-            `}
-          </div>
-        </div>
+              <div><span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Lịch trực của bạn</span></div>
+            </div>
 
-        ${(!isEmployee) ? `
+            <div style="font-size: 12px; color: #475569; background: #f8fafc; padding: 12px 14px; border-radius: 6px;">
+              <div>👤 <strong>Họ tên:</strong> ${a.emp_name || 'Nhân viên'} (${a.emp_code || a.emp_id})</div>
+              <div style="margin-top: 4px;">🏢 <strong>Phòng ban:</strong> ${a.department_name || '-'}</div>
+              ${a.note ? `<div style="margin-top: 4px; font-style: italic;">📝 <strong>Ghi chú:</strong> ${a.note}</div>` : ''}
+            </div>
+          </div>
+        `;
+      });
+    }
+  } else {
+    activeShifts.forEach(s => {
+      const assigned = assignments.filter(a => {
+        const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+      });
+
+      const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
+      const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
+      const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
+        ? Number(rawMax)
+        : null;
+
+      // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
+      const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
+
+      const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
+      const quotaBadge = isSufficient
+        ? `<span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Đã đủ nhân sự</span>`
+        : `<span class="shift-quota-badge shift-quota-deficit" style="font-size: 11px;">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
+
+      const ratioText = (maxStaff && maxStaff > 0)
+        ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
+        : `<strong>${assigned.length}</strong> nhân viên`;
+
+      const cleanName = getCleanShiftName(s);
+      const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
+
+      html += `
+        <div class="schedule-day-shift-card">
+          <div class="schedule-day-shift-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge-status badge-pending" style="font-weight: 700;">${s.code}</span>
+                <strong style="font-size: 14px; color: #0f172a;">${cleanName}</strong>
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                Khung giờ: <strong>${timeStr}</strong> • Tiêu chuẩn: ${Number(s.working_hours).toFixed(1)}h
+              </div>
+            </div>
+            <div>${quotaBadge}</div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 6px;">
+            <span>Định biên phân bổ: ${ratioText}</span>
+            <span>Yêu cầu tối thiểu: <strong>${effectiveMin}</strong></span>
+          </div>
+
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Danh sách nhân viên được phân ca (${assigned.length}):</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              ${assigned.length ? assigned.map(a => `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px;">
+                  <div>
+                    <div style="font-weight: 600; color: #0f172a; font-size: 12.5px;">${a.emp_name || 'Nhân viên'} <span style="font-size: 11.5px; color: #64748b; font-weight: normal;">(${a.emp_code || a.emp_id})</span></div>
+                    <div style="font-size: 11px; color: #64748b;">${a.department_name || '-'} • ${a.note || 'Lịch làm việc'}</div>
+                  </div>
+                  <button type="button" class="btn-secondary-outline" style="padding: 3px 8px; font-size: 11px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Xóa</button>
+                </div>
+              `).join('') : `
+                <div style="text-align: center; color: #94a3b8; font-size: 12px; padding: 16px; background: #f8fafc; border-radius: 6px;">Chưa có nhân sự nào được phân vào ca này</div>
+              `}
+            </div>
+          </div>
+
           <button type="button" class="shift-card-assign-btn" style="padding: 8px; margin-top: auto;" onclick="openAssignShiftModal('${s.id}', '${curDateStr}')">
             ➕ Phân nhân sự vào ca này
           </button>
-        ` : ''}
-      </div>
-    `;
-  });
+        </div>
+      `;
+    });
+  }
 
   html += `</div>`;
   container.innerHTML = html;
@@ -6155,9 +6237,108 @@ async function handleCreateOtSubmit(e) {
 }
 
 // 6. Popup phân ca nhân viên (SCR_SHIFT_01)
+let assignModalSelectedWeekdays = [1, 2, 3, 4, 5]; // Mặc định T2 -> T6
+
+function toggleAssignWeekday(day) {
+  day = Number(day);
+  const idx = assignModalSelectedWeekdays.indexOf(day);
+  if (idx > -1) {
+    assignModalSelectedWeekdays.splice(idx, 1);
+  } else {
+    assignModalSelectedWeekdays.push(day);
+  }
+  document.querySelectorAll('.weekday-chip').forEach(btn => {
+    const bDay = Number(btn.getAttribute('data-day'));
+    if (assignModalSelectedWeekdays.includes(bDay)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  updateAssignModalPreview();
+}
+
+function applyShiftWeekdayPreset(preset) {
+  if (preset === 'weekdays') {
+    assignModalSelectedWeekdays = [1, 2, 3, 4, 5];
+  } else if (preset === 'all') {
+    assignModalSelectedWeekdays = [1, 2, 3, 4, 5, 6, 0];
+  } else if (preset === 'none') {
+    assignModalSelectedWeekdays = [];
+  }
+  document.querySelectorAll('.weekday-chip').forEach(btn => {
+    const bDay = Number(btn.getAttribute('data-day'));
+    if (assignModalSelectedWeekdays.includes(bDay)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  updateAssignModalPreview();
+}
+
+function handleAssignModalShiftChange(shiftId) {
+  const shift = cachedShiftsList.find(s => s.id === shiftId);
+  if (!shift) return;
+  const startInput = document.getElementById('assignModalStartTime');
+  const endInput = document.getElementById('assignModalEndTime');
+  if (startInput && (shift.start_time || shift.startTime)) {
+    startInput.value = (shift.start_time || shift.startTime).slice(0, 5);
+  }
+  if (endInput && (shift.end_time || shift.endTime)) {
+    endInput.value = (shift.end_time || shift.endTime).slice(0, 5);
+  }
+}
+
+function updateAssignModalPreview() {
+  const previewBox = document.getElementById('assignModalPreview');
+  if (!previewBox) return;
+
+  const fromDateVal = document.getElementById('assignModalFromDate')?.value;
+  const toDateVal = document.getElementById('assignModalToDate')?.value;
+  if (!fromDateVal || !toDateVal) {
+    previewBox.className = 'weekday-preview-box empty';
+    previewBox.innerHTML = '⚠️ Vui lòng chọn khoảng ngày bắt đầu và kết thúc';
+    return;
+  }
+
+  const fromParts = fromDateVal.split('-').map(Number);
+  const toParts = toDateVal.split('-').map(Number);
+  const fromD = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+  const toD = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+
+  if (fromD > toD) {
+    previewBox.className = 'weekday-preview-box empty';
+    previewBox.innerHTML = '⚠️ <strong>Từ ngày</strong> không được lớn hơn <strong>Đến ngày</strong>';
+    return;
+  }
+
+  if (!assignModalSelectedWeekdays || !assignModalSelectedWeekdays.length) {
+    previewBox.className = 'weekday-preview-box empty';
+    previewBox.innerHTML = '⚠️ <strong>Chưa chọn thứ nào trong tuần.</strong> Vui lòng bấm chọn ít nhất 1 thứ hoặc dùng các nút gợi ý nhanh bên trên (Các thứ không chọn sẽ không có ca).';
+    return;
+  }
+
+  const dayLabels = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 0: 'CN' };
+  const sortedDays = [1, 2, 3, 4, 5, 6, 0].filter(d => assignModalSelectedWeekdays.includes(d));
+  const daysText = sortedDays.map(d => dayLabels[d]).join(', ');
+
+  let count = 0;
+  for (let cur = new Date(fromD); cur <= toD; cur.setDate(cur.getDate() + 1)) {
+    if (assignModalSelectedWeekdays.includes(cur.getDay())) {
+      count++;
+    }
+  }
+
+  const fromFmt = `${String(fromD.getDate()).padStart(2, '0')}/${String(fromD.getMonth() + 1).padStart(2, '0')}/${fromD.getFullYear()}`;
+  const toFmt = `${String(toD.getDate()).padStart(2, '0')}/${String(toD.getMonth() + 1).padStart(2, '0')}/${toD.getFullYear()}`;
+
+  previewBox.className = 'weekday-preview-box';
+  previewBox.innerHTML = `Sẽ xếp ca cho các ngày: <strong style="color: #2563eb;">${daysText}</strong> trong khoảng từ <strong>${fromFmt}</strong> đến <strong>${toFmt}</strong> (Tổng cộng <strong>${count} ngày</strong> có ca, các thứ không chọn sẽ không có ca).`;
+}
+
 async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
-  const isManager = role === 'MANAGER' || state.user?.username === 'manager';
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
 
   if (isEmployee) {
@@ -6187,32 +6368,113 @@ async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
     } catch {}
   }
 
-  let shiftOptions = cachedShiftsList.filter(s => s.status === 'ACTIVE').map(s => `
-    <option value="${s.id}" ${s.id === preShiftId ? 'selected' : ''}>
+  const activeShifts = cachedShiftsList.filter(s => s.status === 'ACTIVE');
+  const selectedShift = activeShifts.find(s => s.id === preShiftId) || activeShifts[0] || cachedShiftsList[0];
+  const defaultStartTime = (selectedShift?.start_time || selectedShift?.startTime || '08:00:00').slice(0, 5);
+  const defaultEndTime = (selectedShift?.end_time || selectedShift?.endTime || '17:30:00').slice(0, 5);
+
+  let shiftOptions = activeShifts.map(s => `
+    <option value="${s.id}" ${(s.id === preShiftId || (!preShiftId && s.id === selectedShift?.id)) ? 'selected' : ''}>
       ${formatShiftOptionLabel(s)}
     </option>
   `).join('');
 
-  const targetDate = preWorkDate || new Date().toISOString().slice(0, 10);
+  // Tính khoảng ngày Thứ 2 đến Chủ nhật của tuần đang xem
+  const baseDate = preWorkDate ? new Date(preWorkDate + 'T00:00:00') : (scheduleCurrentDate ? new Date(scheduleCurrentDate) : new Date());
+  const weekRange = getScheduleDateRange(baseDate, 'week');
+  const defaultFromDate = weekRange.fromDate;
+  const defaultToDate = weekRange.toDate;
+
+  // Khởi tạo các thứ được chọn mặc định (T2 - T6; nếu ngày click rơi vào T7 hoặc CN thì kích hoạt thêm)
+  assignModalSelectedWeekdays = [1, 2, 3, 4, 5];
+  if (preWorkDate) {
+    const preDay = baseDate.getDay();
+    if (!assignModalSelectedWeekdays.includes(preDay)) {
+      assignModalSelectedWeekdays.push(preDay);
+    }
+  }
+
+  const weekDaysMeta = [
+    { day: 1, label: 'T2', sub: 'Thứ 2' },
+    { day: 2, label: 'T3', sub: 'Thứ 3' },
+    { day: 3, label: 'T4', sub: 'Thứ 4' },
+    { day: 4, label: 'T5', sub: 'Thứ 5' },
+    { day: 5, label: 'T6', sub: 'Thứ 6' },
+    { day: 6, label: 'T7', sub: 'Thứ 7' },
+    { day: 0, label: 'CN', sub: 'C.Nhật' }
+  ];
+
+  const chipsHtml = weekDaysMeta.map(w => {
+    const isActive = assignModalSelectedWeekdays.includes(w.day);
+    return `
+      <button type="button" class="weekday-chip ${isActive ? 'active' : ''}" data-day="${w.day}" onclick="toggleAssignWeekday(${w.day})">
+        <span>${w.label}</span>
+        <span class="chip-sub">${w.sub}</span>
+      </button>
+    `;
+  }).join('');
+
   const html = `
     <form id="formModalAssignShift" onsubmit="handleAssignShiftSubmit(event)">
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn nhân viên *</label>
-        <select id="assignModalEmpId" class="topbar-search-input" required>
-          ${employeeOptions}
-        </select>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn nhân viên *</label>
+          <select id="assignModalEmpId" class="topbar-search-input" required>
+            ${employeeOptions}
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn ca làm việc *</label>
+          <select id="assignModalShiftId" class="topbar-search-input" onchange="handleAssignModalShiftChange(this.value)" required>
+            ${shiftOptions}
+          </select>
+        </div>
       </div>
 
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Chọn ca làm việc *</label>
-        <select id="assignModalShiftId" class="topbar-search-input" required>
-          ${shiftOptions}
-        </select>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ bắt đầu (startTime) *</label>
+          <input type="time" id="assignModalStartTime" class="topbar-search-input" value="${defaultStartTime}" required>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ kết thúc (endTime) *</label>
+          <input type="time" id="assignModalEndTime" class="topbar-search-input" value="${defaultEndTime}" required>
+        </div>
       </div>
 
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Ngày làm việc *</label>
-        <input type="date" id="assignModalWorkDate" class="topbar-search-input" value="${targetDate}" required>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Từ ngày (fromDate) *</label>
+          <input type="date" id="assignModalFromDate" class="topbar-search-input" value="${defaultFromDate}" onchange="updateAssignModalPreview()" required>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Đến ngày (toDate) *</label>
+          <input type="date" id="assignModalToDate" class="topbar-search-input" value="${defaultToDate}" onchange="updateAssignModalPreview()" required>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+          <label style="font-size: 12px; font-weight: 600; color: #475569;">Chọn các thứ làm việc trong tuần (bật/tắt) *</label>
+          <div class="weekday-presets-bar">
+            <button type="button" class="weekday-preset-btn" onclick="applyShiftWeekdayPreset('weekdays')">T2 - T6</button>
+            <button type="button" class="weekday-preset-btn" onclick="applyShiftWeekdayPreset('all')">T2 - CN (Full tuần)</button>
+            <button type="button" class="weekday-preset-btn" onclick="applyShiftWeekdayPreset('none')">Bỏ chọn hết</button>
+          </div>
+        </div>
+
+        <div class="weekday-chips-grid">
+          ${chipsHtml}
+        </div>
+
+        <div id="assignModalPreview" class="weekday-preview-box"></div>
+      </div>
+
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="assignModalClearUnselected" checked style="width: 15px; height: 15px; cursor: pointer;">
+        <label for="assignModalClearUnselected" style="font-size: 12px; color: #475569; cursor: pointer;">
+          Tự động dọn sạch ca cũ nếu rơi vào các thứ không chọn trong khoảng này
+        </label>
       </div>
 
       <div style="margin-bottom: 16px;">
@@ -6227,29 +6489,83 @@ async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
     </form>
   `;
   openModal('Phân ca làm việc cho nhân viên', html);
+  setTimeout(updateAssignModalPreview, 10);
 }
 
 async function handleAssignShiftSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
   const empId = document.getElementById('assignModalEmpId')?.value;
   const shiftId = document.getElementById('assignModalShiftId')?.value;
-  const workDate = document.getElementById('assignModalWorkDate')?.value;
+  const fromDateVal = document.getElementById('assignModalFromDate')?.value;
+  const toDateVal = document.getElementById('assignModalToDate')?.value;
+  const startTime = document.getElementById('assignModalStartTime')?.value ? (document.getElementById('assignModalStartTime').value + ':00') : null;
+  const endTime = document.getElementById('assignModalEndTime')?.value ? (document.getElementById('assignModalEndTime').value + ':00') : null;
+  const clearUnselected = Boolean(document.getElementById('assignModalClearUnselected')?.checked);
   const note = document.getElementById('assignModalNote')?.value.trim() || '';
   const btn = document.getElementById('btnSubmitAssignShift');
 
-  // Kiểm tra cảnh báo định biên tối đa (maxStaff)
+  if (!fromDateVal || !toDateVal) {
+    showToast('Vui lòng chọn khoảng thời gian Từ ngày - Đến ngày', 'warning');
+    return;
+  }
+
+  const fromParts = fromDateVal.split('-').map(Number);
+  const toParts = toDateVal.split('-').map(Number);
+  const fromD = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+  const toD = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+
+  if (fromD > toD) {
+    showToast('Từ ngày không được lớn hơn Đến ngày', 'error');
+    return;
+  }
+
+  if (!assignModalSelectedWeekdays || !assignModalSelectedWeekdays.length) {
+    showToast('Vui lòng chọn ít nhất 1 thứ trong tuần để phân ca', 'warning');
+    return;
+  }
+
+  // Duyệt qua từng ngày trong khoảng fromDate -> toDate
+  const targetWorkDates = [];
+  const unselectedWorkDates = [];
+  for (let cur = new Date(fromD); cur <= toD; cur.setDate(cur.getDate() + 1)) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, '0');
+    const d = String(cur.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+
+    if (assignModalSelectedWeekdays.includes(cur.getDay())) {
+      targetWorkDates.push(dateStr);
+    } else {
+      unselectedWorkDates.push(dateStr);
+    }
+  }
+
+  if (!targetWorkDates.length) {
+    showToast('Không có ngày nào khớp với các thứ đã chọn trong khoảng thời gian này', 'warning');
+    return;
+  }
+
+  // Kiểm tra cảnh báo định biên tối đa (maxStaff) trên các ngày được phân bổ
   const targetShift = cachedShiftsList.find(s => s.id === shiftId);
   const maxStaff = targetShift?.max_staff ?? targetShift?.maxStaff ?? null;
   if (maxStaff && Number(maxStaff) > 0) {
-    const curDateStr = new Date(workDate).toISOString().slice(0, 10);
-    const assignedToShift = (cachedAssignmentsList || []).filter(a => {
-      const aDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
-      return (a.shift_id === shiftId || a.shiftId === shiftId) && aDate === curDateStr && a.status === 'SCHEDULED';
-    });
+    const datesExceeding = [];
+    for (const wDate of targetWorkDates) {
+      const assignedCount = (cachedAssignmentsList || []).filter(a => {
+        const aDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        return (a.shift_id === shiftId || a.shiftId === shiftId) && aDate === wDate && a.status === 'SCHEDULED';
+      }).length;
+      if (assignedCount >= Number(maxStaff)) {
+        datesExceeding.push(wDate);
+      }
+    }
 
-    if (assignedToShift.length >= Number(maxStaff)) {
+    if (datesExceeding.length > 0) {
       const shiftName = getCleanShiftName(targetShift) || 'ca này';
-      const proceed = confirm(`⚠️ Cảnh báo định biên: ${shiftName} vào ngày ${curDateStr} hiện đã có ${assignedToShift.length}/${maxStaff} nhân sự (đã đạt hoặc vượt định biên tối đa).\n\nBạn có muốn tiếp tục phân bổ thêm nhân sự vào ca không?`);
+      const exceedMsg = datesExceeding.length === 1 
+        ? `ngày ${datesExceeding[0]}` 
+        : `${datesExceeding.length} ngày (ví dụ: ${datesExceeding.slice(0, 2).join(', ')}...)`;
+      const proceed = confirm(`⚠️ Cảnh báo định biên: ${shiftName} vào ${exceedMsg} hiện đã đạt hoặc vượt định biên tối đa (${maxStaff} người).\n\nBạn có muốn tiếp tục phân bổ thêm nhân sự vào ca không?`);
       if (!proceed) {
         return;
       }
@@ -6262,21 +6578,29 @@ async function handleAssignShiftSubmit(e) {
   }
 
   try {
+    const payload = {
+      empIds: [empId],
+      shiftId,
+      workDates: targetWorkDates,
+      startTime,
+      endTime,
+      note
+    };
+
+    if (clearUnselected && unselectedWorkDates.length > 0) {
+      payload.clearUnselectedDates = unselectedWorkDates;
+    }
+
     const res = await apiCall('/api/v1/shift-assignments', {
       method: 'POST',
-      body: JSON.stringify({
-        empIds: [empId],
-        shiftId,
-        workDates: [workDate],
-        note
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!res || !res.success) {
       throw new Error(res?.error || 'Phân ca thất bại');
     }
 
-    showToast('Phân ca làm việc thành công!', 'success');
+    showToast(`Phân ca làm việc thành công cho ${targetWorkDates.length} ngày!`, 'success');
     closeModal();
     await loadShiftAssignments();
   } catch (err) {
