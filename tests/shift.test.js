@@ -61,7 +61,21 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     }
   });
 
-  after(() => {
+  after(async () => {
+    try {
+      const db = require('../shared/db');
+      const pool = db.getPool('htqlns_shift');
+      if (createdShiftId) {
+        await pool.query('DELETE FROM shift_assignments WHERE shift_id = ?', [createdShiftId]).catch(() => {});
+        await pool.query('DELETE FROM shifts WHERE id = ? OR code LIKE "CA_TEST_%"', [createdShiftId]).catch(() => {});
+      } else {
+        await pool.query('DELETE FROM shifts WHERE code LIKE "CA_TEST_%"').catch(() => {});
+      }
+      if (createdOtRequestId) {
+        await pool.query('DELETE FROM overtime_requests WHERE id = ?', [createdOtRequestId]).catch(() => {});
+      }
+      await db.closeAllPools().catch(() => {});
+    } catch {}
     if (shiftProcess) shiftProcess.kill();
   });
 

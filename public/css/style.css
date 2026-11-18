@@ -1578,3 +1578,316 @@ input:checked + .slider:before {
   cursor: not-allowed;
 }
 
+/* ============================================================================
+ * WORKMATE-STYLE SHIFT SCHEDULER (Chế độ xem Ngày / Tuần / Tháng)
+ * ============================================================================ */
+
+.btn-schedule-view {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-schedule-view:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+.btn-schedule-view.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+/* Week View Grid: 7 columns (Mon - Sun) */
+.schedule-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.schedule-day-column {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  transition: border-color 0.15s ease;
+}
+
+.schedule-day-column.today {
+  border-color: #3b82f6;
+  background: #f0f7ff;
+}
+
+.schedule-day-header {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 9px 9px 0 0;
+}
+
+.schedule-day-column.today .schedule-day-header {
+  background: #dbeafe;
+  border-bottom-color: #bfdbfe;
+}
+
+.schedule-day-header-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.schedule-day-column.today .schedule-day-header-title {
+  color: #1d4ed8;
+}
+
+.schedule-day-header-date {
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.schedule-day-cards {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+/* Shift Card in Week View */
+.schedule-shift-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.schedule-shift-card:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+.shift-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.shift-card-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.shift-card-time {
+  font-size: 10.5px;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shift-card-quota {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #64748b;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.shift-quota-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.shift-quota-sufficient {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.shift-quota-deficit {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.shift-employee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shift-employee-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  color: #1e293b;
+}
+
+.shift-employee-item .emp-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 100px;
+}
+
+.shift-employee-item .emp-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #0f172a;
+}
+
+.shift-employee-item .emp-dept {
+  font-size: 10px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shift-employee-delete-btn {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.shift-employee-delete-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.shift-card-assign-btn {
+  width: 100%;
+  padding: 6px;
+  border: 1px dashed #cbd5e1;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.shift-card-assign-btn:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+/* Day View Styles */
+.schedule-day-view-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.schedule-day-shift-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.schedule-day-shift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 10px;
+}
+
+/* Month View Styles */
+.schedule-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.schedule-month-day-header {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #475569;
+  padding: 8px 0;
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.schedule-month-cell {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-height: 90px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+}
+
+.schedule-month-cell:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.schedule-month-cell.today {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.schedule-month-cell.different-month {
+  background: #f8fafc;
+  opacity: 0.5;
+}
+

@@ -73,6 +73,25 @@ const memoryShifts = new Map([
       status: 'ACTIVE',
       created_at: '2026-01-01T00:00:00.000Z'
     }
+  ],
+  [
+    'shift00001-0000-0000-0000-000000000004',
+    {
+      id: 'shift00001-0000-0000-0000-000000000004',
+      code: 'CA-TOI',
+      name: 'Ca Tối (Trực đêm)',
+      start_time: '22:00:00',
+      end_time: '06:00:00',
+      break_minutes: 30,
+      grace_late_minutes: 15,
+      grace_early_minutes: 0,
+      working_hours: 7.5,
+      ot_multiplier_weekday: 1.5,
+      ot_multiplier_weekend: 2.0,
+      ot_multiplier_holiday: 3.0,
+      status: 'ACTIVE',
+      created_at: '2026-01-01T00:00:00.000Z'
+    }
   ]
 ]);
 

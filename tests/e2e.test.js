@@ -81,8 +81,11 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
     try {
       const orgPool = db.getPool('htqlns_organization');
       const authPool = db.getPool('htqlns_auth');
+      const shiftPool = db.getPool('htqlns_shift');
       await orgPool.query("DELETE FROM employees WHERE email LIKE 'tester_%' OR email LIKE 'user_%' OR code LIKE 'EMP_SOA_%'").catch(() => {});
       await authPool.query("DELETE FROM users WHERE username LIKE 'user_%' OR email LIKE 'tester_%' OR email LIKE 'user_%'").catch(() => {});
+      await shiftPool.query("DELETE FROM shift_assignments WHERE shift_id IN (SELECT id FROM shifts WHERE code LIKE 'CA_TEST_%' OR name LIKE 'Ca Kiểm Thử%')").catch(() => {});
+      await shiftPool.query("DELETE FROM shifts WHERE code LIKE 'CA_TEST_%' OR name LIKE 'Ca Kiểm Thử%'").catch(() => {});
       await db.closeAllPools();
     } catch {}
   });

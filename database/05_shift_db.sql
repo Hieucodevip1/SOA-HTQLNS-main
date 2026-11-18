@@ -87,7 +87,8 @@ INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_l
 VALUES
   ('s0000001-0000-0000-0000-000000000001', 'CA-HC', 'Ca Hành Chính (08:00 - 17:30)', '08:00:00', '17:30:00', 90, 15, 0, 8.00, 'ACTIVE'),
   ('s0000001-0000-0000-0000-000000000002', 'CA-SANG', 'Ca Sáng (06:00 - 14:00)', '06:00:00', '14:00:00', 30, 10, 0, 7.50, 'ACTIVE'),
-  ('s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 'ACTIVE')
+  ('s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 'ACTIVE'),
+  ('s0000001-0000-0000-0000-000000000004', 'CA-TOI', 'Ca Tối (22:00 - 06:00)', '22:00:00', '06:00:00', 30, 10, 0, 7.50, 'ACTIVE')
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 -- Phân ca hành chính mặc định ngày hôm nay (CURDATE) cho 4 nhân sự mẫu

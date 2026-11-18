@@ -9,7 +9,11 @@
 
 const shiftRepository = require('../repositories/shiftRepository');
 const events = require('../../../shared/events');
+const db = require('../../../shared/db');
 const { resolveEmployeeScope } = require('../../../shared/employee-scope');
+
+const DB_NAME = process.env.SHIFT_DB_NAME || 'htqlns_shift';
+const pool = db.getPool(DB_NAME);
 
 /**
  * Helper định dạng ngày sang dd/MM/yyyy
@@ -54,7 +58,7 @@ class ShiftService {
    * Có cô lập dữ liệu cá nhân theo x-user-id
    */
   async getMySchedule(req) {
-    const scope = await resolveEmployeeScope(req);
+    const scope = await resolveEmployeeScope(req, { pool });
     if (scope.isEmployee && scope.isUnassigned) {
       return {
         schedule: [],
@@ -126,7 +130,7 @@ class ShiftService {
    * 2. Lấy danh sách phân ca làm việc (theo quyền hạn & phạm vi phòng ban)
    */
   async getShiftAssignments(req) {
-    const scope = await resolveEmployeeScope(req);
+    const scope = await resolveEmployeeScope(req, { pool });
     if (scope.isEmployee && scope.isUnassigned) {
       return { assignments: [], meta: { total: 0, unassigned: true } };
     }
@@ -190,11 +194,27 @@ class ShiftService {
    * 3. Phân ca cho nhân sự (ADMIN, HR, MANAGER)
    */
   async createShiftAssignments(req) {
+    const scope = await resolveEmployeeScope(req, { pool });
+    if (scope.isEmployee) {
+      const err = new Error('Nhân viên không có quyền phân ca làm việc');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const { empIds, shiftId, workDates, note } = req.body;
     if (!Array.isArray(empIds) || !empIds.length || !shiftId || !Array.isArray(workDates) || !workDates.length) {
       const err = new Error('Yêu cầu danh sách empIds, shiftId và danh sách workDates');
       err.statusCode = 400;
       throw err;
+    }
+
+    if (scope.isManager && Array.isArray(scope.allowedEmpIds)) {
+      const unauthorized = empIds.some(id => !scope.allowedEmpIds.includes(id));
+      if (unauthorized) {
+        const err = new Error('Quản lý chỉ được phân ca cho nhân sự thuộc phạm vi quản lý');
+        err.statusCode = 403;
+        throw err;
+      }
     }
 
     const assignedBy = req.user?.empId || req.user?.emp_id || req.user?.id || null;
@@ -215,7 +235,15 @@ class ShiftService {
   /**
    * 4. Hủy phân ca
    */
-  async cancelShiftAssignment(id) {
+  async cancelShiftAssignment(id, req = null) {
+    if (req) {
+      const scope = await resolveEmployeeScope(req, { pool });
+      if (scope.isEmployee) {
+        const err = new Error('Nhân viên không có quyền hủy phân ca');
+        err.statusCode = 403;
+        throw err;
+      }
+    }
     const success = await shiftRepository.cancelShiftAssignment(id);
     if (!success) {
       const err = new Error('Không tìm thấy lịch phân ca cần hủy');

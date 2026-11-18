@@ -370,7 +370,7 @@ async function fetchCurrentUserProfile() {
   }
   return state.user;
 }
-}
+
 // Sinh khóa lưu trữ riêng biệt theo mã/tên người dùng
 function getUserStorageKey(entity) {
   const userKey = state.user?.id || state.user?.username || 'guest';
@@ -924,8 +924,10 @@ function applyRoleBasedUI() {
 
   // 3. Quyền hạn thao tác phân ca & ca làm việc
   const btnShiftOpenAssign = document.getElementById('btnShiftOpenAssign');
+  const btnHeaderAssignShift = document.getElementById('btnHeaderAssignShift');
   const btnShiftOpenCreateShift = document.getElementById('btnShiftOpenCreateShift');
   if (btnShiftOpenAssign) btnShiftOpenAssign.style.display = (!isEmployee) ? 'inline-flex' : 'none';
+  if (btnHeaderAssignShift) btnHeaderAssignShift.style.display = (!isEmployee) ? 'inline-flex' : 'none';
   if (btnShiftOpenCreateShift) btnShiftOpenCreateShift.style.display = (role === 'ADMIN' || role === 'HR') ? 'inline-flex' : 'none';
 
   // 4. Quyền hạn thao tác tính lương & cấu hình lương
@@ -5304,67 +5306,552 @@ async function loadShiftsCatalog() {
   }
 }
 
-// 2. Lịch phân ca nhân viên (SCR_SHIFT_01)
-async function loadShiftAssignments() {
-  const tbody = document.getElementById('tableBodyShiftAssignments');
-  if (!tbody) return;
+// ==============================================================================
+// 2. LỊCH PHÂN CA NHÂN VIÊN (SCR_SHIFT_01 - WORKMATE SCHEDULER)
+// ==============================================================================
 
-  const fromDate = document.getElementById('filterShiftFromDate')?.value || '';
-  const toDate = document.getElementById('filterShiftToDate')?.value || '';
-  let url = '/api/v1/shift-assignments';
-  const params = [];
-  if (fromDate) params.push(`fromDate=${fromDate}`);
-  if (toDate) params.push(`toDate=${toDate}`);
-  if (params.length) url += `?${params.join('&')}`;
+let currentScheduleView = 'week'; // 'day' | 'week' | 'month'
+let scheduleDisplayMode = 'visual'; // 'visual' | 'table'
+let scheduleCurrentDate = new Date();
+let cachedAssignmentsList = [];
+
+function formatShiftOptionLabel(s) {
+  if (!s) return '';
+  const code = s.code || s.shift_code || '';
+  let name = s.name || s.shift_name || '';
+  const startTime = (s.start_time || s.startTime || '').slice(0, 5);
+  const endTime = (s.end_time || s.endTime || '').slice(0, 5);
+  const timeRange = (startTime && endTime) ? `(${startTime} - ${endTime})` : '';
+
+  // Loại bỏ chuỗi giờ trùng lặp đã có sẵn trong name
+  name = name.replace(/\s*\(\d{2}:\d{2}\s*[-–]\s*\d{2}:\d{2}\)/g, '').trim();
+  return timeRange ? `${code} - ${name} ${timeRange}` : `${code} - ${name}`;
+}
+
+function getCleanShiftName(s) {
+  if (!s) return '';
+  let name = s.name || s.shift_name || '';
+  return name.replace(/\s*\(\d{2}:\d{2}\s*[-–]\s*\d{2}:\d{2}\)/g, '').trim();
+}
+
+function getScheduleDateRange(date, view) {
+  const d = new Date(date);
+  if (view === 'day') {
+    const dateStr = d.toISOString().slice(0, 10);
+    return { fromDate: dateStr, toDate: dateStr, days: [new Date(d)] };
+  } else if (view === 'week') {
+    // Tuần ISO: Thứ 2 là ngày bắt đầu tuần (0: CN, 1: T2, ..., 6: T7)
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const cur = new Date(monday);
+      cur.setDate(monday.getDate() + i);
+      days.push(cur);
+    }
+    const fromDate = monday.toISOString().slice(0, 10);
+    const toDate = days[6].toISOString().slice(0, 10);
+    return { fromDate, toDate, days };
+  } else if (view === 'month') {
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const startDay = firstDay.getDay();
+    const startDiff = (startDay === 0 ? -6 : 1 - startDay);
+    const gridStart = new Date(firstDay);
+    gridStart.setDate(firstDay.getDate() + startDiff);
+
+    const days = [];
+    const cur = new Date(gridStart);
+    while (days.length < 35 || (days.length < 42 && cur.getMonth() === month)) {
+      days.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+      if (days.length >= 35 && cur.getMonth() !== month && cur.getDay() === 1) break;
+    }
+
+    const fromDate = days[0].toISOString().slice(0, 10);
+    const toDate = days[days.length - 1].toISOString().slice(0, 10);
+    return { fromDate, toDate, days, targetMonth: month, targetYear: year };
+  }
+}
+
+function updateScheduleDateLabel() {
+  const labelEl = document.getElementById('scheduleCurrentDateLabel');
+  if (!labelEl) return;
+  const d = new Date(scheduleCurrentDate);
+  const range = getScheduleDateRange(d, currentScheduleView);
+
+  if (currentScheduleView === 'day') {
+    const dayNames = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const dStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    labelEl.innerText = `${dayNames[d.getDay()]}, ${dStr}`;
+  } else if (currentScheduleView === 'week') {
+    const start = range.days[0];
+    const end = range.days[6];
+    const sStr = `${String(start.getDate()).padStart(2, '0')}/${String(start.getMonth() + 1).padStart(2, '0')}`;
+    const eStr = `${String(end.getDate()).padStart(2, '0')}/${String(end.getMonth() + 1).padStart(2, '0')}/${end.getFullYear()}`;
+    labelEl.innerText = `${sStr} - ${eStr}`;
+  } else if (currentScheduleView === 'month') {
+    labelEl.innerText = `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`;
+  }
+}
+
+function setScheduleView(view) {
+  currentScheduleView = view;
+  ['day', 'week', 'month'].forEach(v => {
+    const btn = document.getElementById(`btnView${v.charAt(0).toUpperCase() + v.slice(1)}`);
+    if (btn) {
+      if (v === view) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  });
+  loadShiftAssignments();
+}
+
+function navigateSchedulePrev() {
+  const d = new Date(scheduleCurrentDate);
+  if (currentScheduleView === 'day') d.setDate(d.getDate() - 1);
+  else if (currentScheduleView === 'week') d.setDate(d.getDate() - 7);
+  else if (currentScheduleView === 'month') d.setMonth(d.getMonth() - 1);
+  scheduleCurrentDate = d;
+  loadShiftAssignments();
+}
+
+function navigateScheduleNext() {
+  const d = new Date(scheduleCurrentDate);
+  if (currentScheduleView === 'day') d.setDate(d.getDate() + 1);
+  else if (currentScheduleView === 'week') d.setDate(d.getDate() + 7);
+  else if (currentScheduleView === 'month') d.setMonth(d.getMonth() + 1);
+  scheduleCurrentDate = d;
+  loadShiftAssignments();
+}
+
+function navigateScheduleToday() {
+  scheduleCurrentDate = new Date();
+  loadShiftAssignments();
+}
+
+function toggleScheduleDisplayMode() {
+  scheduleDisplayMode = scheduleDisplayMode === 'visual' ? 'table' : 'visual';
+  const visualCont = document.getElementById('shiftScheduleVisualContainer');
+  const tableCont = document.getElementById('shiftScheduleTableContainer');
+  const toolbar = document.getElementById('shiftScheduleToolbar');
+  const icon = document.getElementById('iconScheduleMode');
+  const label = document.getElementById('labelScheduleMode');
+
+  if (scheduleDisplayMode === 'table') {
+    if (visualCont) visualCont.style.display = 'none';
+    if (tableCont) tableCont.style.display = 'block';
+    if (toolbar) toolbar.style.display = 'none';
+    if (icon) icon.innerText = '🖼️';
+    if (label) label.innerText = 'Dạng lịch trực quan';
+  } else {
+    if (visualCont) visualCont.style.display = 'block';
+    if (tableCont) tableCont.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'flex';
+    if (icon) icon.innerText = '📋';
+    if (label) label.innerText = 'Dạng bảng';
+  }
+}
+
+async function loadShiftAssignments() {
+  const visualContainer = document.getElementById('shiftScheduleVisualContainer');
+  const tbody = document.getElementById('tableBodyShiftAssignments');
+  if (!visualContainer && !tbody) return;
+
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+  const isManager = role === 'MANAGER' || state.user?.username === 'manager';
+  const isAdminOrHr = ['ADMIN', 'HR'].includes(role);
+
+  // Cập nhật Badge vai trò & hiển thị các nút thao tác
+  const roleBadge = document.getElementById('shiftScheduleRoleBadge');
+  if (roleBadge) {
+    if (isEmployee) {
+      roleBadge.innerText = 'Lịch cá nhân';
+      roleBadge.style.background = '#e0f2fe';
+      roleBadge.style.color = '#0369a1';
+    } else if (isManager) {
+      roleBadge.innerText = `Đội ngũ ${state.user?.departmentName || 'Phòng ban'}`;
+      roleBadge.style.background = '#dcfce7';
+      roleBadge.style.color = '#15803d';
+    } else {
+      roleBadge.innerText = 'Toàn công ty (Admin)';
+      roleBadge.style.background = '#e0e7ff';
+      roleBadge.style.color = '#3730a3';
+    }
+  }
+
+  const btnAssign = document.getElementById('btnHeaderAssignShift');
+  if (btnAssign) {
+    btnAssign.style.display = isEmployee ? 'none' : 'inline-flex';
+  }
+  const btnCreateShift = document.getElementById('btnShiftOpenCreateShift');
+  if (btnCreateShift) {
+    btnCreateShift.style.display = isAdminOrHr ? 'inline-flex' : 'none';
+  }
+
+  // Đảm bảo danh mục ca đã được nạp
+  if (!cachedShiftsList.length) {
+    try {
+      const shiftRes = await apiCall('/api/v1/shifts');
+      cachedShiftsList = shiftRes?.data || [];
+    } catch {}
+  }
+
+  // Tính khoảng ngày theo chế độ hiển thị
+  const range = getScheduleDateRange(scheduleCurrentDate, currentScheduleView);
+  updateScheduleDateLabel();
+
+  // Đồng bộ ô lọc ngày của bảng nếu có
+  const fromDateInput = document.getElementById('filterShiftFromDate');
+  const toDateInput = document.getElementById('filterShiftToDate');
+  if (fromDateInput && toDateInput) {
+    if (scheduleDisplayMode === 'visual' || (!fromDateInput.value && !toDateInput.value)) {
+      fromDateInput.value = range.fromDate;
+      toDateInput.value = range.toDate;
+    }
+  }
+
+  const queryFrom = (scheduleDisplayMode === 'table' && fromDateInput?.value) ? fromDateInput.value : range.fromDate;
+  const queryTo = (scheduleDisplayMode === 'table' && toDateInput?.value) ? toDateInput.value : range.toDate;
+
+  let url = `/api/v1/shift-assignments?fromDate=${queryFrom}&toDate=${queryTo}`;
 
   try {
     const res = await apiCall(url);
-    const assignments = res?.data || [];
+    let assignments = res?.data || [];
+
+    // RBAC: Nếu là nhân viên, chỉ hiển thị các ca được phân cho chính mình
+    if (isEmployee) {
+      const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+      assignments = assignments.filter(a => (a.emp_id === myEmpId || a.empId === myEmpId));
+    }
+
+    cachedAssignmentsList = assignments;
 
     // Cập nhật KPI phân ca hôm nay
     const todayStr = new Date().toISOString().slice(0, 10);
     const todayCount = assignments.filter(a => {
       const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
-      return wDate === todayStr;
+      return wDate === todayStr && a.status === 'SCHEDULED';
     }).length;
     const kpiToday = document.getElementById('kpiShiftTodayAssignments');
     if (kpiToday) kpiToday.innerText = todayCount;
 
-    if (!assignments.length) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Không có ca làm việc nào được phân trong khoảng thời gian này</td></tr>`;
-      return;
-    }
+    // Render giao diện trực quan theo chế độ xem (Tuần / Ngày / Tháng)
+    renderShiftSchedule(assignments, range);
 
-    const canManage = ['ADMIN', 'HR', 'MANAGER'].includes(state.user?.role);
-    tbody.innerHTML = assignments.map(a => {
-      const wDate = a.work_date ? formatLeaveDate(a.work_date) : '';
-      return `
-        <tr>
-          <td><strong>${wDate}</strong></td>
-          <td>${a.emp_code || a.emp_id}</td>
-          <td><span style="font-weight: 600; color: #0f172a;">${a.emp_name || 'Nhân viên'}</span></td>
-          <td>${a.department_name || '-'}</td>
-          <td><span class="badge-status badge-pending" style="font-weight: 600;">${a.shift_code}</span></td>
-          <td>${a.start_time ? a.start_time.slice(0, 5) : ''} - ${a.end_time ? a.end_time.slice(0, 5) : ''}</td>
-          <td>${a.working_hours ? Number(a.working_hours).toFixed(1) + 'h' : '8.0h'}</td>
-          <td style="font-size: 11.5px; color: #64748b;">${a.note || '—'}</td>
-          <td>
-            <span class="badge-status ${a.status === 'SCHEDULED' ? 'badge-approved' : 'badge-rejected'}">
-              ${a.status === 'SCHEDULED' ? 'Đã xếp ca' : (a.status === 'SWAPPED' ? 'Đã đổi ca' : 'Đã hủy')}
-            </span>
-          </td>
-          <td style="text-align: center;">
-            ${(canManage && a.status === 'SCHEDULED') ? `
-              <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Hủy</button>
-            ` : `<span style="font-size: 11px; color: #94a3b8;">—</span>`}
-          </td>
-        </tr>
-      `;
-    }).join('');
+    // Render bảng phân ca (cho chế độ xem dạng bảng)
+    renderShiftAssignmentsTable(assignments);
   } catch (err) {
     console.error('Lỗi tải lịch phân ca:', err);
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+    if (visualContainer) {
+      visualContainer.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 24px;">Lỗi tải dữ liệu lịch phân ca: ${err.message}</div>`;
+    }
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+    }
   }
+}
+
+function renderShiftSchedule(assignments, range) {
+  const container = document.getElementById('shiftScheduleVisualContainer');
+  if (!container) return;
+
+  if (currentScheduleView === 'week') {
+    renderWeekSchedule(container, assignments, range);
+  } else if (currentScheduleView === 'day') {
+    renderDaySchedule(container, assignments, range);
+  } else if (currentScheduleView === 'month') {
+    renderMonthSchedule(container, assignments, range);
+  }
+}
+
+function renderWeekSchedule(container, assignments, range) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+  const activeShifts = cachedShiftsList.filter(s => s.status === 'ACTIVE');
+
+  let html = `<div class="schedule-week-grid">`;
+
+  range.days.forEach(dayDate => {
+    const curDateStr = dayDate.toISOString().slice(0, 10);
+    const isToday = (curDateStr === todayStr);
+    const dayName = dayNames[dayDate.getDay()];
+    const dateFormatted = `${String(dayDate.getDate()).padStart(2, '0')}/${String(dayDate.getMonth() + 1).padStart(2, '0')}`;
+
+    html += `
+      <div class="schedule-day-column ${isToday ? 'today' : ''}">
+        <div class="schedule-day-header">
+          <div class="schedule-day-header-title">${dayName} - ${dayDate.getDate()}</div>
+          <div class="schedule-day-header-date">${dateFormatted}${isToday ? ' • Hôm nay' : ''}</div>
+        </div>
+        <div class="schedule-day-cards">
+    `;
+
+    activeShifts.forEach(s => {
+      const assigned = assignments.filter(a => {
+        const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+      });
+
+      const minQuota = 2;
+      const isSufficient = assigned.length >= minQuota;
+      const quotaBadge = isSufficient
+        ? `<span class="shift-quota-badge shift-quota-sufficient">✓ Đã đủ mức tối thiểu</span>`
+        : `<span class="shift-quota-badge shift-quota-deficit">Còn thiếu ${minQuota - assigned.length} người</span>`;
+
+      const cleanName = getCleanShiftName(s);
+      const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
+
+      html += `
+        <div class="schedule-shift-card">
+          <div class="shift-card-header">
+            <div>
+              <div class="shift-card-title">${cleanName}</div>
+              <span class="shift-card-time">${timeStr}</span>
+            </div>
+          </div>
+
+          <div class="shift-card-quota">
+            <span><strong>${assigned.length}/6</strong> nhân viên</span>
+            <span style="font-size: 10.5px; color: #64748b;">Tối thiểu: ${minQuota}</span>
+          </div>
+
+          <div style="margin-top: -2px;">
+            ${quotaBadge}
+          </div>
+
+          <div class="shift-employee-list">
+            ${assigned.length ? assigned.map(a => `
+              <div class="shift-employee-item">
+                <div class="emp-info">
+                  <span class="emp-name" title="${a.emp_name || 'Nhân viên'}">${a.emp_name || 'Nhân viên'}</span>
+                  <span class="emp-dept">${a.department_name || a.emp_code || ''}</span>
+                </div>
+                ${(!isEmployee) ? `
+                  <button type="button" class="shift-employee-delete-btn" onclick="handleCancelShiftAssignment('${a.id}')" title="Hủy phân ca">Xóa</button>
+                ` : ''}
+              </div>
+            `).join('') : `
+              <div style="font-size: 11px; color: #94a3b8; font-style: italic; padding: 4px 0; text-align: center;">Chưa phân nhân sự</div>
+            `}
+          </div>
+
+          ${(!isEmployee) ? `
+            <button type="button" class="shift-card-assign-btn" onclick="openAssignShiftModal('${s.id}', '${curDateStr}')">
+              ➕ Phân nhân viên
+            </button>
+          ` : ''}
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function renderDaySchedule(container, assignments, range) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+  const targetDate = range.days[0];
+  const curDateStr = targetDate.toISOString().slice(0, 10);
+  const activeShifts = cachedShiftsList.filter(s => s.status === 'ACTIVE');
+
+  let html = `
+    <div style="margin-bottom: 16px; padding: 12px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+      <div>
+        <div style="font-size: 14px; font-weight: 700; color: #0f172a;">Lịch làm việc chi tiết trong ngày: ${formatLeaveDate(curDateStr)}</div>
+        <div style="font-size: 12px; color: #64748b;">Tổng cộng ${assignments.filter(a => a.status === 'SCHEDULED').length} nhân sự trực thuộc các ca trong ngày</div>
+      </div>
+      ${(!isEmployee) ? `
+        <button type="button" class="btn-primary-blue" onclick="openAssignShiftModal(null, '${curDateStr}')" style="font-size: 12px; padding: 6px 12px;">
+          ➕ Phân ca cho ngày này
+        </button>
+      ` : ''}
+    </div>
+    <div class="schedule-day-view-container">
+  `;
+
+  activeShifts.forEach(s => {
+    const assigned = assignments.filter(a => {
+      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
+    });
+
+    const minQuota = 2;
+    const isSufficient = assigned.length >= minQuota;
+    const quotaBadge = isSufficient
+      ? `<span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Đã đủ mức tối thiểu</span>`
+      : `<span class="shift-quota-badge shift-quota-deficit" style="font-size: 11px;">Còn thiếu ${minQuota - assigned.length} người</span>`;
+
+    const cleanName = getCleanShiftName(s);
+    const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
+
+    html += `
+      <div class="schedule-day-shift-card">
+        <div class="schedule-day-shift-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge-status badge-pending" style="font-weight: 700;">${s.code}</span>
+              <strong style="font-size: 14px; color: #0f172a;">${cleanName}</strong>
+            </div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+              Khung giờ: <strong>${timeStr}</strong> • Tiêu chuẩn: ${Number(s.working_hours).toFixed(1)}h
+            </div>
+          </div>
+          <div>${quotaBadge}</div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 6px;">
+          <span>Định biên phân bổ: <strong>${assigned.length}/6</strong> nhân viên</span>
+          <span>Yêu cầu tối thiểu: <strong>${minQuota}</strong></span>
+        </div>
+
+        <div>
+          <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Danh sách nhân viên được phân ca (${assigned.length}):</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${assigned.length ? assigned.map(a => `
+              <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px;">
+                <div>
+                  <div style="font-weight: 600; color: #0f172a; font-size: 12.5px;">${a.emp_name || 'Nhân viên'} <span style="font-size: 11.5px; color: #64748b; font-weight: normal;">(${a.emp_code || a.emp_id})</span></div>
+                  <div style="font-size: 11px; color: #64748b;">${a.department_name || '-'} • ${a.note || 'Lịch làm việc'}</div>
+                </div>
+                ${(!isEmployee) ? `
+                  <button type="button" class="btn-secondary-outline" style="padding: 3px 8px; font-size: 11px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Xóa</button>
+                ` : ''}
+              </div>
+            `).join('') : `
+              <div style="text-align: center; color: #94a3b8; font-size: 12px; padding: 16px; background: #f8fafc; border-radius: 6px;">Chưa có nhân sự nào được phân vào ca này</div>
+            `}
+          </div>
+        </div>
+
+        ${(!isEmployee) ? `
+          <button type="button" class="shift-card-assign-btn" style="padding: 8px; margin-top: auto;" onclick="openAssignShiftModal('${s.id}', '${curDateStr}')">
+            ➕ Phân nhân sự vào ca này
+          </button>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function renderMonthSchedule(container, assignments, range) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const targetMonth = range.targetMonth;
+  const headerDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+
+  let html = `
+    <div style="margin-bottom: 12px; font-size: 12px; color: #64748b; display: flex; justify-content: space-between; align-items: center;">
+      <span>💡 Nhấp vào ô ngày bất kỳ để chuyển sang chế độ xem chi tiết ngày</span>
+      <span>Tổng số lượt phân ca trong tháng: <strong>${assignments.filter(a => a.status === 'SCHEDULED').length}</strong></span>
+    </div>
+    <div class="schedule-month-grid">
+  `;
+
+  headerDays.forEach(h => {
+    html += `<div class="schedule-month-day-header">${h}</div>`;
+  });
+
+  range.days.forEach(dayDate => {
+    const curDateStr = dayDate.toISOString().slice(0, 10);
+    const isToday = (curDateStr === todayStr);
+    const isDiffMonth = (dayDate.getMonth() !== targetMonth);
+
+    const dayAssignments = assignments.filter(a => {
+      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      return (wDate === curDateStr) && (a.status === 'SCHEDULED');
+    });
+
+    const shiftCounts = {};
+    dayAssignments.forEach(a => {
+      const code = a.shift_code || 'CA';
+      shiftCounts[code] = (shiftCounts[code] || 0) + 1;
+    });
+
+    html += `
+      <div class="schedule-month-cell ${isToday ? 'today' : ''} ${isDiffMonth ? 'different-month' : ''}" onclick="selectScheduleDateAndDayView('${curDateStr}')">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 700; font-size: 13px; color: ${isToday ? '#2563eb' : (isDiffMonth ? '#94a3b8' : '#1e293b')};">${dayDate.getDate()}</span>
+          ${dayAssignments.length ? `<span style="font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 1px 5px; border-radius: 10px;">${dayAssignments.length} NV</span>` : ''}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 4px;">
+          ${Object.entries(shiftCounts).slice(0, 3).map(([code, count]) => `
+            <div style="font-size: 9.5px; background: #f1f5f9; color: #334155; padding: 1px 4px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${code}: <strong>${count}</strong>
+            </div>
+          `).join('')}
+          ${Object.keys(shiftCounts).length > 3 ? `<div style="font-size: 9px; color: #64748b;">+${Object.keys(shiftCounts).length - 3} ca khác</div>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function selectScheduleDateAndDayView(dateStr) {
+  scheduleCurrentDate = new Date(dateStr + 'T00:00:00');
+  setScheduleView('day');
+}
+
+function renderShiftAssignmentsTable(assignments) {
+  const tbody = document.getElementById('tableBodyShiftAssignments');
+  if (!tbody) return;
+
+  if (!assignments.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Không có ca làm việc nào được phân trong khoảng thời gian này</td></tr>`;
+    return;
+  }
+
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+  const canManage = !isEmployee && ['ADMIN', 'HR', 'MANAGER'].includes(role);
+
+  tbody.innerHTML = assignments.map(a => {
+    const wDate = a.work_date ? formatLeaveDate(a.work_date) : '';
+    return `
+      <tr>
+        <td><strong>${wDate}</strong></td>
+        <td>${a.emp_code || a.emp_id}</td>
+        <td><span style="font-weight: 600; color: #0f172a;">${a.emp_name || 'Nhân viên'}</span></td>
+        <td>${a.department_name || '-'}</td>
+        <td><span class="badge-status badge-pending" style="font-weight: 600;">${a.shift_code}</span></td>
+        <td>${a.start_time ? a.start_time.slice(0, 5) : ''} - ${a.end_time ? a.end_time.slice(0, 5) : ''}</td>
+        <td>${a.working_hours ? Number(a.working_hours).toFixed(1) + 'h' : '8.0h'}</td>
+        <td style="font-size: 11.5px; color: #64748b;">${a.note || '—'}</td>
+        <td>
+          <span class="badge-status ${a.status === 'SCHEDULED' ? 'badge-approved' : 'badge-rejected'}">
+            ${a.status === 'SCHEDULED' ? 'Đã xếp ca' : (a.status === 'SWAPPED' ? 'Đã đổi ca' : 'Đã hủy')}
+          </span>
+        </td>
+        <td style="text-align: center;">
+          ${(canManage && a.status === 'SCHEDULED') ? `
+            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px; color: #ef4444; border-color: #fecaca;" onclick="handleCancelShiftAssignment('${a.id}')">Hủy</button>
+          ` : `<span style="font-size: 11px; color: #94a3b8;">—</span>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // 3. Đơn đăng ký tăng ca OT (SCR_OT_01, SCR_OT_02)
@@ -5594,23 +6081,58 @@ async function handleCreateOtSubmit(e) {
 }
 
 // 6. Popup phân ca nhân viên (SCR_SHIFT_01)
-async function openAssignShiftModal() {
+async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isManager = role === 'MANAGER' || state.user?.username === 'manager';
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+
+  if (isEmployee) {
+    showToast('Nhân viên không có quyền phân ca làm việc', 'error');
+    return;
+  }
+
   let employeeOptions = '';
   try {
     const empRes = await apiCall('/api/organization/employees');
-    const employees = empRes?.data || [];
+    let employees = empRes?.data || [];
+
+    // RBAC: Quản lý chỉ được phân ca cho nhân sự thuộc quyền phụ trách
+    if (isManager) {
+      const userDeptId = state.user?.departmentId || state.user?.department_id;
+      const userEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+      employees = employees.filter(e => {
+        const dId = e.departmentId || e.department_id;
+        const mId = e.managerId || e.manager_id;
+        return (userDeptId && dId === userDeptId) || (userEmpId && mId === userEmpId);
+      });
+    }
+
+    if (!employees.length) {
+      showToast('Không tìm thấy nhân viên nào thuộc phạm vi quản lý', 'warning');
+      return;
+    }
+
     employeeOptions = employees.map(e => `
-      <option value="${e.id}">${e.code} - ${e.full_name} (${e.department_name || 'Phòng ban'})</option>
+      <option value="${e.id}">${e.code || e.id} - ${e.full_name} (${e.department_name || 'Phòng ban'})</option>
     `).join('');
   } catch {
     employeeOptions = '<option value="e0000001-0000-0000-0000-000000000004">NV-001 - Vũ Đức Hiếu</option>';
   }
 
+  if (!cachedShiftsList.length) {
+    try {
+      const shiftRes = await apiCall('/api/v1/shifts');
+      cachedShiftsList = shiftRes?.data || [];
+    } catch {}
+  }
+
   let shiftOptions = cachedShiftsList.filter(s => s.status === 'ACTIVE').map(s => `
-    <option value="${s.id}">${s.code} - ${s.name} (${s.start_time.slice(0, 5)} - ${s.end_time.slice(0, 5)})</option>
+    <option value="${s.id}" ${s.id === preShiftId ? 'selected' : ''}>
+      ${formatShiftOptionLabel(s)}
+    </option>
   `).join('');
 
-  const today = new Date().toISOString().slice(0, 10);
+  const targetDate = preWorkDate || new Date().toISOString().slice(0, 10);
   const html = `
     <form id="formModalAssignShift" onsubmit="handleAssignShiftSubmit(event)">
       <div style="margin-bottom: 12px;">
@@ -5629,7 +6151,7 @@ async function openAssignShiftModal() {
 
       <div style="margin-bottom: 12px;">
         <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Ngày làm việc *</label>
-        <input type="date" id="assignModalWorkDate" class="topbar-search-input" value="${today}" required>
+        <input type="date" id="assignModalWorkDate" class="topbar-search-input" value="${targetDate}" required>
       </div>
 
       <div style="margin-bottom: 16px;">

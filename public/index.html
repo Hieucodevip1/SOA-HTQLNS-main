@@ -2437,40 +2437,92 @@ input:checked + .slider:before {
             </button>
           </div>
 
-          <!-- TAB 1: LỊCH PHÂN CA (SCR_SHIFT_01) -->
-          <div id="tabContentAssignments" class="figma-white-card" style="margin-bottom: 24px;">
-            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
+          <!-- TAB 1: LỊCH PHÂN CA (SCR_SHIFT_01 - WORKMATE STYLE) -->
+          <div id="tabContentAssignments" class="figma-white-card" style="margin-bottom: 24px; padding: 20px;">
+            <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center; justify-content: space-between;">
               <div>
-                <div class="card-title-text">Bảng phân công ca làm việc</div>
-                <div style="font-size: 12px; color: #64748b;">Lịch trực và xếp ca nhân sự thực tế phục vụ kiểm soát chấm công</div>
+                <div class="card-title-text" style="font-size: 18px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                  <span>📅</span> Lịch phân ca nhân viên
+                  <span id="shiftScheduleRoleBadge" class="badge-status" style="font-size: 11px; font-weight: 600; background: #e0e7ff; color: #3730a3; margin-left: 6px;"></span>
+                </div>
+                <div style="font-size: 12.5px; color: #64748b; margin-top: 2px;">
+                  Theo dõi lịch làm việc, phân bổ định biên ca và kiểm soát tỷ lệ nhân sự trực thực tế
+                </div>
               </div>
-              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <!-- Nút chuyển đổi Dạng bảng <-> Dạng lịch trực quan -->
+                <button type="button" id="btnToggleScheduleMode" class="btn-secondary-outline" onclick="toggleScheduleDisplayMode()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                  <span id="iconScheduleMode">📋</span> <span id="labelScheduleMode">Dạng bảng</span>
+                </button>
+                <!-- Nút phân ca nhanh cho Quản lý / Admin -->
+                <button type="button" id="btnHeaderAssignShift" class="btn-primary-blue" onclick="openAssignShiftModal()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+                  <span>➕</span> Phân ca nhanh
+                </button>
+              </div>
+            </div>
+
+            <!-- Thanh điều khiển Workmate (Ngày / Tuần / Tháng & < Ngày/Khoảng ngày > Hôm nay) -->
+            <div id="shiftScheduleToolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px;">
+              <!-- Trái: Bộ chọn chế độ (Ngày | Tuần | Tháng) -->
+              <div style="display: flex; align-items: center; gap: 4px; background: #ffffff; padding: 3px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <button type="button" id="btnViewDay" class="btn-schedule-view" onclick="setScheduleView('day')">Ngày</button>
+                <button type="button" id="btnViewWeek" class="btn-schedule-view active" onclick="setScheduleView('week')">Tuần</button>
+                <button type="button" id="btnViewMonth" class="btn-schedule-view" onclick="setScheduleView('month')">Tháng</button>
+              </div>
+
+              <!-- Phải: Điều hướng thời gian (< Ngày/Khoảng ngày > Hôm nay) -->
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" class="btn-secondary-outline" onclick="navigateSchedulePrev()" style="width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; border-radius: 6px;" title="Khoảng thời gian trước">
+                  ‹
+                </button>
+                <div id="scheduleCurrentDateLabel" style="font-size: 13.5px; font-weight: 700; color: #1e293b; min-width: 170px; text-align: center; padding: 4px 8px;">
+                  Đang tải...
+                </div>
+                <button type="button" class="btn-secondary-outline" onclick="navigateScheduleNext()" style="width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; border-radius: 6px;" title="Khoảng thời gian sau">
+                  ›
+                </button>
+                <button type="button" class="btn-secondary-outline" onclick="navigateScheduleToday()" style="padding: 6px 12px; font-size: 12px; font-weight: 600; border-radius: 6px;">
+                  Hôm nay
+                </button>
+              </div>
+            </div>
+
+            <!-- KHUNG LỊCH TRỰC QUAN (WORKMATE VISUAL SCHEDULE) -->
+            <div id="shiftScheduleVisualContainer">
+              <!-- Render động theo chế độ Ngày / Tuần / Tháng -->
+            </div>
+
+            <!-- KHUNG DANH SÁCH BẢNG (HIỂN THỊ KHI BẬT DẠNG BẢNG) -->
+            <div id="shiftScheduleTableContainer" style="display: none;">
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; justify-content: flex-end;">
                 <input type="date" id="filterShiftFromDate" class="topbar-search-input" style="padding: 6px 10px; width: 140px;" onchange="loadShiftAssignments()">
                 <span style="font-size: 12px; color: #64748b;">đến</span>
                 <input type="date" id="filterShiftToDate" class="topbar-search-input" style="padding: 6px 10px; width: 140px;" onchange="loadShiftAssignments()">
                 <button class="btn-secondary-outline" style="padding: 6px 14px; font-size: 12px;" onclick="loadShiftAssignments()">Lọc</button>
               </div>
-            </div>
 
-            <table class="figma-table" id="tableShiftAssignments">
-              <thead>
-                <tr>
-                  <th>Ngày làm việc</th>
-                  <th>Mã NV</th>
-                  <th>Họ và tên</th>
-                  <th>Phòng ban</th>
-                  <th>Ca làm việc</th>
-                  <th>Khung giờ</th>
-                  <th>Số giờ chuẩn</th>
-                  <th>Ghi chú</th>
-                  <th>Trạng thái</th>
-                  <th style="text-align: center;">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="tableBodyShiftAssignments">
-                <!-- Nạp động qua API GET /api/v1/shift-assignments -->
-              </tbody>
-            </table>
+              <div style="overflow-x: auto;">
+                <table class="figma-table" id="tableShiftAssignments">
+                  <thead>
+                    <tr>
+                      <th>Ngày làm việc</th>
+                      <th>Mã NV</th>
+                      <th>Họ và tên</th>
+                      <th>Phòng ban</th>
+                      <th>Ca làm việc</th>
+                      <th>Khung giờ</th>
+                      <th>Số giờ chuẩn</th>
+                      <th>Ghi chú</th>
+                      <th>Trạng thái</th>
+                      <th style="text-align: center;">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tableBodyShiftAssignments">
+                    <!-- Nạp động qua API GET /api/v1/shift-assignments -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <!-- TAB 2: ĐƠN TĂNG CA OT (SCR_OT_01, SCR_OT_02) -->

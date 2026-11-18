@@ -54,7 +54,7 @@ class ShiftController {
   // 4. Hủy phân ca
   async cancelShiftAssignment(req, res, next) {
     try {
-      const result = await shiftService.cancelShiftAssignment(req.params.id);
+      const result = await shiftService.cancelShiftAssignment(req.params.id, req);
       return res.status(200).json({
         success: true,
         message: result.message
