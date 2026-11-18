@@ -400,18 +400,21 @@ function updateTopbarUser() {
 function applyRoleBasedUI() {
   const role = state.user?.role || 'EMPLOYEE';
   const isEmployee = role === 'EMPLOYEE';
+  const canViewAccounts = role === 'ADMIN' || role === 'HR';
 
   const setDisplay = (id, show, displayValue = 'block') => {
     const element = document.getElementById(id);
     if (element) element.style.display = show ? displayValue : 'none';
   };
 
-  setDisplay('nav-rbac', role === 'ADMIN', 'flex');
+  setDisplay('nav-rbac', canViewAccounts, 'flex');
+  const rbacNav = document.getElementById('nav-rbac');
+  if (rbacNav) rbacNav.textContent = role === 'HR' ? 'Danh sách tài khoản' : 'Quản lý phân quyền';
   setDisplay('nav-soa-monitor', role === 'ADMIN', 'flex');
   setDisplay('nav-settings', role === 'ADMIN' || role === 'HR', 'flex');
   setDisplay('nav-departments', role === 'ADMIN' || role === 'HR', 'flex');
-  setDisplay('nav-attendance-history', !isEmployee, 'flex');
-  setDisplay('nav-employees', !isEmployee, 'flex');
+  setDisplay('nav-attendance-history', ['ADMIN', 'HR', 'MANAGER'].includes(role), 'flex');
+  setDisplay('nav-employees', ['ADMIN', 'HR', 'MANAGER'].includes(role), 'flex');
   setDisplay('dashOrgMetrics', !isEmployee);
   setDisplay('dashOrgDataState', !isEmployee);
   setDisplay('dashOrgDetails', !isEmployee);
@@ -425,14 +428,22 @@ function applyRoleBasedUI() {
 }
 
 function navigateToView(viewName) {
-  // Kiểm tra quyền hạn truy cập theo vai trò (RBAC Route Guard)
   const role = state.user?.role || 'EMPLOYEE';
-  if (role === 'EMPLOYEE' && ['rbac', 'departments', 'settings', 'soa-monitor', 'attendance-history', 'employees'].includes(viewName)) {
-    showToast('Nhân viên không có quyền truy cập chức năng này (Chỉ dành cho Quản lý / Quản trị viên)', 'error');
-    return;
-  }
-  if (role !== 'ADMIN' && ['rbac', 'soa-monitor'].includes(viewName)) {
-    showToast('Chỉ Quản trị viên (ADMIN) mới có quyền truy cập chức năng này', 'error');
+  const allowedRolesByView = {
+    dashboard: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    employees: ['ADMIN', 'HR', 'MANAGER'],
+    departments: ['ADMIN', 'HR'],
+    'attendance-history': ['ADMIN', 'HR', 'MANAGER'],
+    'my-attendance': ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    rbac: ['ADMIN', 'HR'],
+    stats: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    requests: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    settings: ['ADMIN', 'HR'],
+    profile: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    'soa-monitor': ['ADMIN']
+  };
+  if (!allowedRolesByView[viewName] || !allowedRolesByView[viewName].includes(role)) {
+    showToast('Vai trò hiện tại không có quyền truy cập chức năng này', 'error');
     return;
   }
 
@@ -975,6 +986,7 @@ function loadMyAttendanceData() {
 async function loadRbacUsersData() {
   const tbody = document.getElementById('rbacUsersTableBody');
   if (!tbody) return;
+  const canAssignRoles = state.user?.role === 'ADMIN';
 
   tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Đang kết nối Auth Service (:3001) để lấy danh sách tài khoản...</td></tr>`;
 
@@ -1005,17 +1017,21 @@ async function loadRbacUsersData() {
         <td><code>${escapeHtml(u.emp_id || '-')}</code></td>
         <td>${roleBadge}</td>
         <td>
-          <select id="role-select-${escapeHtml(u.id)}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
-            <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
-            <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
-            <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
-            <option value="EMPLOYEE" ${u.role === 'EMPLOYEE' ? 'selected' : ''}>EMPLOYEE (Nhân viên)</option>
-          </select>
+          ${canAssignRoles ? `
+            <select id="role-select-${escapeHtml(u.id)}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
+              <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
+              <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
+              <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
+              <option value="EMPLOYEE" ${u.role === 'EMPLOYEE' ? 'selected' : ''}>EMPLOYEE (Nhân viên)</option>
+            </select>
+          ` : 'Chỉ ADMIN được gán vai trò'}
         </td>
         <td>
-          <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" data-user-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}">
-            Lưu quyền
-          </button>
+          ${canAssignRoles ? `
+            <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" data-user-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}">
+              Lưu quyền
+            </button>
+          ` : '-'}
         </td>
       </tr>
     `;
@@ -1026,6 +1042,11 @@ async function loadRbacUsersData() {
 }
 
 async function handleUpdateUserRole(userId, username) {
+  if (state.user?.role !== 'ADMIN') {
+    showToast('Chỉ Quản trị viên (ADMIN) mới được gán vai trò tài khoản', 'error');
+    return;
+  }
+
   const selectEl = document.getElementById(`role-select-${userId}`);
   if (!selectEl) return;
   const newRole = selectEl.value;

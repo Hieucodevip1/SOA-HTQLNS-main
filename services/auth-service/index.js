@@ -28,6 +28,7 @@ const { createOpenApiSpec } = require('../../shared/openapi');
 
 const PORT = Number(process.env.AUTH_PORT || 3001);
 const DB_NAME = 'htqlns_auth';
+const ORGANIZATION_DB_NAME = process.env.ORGANIZATION_DB_NAME || 'htqlns_organization';
 
 // Bộ nhớ đệm dự phòng (In-memory fallback) cho trường hợp MySQL chưa sẵn sàng
 const memoryUsers = new Map([
@@ -211,7 +212,7 @@ app.post('/api/auth/register', async (req, res) => {
       username,
       email,
       role: assignedRole
-    }, 'Đăng ký tài khoản thành công');
+    }, 'Đăng ký thành công. Tài khoản cần được ADMIN liên kết với hồ sơ nhân sự để dùng các chức năng cá nhân.');
   } catch (err) {
     return error(res, 'Lỗi đăng ký tài khoản: ' + err.message);
   }
@@ -656,6 +657,72 @@ app.get('/api/auth/users', async (req, res) => {
   }
 });
 
+app.put('/api/auth/users/:id/employee', async (req, res) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser || currentUser.role !== 'ADMIN') {
+      return forbidden(res, 'Chỉ ADMIN mới có quyền liên kết hồ sơ nhân sự');
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(req.body, 'empId')) {
+      return badRequest(res, 'Cần cung cấp empId (hoặc null để hủy liên kết)');
+    }
+
+    const empId = req.body.empId;
+    if (empId !== null && (typeof empId !== 'string' || !empId.trim())) {
+      return badRequest(res, 'empId phải là mã hồ sơ nhân sự hợp lệ hoặc null');
+    }
+
+    const targetId = req.params.id;
+    const useDb = await isDbAvailable();
+
+    if (useDb) {
+      const users = await db.query('SELECT id FROM users WHERE id = ? LIMIT 1', [targetId], DB_NAME);
+      if (!users.length) return notFound(res, 'Không tìm thấy tài khoản');
+
+      if (empId !== null) {
+        try {
+          await db.query('SELECT 1', [], ORGANIZATION_DB_NAME);
+        } catch {
+          return res.status(503).json({ success: false, error: 'Organization DB hiện chưa sẵn sàng' });
+        }
+
+        const employees = await db.query(
+          'SELECT id FROM employees WHERE id = ? LIMIT 1',
+          [empId.trim()],
+          ORGANIZATION_DB_NAME
+        );
+        if (!employees.length) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
+
+        const linkedUsers = await db.query(
+          'SELECT id FROM users WHERE emp_id = ? AND id <> ? LIMIT 1',
+          [empId.trim(), targetId],
+          DB_NAME
+        );
+        if (linkedUsers.length) return conflict(res, 'Hồ sơ nhân sự đã được liên kết với tài khoản khác');
+      }
+
+      await db.query('UPDATE users SET emp_id = ? WHERE id = ?', [empId === null ? null : empId.trim(), targetId], DB_NAME);
+    } else {
+      const target = memoryUsers.get(targetId);
+      if (!target) return notFound(res, 'Không tìm thấy tài khoản');
+      if (empId !== null) {
+        return res.status(503).json({ success: false, error: 'Liên kết hồ sơ cần cơ sở dữ liệu Organization hoạt động' });
+      }
+      target.emp_id = null;
+    }
+
+    return success(
+      res,
+      { id: targetId, emp_id: empId === null ? null : empId.trim() },
+      200,
+      'Đã cập nhật liên kết hồ sơ. Tài khoản cần đăng nhập lại để nhận quyền mới.'
+    );
+  } catch (err) {
+    return error(res, err.message);
+  }
+});
+
 // Cập nhật vai trò tài khoản (PUT /api/auth/users/:id/role) - ADMIN
 app.put('/api/auth/users/:id/role', async (req, res) => {
   try {
@@ -756,6 +823,9 @@ app.get('/api-docs.json', (req, res) => {
       },
       '/api/auth/me': {
         get: { summary: 'Xem thông tin hồ sơ tài khoản hiện tại' }
+      },
+      '/api/auth/users/{id}/employee': {
+        put: { summary: 'ADMIN liên kết hoặc hủy liên kết hồ sơ nhân sự với tài khoản' }
       }
     }
   });

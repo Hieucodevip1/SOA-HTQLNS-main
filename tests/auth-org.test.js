@@ -109,6 +109,7 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.strictEqual(data.success, true);
       assert.strictEqual(data.data.username, testUsername);
       assert.strictEqual(data.data.role, 'EMPLOYEE');
+      assert.strictEqual(data.data.emp_id, null);
     });
 
     test('Đăng ký công khai bỏ qua role đặc quyền và liên kết nhân sự do người dùng gửi lên', async () => {
@@ -388,6 +389,19 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
         { headers: employeeHeaders }
       );
       assert.strictEqual(otherProfile.status, 403);
+    });
+
+    test('Tài khoản chưa liên kết không được nhận hồ sơ theo email trùng nhân sự mẫu', async () => {
+      const unlinkedToken = jwt.signToken({
+        userId: 'unlinked-user',
+        role: 'EMPLOYEE',
+        email: 'employee@htqlns.com',
+        empId: null
+      });
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/me/profile`, {
+        headers: { Authorization: `Bearer ${unlinkedToken}` }
+      });
+      assert.strictEqual(res.status, 404);
     });
 
     test('Tạo mới hồ sơ nhân sự /api/organization/employees (HTTP 201)', async () => {

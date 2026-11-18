@@ -9,7 +9,7 @@ require('../../shared/env');
 const crypto = require('crypto');
 const env = require('../../shared/env');
 const db = require('../../shared/db');
-const { createServiceApp } = require('../../shared/service-base');
+const { createServiceApp, requireAuth } = require('../../shared/service-base');
 const { registerService } = require('../../shared/registrar');
 const events = require('../../shared/events');
 const {
@@ -304,8 +304,8 @@ const getDepartmentsHandler = async (req, res) => {
   }
 };
 
-app.get('/api/organization/departments', getDepartmentsHandler);
-app.get('/api/departments', getDepartmentsHandler);
+app.get('/api/organization/departments', requireAuth(), getDepartmentsHandler);
+app.get('/api/departments', requireAuth(), getDepartmentsHandler);
 
 // Chi tiết một phòng ban
 const getDepartmentDetailHandler = async (req, res) => {
@@ -335,8 +335,8 @@ const getDepartmentDetailHandler = async (req, res) => {
   }
 };
 
-app.get('/api/organization/departments/:id', getDepartmentDetailHandler);
-app.get('/api/departments/:id', getDepartmentDetailHandler);
+app.get('/api/organization/departments/:id', requireAuth(), getDepartmentDetailHandler);
+app.get('/api/departments/:id', requireAuth(), getDepartmentDetailHandler);
 
 // Tạo mới phòng ban (ADMIN, HR)
 const createDepartmentHandler = async (req, res) => {
@@ -383,8 +383,8 @@ const createDepartmentHandler = async (req, res) => {
   }
 };
 
-app.post('/api/organization/departments', createDepartmentHandler);
-app.post('/api/departments', createDepartmentHandler);
+app.post('/api/organization/departments', requireAuth(['ADMIN', 'HR']), createDepartmentHandler);
+app.post('/api/departments', requireAuth(['ADMIN', 'HR']), createDepartmentHandler);
 
 // Cập nhật phòng ban (ADMIN, HR)
 const updateDepartmentHandler = async (req, res) => {
@@ -422,8 +422,8 @@ const updateDepartmentHandler = async (req, res) => {
   }
 };
 
-app.put('/api/organization/departments/:id', updateDepartmentHandler);
-app.put('/api/departments/:id', updateDepartmentHandler);
+app.put('/api/organization/departments/:id', requireAuth(['ADMIN', 'HR']), updateDepartmentHandler);
+app.put('/api/departments/:id', requireAuth(['ADMIN', 'HR']), updateDepartmentHandler);
 
 // Xóa phòng ban (ADMIN, HR)
 const deleteDepartmentHandler = async (req, res) => {
@@ -444,8 +444,8 @@ const deleteDepartmentHandler = async (req, res) => {
   }
 };
 
-app.delete('/api/organization/departments/:id', deleteDepartmentHandler);
-app.delete('/api/departments/:id', deleteDepartmentHandler);
+app.delete('/api/organization/departments/:id', requireAuth(['ADMIN', 'HR']), deleteDepartmentHandler);
+app.delete('/api/departments/:id', requireAuth(['ADMIN', 'HR']), deleteDepartmentHandler);
 
 // ==============================================================================
 // 2. QUẢN LÝ CHỨC DANH (POSITIONS)
@@ -481,8 +481,8 @@ const getPositionsHandler = async (req, res) => {
   }
 };
 
-app.get('/api/organization/positions', getPositionsHandler);
-app.get('/api/positions', getPositionsHandler);
+app.get('/api/organization/positions', requireAuth(), getPositionsHandler);
+app.get('/api/positions', requireAuth(), getPositionsHandler);
 
 const createPositionHandler = async (req, res) => {
   try {
@@ -526,8 +526,8 @@ const createPositionHandler = async (req, res) => {
   }
 };
 
-app.post('/api/organization/positions', createPositionHandler);
-app.post('/api/positions', createPositionHandler);
+app.post('/api/organization/positions', requireAuth(['ADMIN', 'HR']), createPositionHandler);
+app.post('/api/positions', requireAuth(['ADMIN', 'HR']), createPositionHandler);
 
 // ==============================================================================
 // 3. QUẢN LÝ HỒ SƠ NHÂN SỰ (EMPLOYEES)
@@ -621,11 +621,11 @@ const getEmployeesHandler = async (req, res) => {
   }
 };
 
-app.get('/api/organization/employees', getEmployeesHandler);
-app.get('/api/employees', getEmployeesHandler);
+app.get('/api/organization/employees', requireAuth(['ADMIN', 'HR', 'MANAGER']), getEmployeesHandler);
+app.get('/api/employees', requireAuth(['ADMIN', 'HR', 'MANAGER']), getEmployeesHandler);
 
 // Hồ sơ nhân sự của tài khoản đang đăng nhập
-app.get('/api/organization/employees/me/profile', async (req, res) => {
+app.get('/api/organization/employees/me/profile', requireAuth(), async (req, res) => {
   try {
     const currentUser = req.user;
     if (!currentUser) return unauthorized(res);
@@ -639,15 +639,8 @@ app.get('/api/organization/employees/me/profile', async (req, res) => {
         const rows = await db.query('SELECT * FROM employees WHERE id = ? LIMIT 1', [empId], DB_NAME);
         employee = rows[0];
       }
-      if (!employee && currentUser.email) {
-        const rows = await db.query('SELECT * FROM employees WHERE email = ? LIMIT 1', [currentUser.email], DB_NAME);
-        employee = rows[0];
-      }
     } else {
       if (empId) employee = memoryEmployees.get(empId);
-      if (!employee && currentUser.email) {
-        employee = Array.from(memoryEmployees.values()).find((e) => e.email === currentUser.email);
-      }
     }
 
     if (!employee) return notFound(res, 'Chưa tìm thấy hồ sơ nhân sự liên kết với tài khoản này');
@@ -700,8 +693,8 @@ const getEmployeeDetailHandler = async (req, res) => {
   }
 };
 
-app.get('/api/organization/employees/:id', getEmployeeDetailHandler);
-app.get('/api/employees/:id', getEmployeeDetailHandler);
+app.get('/api/organization/employees/:id', requireAuth(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']), getEmployeeDetailHandler);
+app.get('/api/employees/:id', requireAuth(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']), getEmployeeDetailHandler);
 
 // Tạo mới hồ sơ nhân sự (ADMIN, HR)
 const createEmployeeHandler = async (req, res) => {
@@ -791,8 +784,8 @@ const createEmployeeHandler = async (req, res) => {
   }
 };
 
-app.post('/api/organization/employees', createEmployeeHandler);
-app.post('/api/employees', createEmployeeHandler);
+app.post('/api/organization/employees', requireAuth(['ADMIN', 'HR']), createEmployeeHandler);
+app.post('/api/employees', requireAuth(['ADMIN', 'HR']), createEmployeeHandler);
 
 // Cập nhật hồ sơ nhân sự (ADMIN, HR)
 const updateEmployeeHandler = async (req, res) => {
@@ -844,8 +837,8 @@ const updateEmployeeHandler = async (req, res) => {
   }
 };
 
-app.put('/api/organization/employees/:id', updateEmployeeHandler);
-app.put('/api/employees/:id', updateEmployeeHandler);
+app.put('/api/organization/employees/:id', requireAuth(['ADMIN', 'HR']), updateEmployeeHandler);
+app.put('/api/employees/:id', requireAuth(['ADMIN', 'HR']), updateEmployeeHandler);
 
 // Đánh dấu nhân viên nghỉ việc hoặc xóa (ADMIN, HR)
 const deleteEmployeeHandler = async (req, res) => {
@@ -869,13 +862,13 @@ const deleteEmployeeHandler = async (req, res) => {
   }
 };
 
-app.delete('/api/organization/employees/:id', deleteEmployeeHandler);
-app.delete('/api/employees/:id', deleteEmployeeHandler);
+app.delete('/api/organization/employees/:id', requireAuth(['ADMIN', 'HR']), deleteEmployeeHandler);
+app.delete('/api/employees/:id', requireAuth(['ADMIN', 'HR']), deleteEmployeeHandler);
 
 // ==============================================================================
 // 4. NHẬT KÝ HỆ THỐNG (AUDIT LOGS - ADMIN ONLY)
 // ==============================================================================
-app.get('/api/organization/audit-logs', async (req, res) => {
+app.get('/api/organization/audit-logs', requireAuth(['ADMIN']), async (req, res) => {
   try {
     const currentUser = req.user;
     if (!currentUser || currentUser.role !== 'ADMIN') {
@@ -896,33 +889,6 @@ app.get('/api/organization/audit-logs', async (req, res) => {
     return error(res, err.message);
   }
 });
-
-// ==============================================================================
-// 5. WEBHOOK NHẬN SỰ KIỆN TỪ EVENT BUS
-// ==============================================================================
-app.use(
-  '/events',
-  events.createWebhookRouter({
-    'user.registered': async (event) => {
-      const { userId, email, empId } = event.data || {};
-      console.log(`[ORG-SERVICE] Nhận event user.registered: tài khoản "${email}" (id: ${userId})`);
-      // Nếu user đăng ký chưa có emp_id, thử liên kết với employee theo email
-      if (!empId && email) {
-        const useDb = await isDbAvailable();
-        if (useDb) {
-          try {
-            const rows = await db.query('SELECT id FROM employees WHERE email = ? LIMIT 1', [email], DB_NAME);
-            if (rows.length > 0) {
-              const matchedEmpId = rows[0].id;
-              await db.query('UPDATE htqlns_auth.users SET emp_id = ? WHERE id = ?', [matchedEmpId, userId]);
-              console.log(`[ORG-SERVICE] Đã tự động gắn emp_id ${matchedEmpId} cho user ${userId}`);
-            }
-          } catch {}
-        }
-      }
-    }
-  })
-);
 
 // OpenAPI Spec
 app.get('/api-docs.json', (req, res) => {
@@ -958,14 +924,6 @@ const server = app.start(PORT, () => {
     console.warn('[ORGANIZATION-SERVICE] Không thể đăng ký với Registry:', err.message);
   }
 
-  // Subscribe nhận sự kiện từ Event Bus
-  setTimeout(async () => {
-    try {
-      await events.subscribe(['user.registered'], `http://localhost:${PORT}/events`, {
-        serviceName: 'organization-service'
-      });
-    } catch {}
-  }, 2000);
 });
 
 module.exports = { app, server };

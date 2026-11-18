@@ -141,18 +141,19 @@ app.post(['/api/v1/payrolls/calculate', '/api/payroll/calculate'], requireAuth([
 });
 
 // 3. Xem danh sách phiếu lương / Phiếu lương cá nhân (SCR_PAY_01)
-app.get(['/api/v1/payslips', '/api/payslips'], requireAuth(['ADMIN', 'HR', 'EMPLOYEE']), async (req, res, next) => {
+app.get(['/api/v1/payslips', '/api/payslips'], requireAuth(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']), async (req, res, next) => {
   try {
     const { month, year, empId } = req.query;
     const conditions = [];
     const params = [];
 
-    if (req.user.role === 'EMPLOYEE') {
-      if (!req.user.empId) {
+    if (['EMPLOYEE', 'MANAGER'].includes(req.user.role)) {
+      const ownEmpId = req.user.empId || req.user.emp_id;
+      if (!ownEmpId) {
         return res.status(403).json({ success: false, error: 'Tài khoản chưa liên kết hồ sơ nhân sự' });
       }
       conditions.push('emp_id = ?');
-      params.push(req.user.empId);
+      params.push(ownEmpId);
     } else if (empId) {
       conditions.push('emp_id = ?');
       params.push(empId);
