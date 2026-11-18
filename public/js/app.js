@@ -565,6 +565,10 @@ function handleLogoutClick() {
 
   document.getElementById('portalApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+  const uInput = document.getElementById('loginUsername');
+  const pInput = document.getElementById('loginPassword');
+  if (uInput) uInput.value = '';
+  if (pInput) pInput.value = '';
   toggleAuthMode('login');
   showToast('Đã đăng xuất thành công', 'success');
 }
@@ -4628,6 +4632,10 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     // Nếu chưa đăng nhập hoặc token đã hết hạn -> hiển thị màn hình Đăng nhập
     showScreenView('login');
+    const uInput = document.getElementById('loginUsername');
+    const pInput = document.getElementById('loginPassword');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
   }
 });
 

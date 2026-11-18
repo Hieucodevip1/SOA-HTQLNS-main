@@ -1399,13 +1399,13 @@ input:checked + .slider:before {
             <div class="auth-card-sub">Login with your details</div>
           </div>
 
-          <form onsubmit="handleLoginSubmit(event)">
+          <form onsubmit="handleLoginSubmit(event)" autocomplete="off">
             <div class="figma-input-wrapper">
-              <input type="text" id="loginUsername" class="figma-pill-input" placeholder="User name or Email" required autocomplete="username">
+              <input type="text" id="loginUsername" class="figma-pill-input" placeholder="Nhập tên đăng nhập hoặc email..." required autocomplete="off">
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="loginPassword" class="figma-pill-input" placeholder="Password" required autocomplete="current-password" style="padding-right: 58px;">
+              <input type="password" id="loginPassword" class="figma-pill-input" placeholder="Nhập mật khẩu..." required autocomplete="new-password" style="padding-right: 58px;">
               <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
@@ -1444,23 +1444,23 @@ input:checked + .slider:before {
             <div class="auth-card-sub">Register personal information</div>
           </div>
 
-          <form onsubmit="handleRegisterSubmit(event)">
+          <form onsubmit="handleRegisterSubmit(event)" autocomplete="off">
             <div class="figma-input-row">
-              <input type="text" id="regFirstName" class="figma-pill-input" placeholder="First name" required>
-              <input type="text" id="regLastName" class="figma-pill-input" placeholder="Last name" required>
+              <input type="text" id="regFirstName" class="figma-pill-input" placeholder="Họ và tên đệm (vd: Nguyễn Văn)" required autocomplete="off">
+              <input type="text" id="regLastName" class="figma-pill-input" placeholder="Tên (vd: An)" required autocomplete="off">
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="email" id="regEmail" class="figma-pill-input" placeholder="Email" required>
+              <input type="email" id="regEmail" class="figma-pill-input" placeholder="Email (vd: an.nv@htqlns.com)" required autocomplete="off">
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="regPassword" class="figma-pill-input" placeholder="Password" required minlength="6" style="padding-right: 58px;">
+              <input type="password" id="regPassword" class="figma-pill-input" placeholder="Mật khẩu (tối thiểu 6 ký tự)" required minlength="6" autocomplete="new-password" style="padding-right: 58px;">
               <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
             <div class="figma-input-wrapper">
-              <input type="password" id="regConfirmPassword" class="figma-pill-input" placeholder="Confirm password" required minlength="6" style="padding-right: 58px;">
+              <input type="password" id="regConfirmPassword" class="figma-pill-input" placeholder="Xác nhận lại mật khẩu" required minlength="6" autocomplete="new-password" style="padding-right: 58px;">
               <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regConfirmPassword', this)" aria-label="Hiện mật khẩu">Hiện</button>
             </div>
 
