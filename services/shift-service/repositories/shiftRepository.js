@@ -29,6 +29,10 @@ const memoryShifts = new Map([
       grace_late_minutes: 15,
       grace_early_minutes: 0,
       working_hours: 8.0,
+      min_staff: 1,
+      max_staff: null,
+      minStaff: 1,
+      maxStaff: null,
       ot_multiplier_weekday: 1.5,
       ot_multiplier_weekend: 2.0,
       ot_multiplier_holiday: 3.0,
@@ -48,6 +52,10 @@ const memoryShifts = new Map([
       grace_late_minutes: 15,
       grace_early_minutes: 0,
       working_hours: 7.5,
+      min_staff: 2,
+      max_staff: 6,
+      minStaff: 2,
+      maxStaff: 6,
       ot_multiplier_weekday: 1.5,
       ot_multiplier_weekend: 2.0,
       ot_multiplier_holiday: 3.0,
@@ -67,6 +75,10 @@ const memoryShifts = new Map([
       grace_late_minutes: 15,
       grace_early_minutes: 0,
       working_hours: 7.5,
+      min_staff: 2,
+      max_staff: 6,
+      minStaff: 2,
+      maxStaff: 6,
       ot_multiplier_weekday: 1.5,
       ot_multiplier_weekend: 2.0,
       ot_multiplier_holiday: 3.0,
@@ -86,6 +98,10 @@ const memoryShifts = new Map([
       grace_late_minutes: 15,
       grace_early_minutes: 0,
       working_hours: 7.5,
+      min_staff: 1,
+      max_staff: 4,
+      minStaff: 1,
+      maxStaff: 4,
       ot_multiplier_weekday: 1.5,
       ot_multiplier_weekend: 2.0,
       ot_multiplier_holiday: 3.0,
@@ -247,6 +263,10 @@ class ShiftRepository {
 
   async createShift(data) {
     const id = data.id || crypto.randomUUID();
+    const minStaff = data.minStaff !== undefined ? (Number(data.minStaff) || 1) : (data.min_staff !== undefined ? (Number(data.min_staff) || 1) : 1);
+    const rawMax = data.maxStaff !== undefined ? data.maxStaff : data.max_staff;
+    const maxStaff = (rawMax === null || rawMax === undefined || rawMax === '' || Number(rawMax) === 0) ? null : Number(rawMax);
+
     const newShift = {
       id,
       code: data.code.trim().toUpperCase(),
@@ -257,6 +277,10 @@ class ShiftRepository {
       grace_late_minutes: Number(data.graceLateMinutes ?? data.grace_late_minutes ?? 15),
       grace_early_minutes: Number(data.graceEarlyMinutes ?? data.grace_early_minutes ?? 0),
       working_hours: Number(data.workingHours ?? data.working_hours ?? 8.0),
+      min_staff: minStaff,
+      max_staff: maxStaff,
+      minStaff,
+      maxStaff,
       ot_multiplier_weekday: Number(data.otMultiplierWeekday ?? data.ot_multiplier_weekday ?? 1.5),
       ot_multiplier_weekend: Number(data.otMultiplierWeekend ?? data.ot_multiplier_weekend ?? 2.0),
       ot_multiplier_holiday: Number(data.otMultiplierHoliday ?? data.ot_multiplier_holiday ?? 3.0),
@@ -268,8 +292,8 @@ class ShiftRepository {
     if (useDb) {
       try {
         await pool.query(
-          `INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours, min_staff, max_staff)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newShift.id,
             newShift.code,
@@ -279,7 +303,9 @@ class ShiftRepository {
             newShift.break_minutes,
             newShift.grace_late_minutes,
             newShift.grace_early_minutes,
-            newShift.working_hours
+            newShift.working_hours,
+            newShift.min_staff,
+            newShift.max_staff
           ]
         );
         const [created] = await pool.query('SELECT * FROM shifts WHERE id = ?', [id]);
@@ -308,13 +334,20 @@ class ShiftRepository {
     const existing = await this.getShiftById(id);
     if (!existing) return null;
 
+    const minStaff = data.minStaff !== undefined ? (Number(data.minStaff) || 1) : (data.min_staff !== undefined ? (Number(data.min_staff) || 1) : (existing.min_staff ?? 1));
+    const rawMax = data.maxStaff !== undefined ? data.maxStaff : data.max_staff;
+    const maxStaff = (rawMax !== undefined)
+      ? ((rawMax === null || rawMax === '' || Number(rawMax) === 0) ? null : Number(rawMax))
+      : (existing.max_staff ?? null);
+
     const useDb = await this.isDbAvailable();
     if (useDb) {
       try {
         await pool.query(
           `UPDATE shifts
            SET name = ?, start_time = ?, end_time = ?, break_minutes = ?,
-               grace_late_minutes = ?, grace_early_minutes = ?, working_hours = ?, status = ?
+               grace_late_minutes = ?, grace_early_minutes = ?, working_hours = ?,
+               min_staff = ?, max_staff = ?, status = ?
            WHERE id = ?`,
           [
             data.name ?? existing.name,
@@ -324,6 +357,8 @@ class ShiftRepository {
             data.graceLateMinutes ?? data.grace_late_minutes ?? existing.grace_late_minutes,
             data.graceEarlyMinutes ?? data.grace_early_minutes ?? existing.grace_early_minutes,
             data.workingHours ?? data.working_hours ?? existing.working_hours,
+            minStaff,
+            maxStaff,
             data.status ?? existing.status,
             id
           ]
@@ -344,6 +379,10 @@ class ShiftRepository {
       grace_late_minutes: Number(data.graceLateMinutes ?? data.grace_late_minutes ?? existing.grace_late_minutes),
       grace_early_minutes: Number(data.graceEarlyMinutes ?? data.grace_early_minutes ?? existing.grace_early_minutes),
       working_hours: Number(data.workingHours ?? data.working_hours ?? existing.working_hours),
+      min_staff: minStaff,
+      max_staff: maxStaff,
+      minStaff,
+      maxStaff,
       status: data.status ?? existing.status
     };
     memoryShifts.set(id, updated);

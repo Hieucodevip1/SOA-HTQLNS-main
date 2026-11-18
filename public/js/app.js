@@ -5274,35 +5274,48 @@ async function loadShiftsCatalog() {
     }
 
     if (!cachedShiftsList.length) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có ca làm việc nào trong hệ thống</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có ca làm việc nào trong hệ thống</td></tr>`;
       return;
     }
 
     const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
-    tbody.innerHTML = cachedShiftsList.map(s => `
-      <tr>
-        <td><strong>${s.code}</strong></td>
-        <td><span style="font-weight: 600; color: #0f172a;">${s.name}</span></td>
-        <td>${s.start_time.slice(0, 5)}</td>
-        <td>${s.end_time.slice(0, 5)}</td>
-        <td>${s.break_minutes || 0} phút</td>
-        <td>+${s.grace_late_minutes || 0} phút</td>
-        <td><strong>${Number(s.working_hours).toFixed(1)}h</strong></td>
-        <td>
-          <span class="badge-status ${s.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">
-            ${s.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
-          </span>
-        </td>
-        <td style="text-align: center;">
-          ${isAdminOrHr ? `
-            <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openCreateShiftModal(${JSON.stringify(s)})'>Sửa</button>
-          ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = cachedShiftsList.map(s => {
+      const minStaff = s.min_staff ?? s.minStaff ?? 1;
+      const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
+      const maxStaffText = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
+        ? `${Number(rawMax)} NV`
+        : 'Không giới hạn';
+
+      return `
+        <tr>
+          <td><strong>${s.code}</strong></td>
+          <td><span style="font-weight: 600; color: #0f172a;">${s.name}</span></td>
+          <td>${s.start_time.slice(0, 5)}</td>
+          <td>${s.end_time.slice(0, 5)}</td>
+          <td>${s.break_minutes || 0} phút</td>
+          <td>+${s.grace_late_minutes || 0} phút</td>
+          <td><strong>${Number(s.working_hours).toFixed(1)}h</strong></td>
+          <td>
+            <span style="font-weight: 600; color: #1e293b;">${minStaff}</span>
+            <span style="color: #94a3b8;">/</span>
+            <span style="color: #475569; font-weight: 500;">${maxStaffText}</span>
+          </td>
+          <td>
+            <span class="badge-status ${s.status === 'ACTIVE' ? 'badge-approved' : 'badge-rejected'}">
+              ${s.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            ${isAdminOrHr ? `
+              <button class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick='openCreateShiftModal(${JSON.stringify(s)})'>Sửa</button>
+            ` : `<span style="font-size: 11px; color: #94a3b8;">Chỉ xem</span>`}
+          </td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     console.error('Lỗi nạp danh mục ca:', err);
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 20px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
   }
 }
 
@@ -5314,6 +5327,34 @@ let currentScheduleView = 'week'; // 'day' | 'week' | 'month'
 let scheduleDisplayMode = 'visual'; // 'visual' | 'table'
 let scheduleCurrentDate = new Date();
 let cachedAssignmentsList = [];
+let cachedEmployeesScopeList = [];
+
+async function getEmployeesInScope() {
+  try {
+    const empRes = await apiCall('/api/organization/employees');
+    let list = empRes?.data || [];
+    const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+    const isManager = role === 'MANAGER' || state.user?.username === 'manager';
+    const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
+
+    if (isEmployee) {
+      const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+      list = list.filter(e => e.id === myEmpId);
+    } else if (isManager) {
+      const userDeptId = state.user?.departmentId || state.user?.department_id;
+      const userEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+      list = list.filter(e => {
+        const dId = e.departmentId || e.department_id;
+        const mId = e.managerId || e.manager_id;
+        return (userDeptId && dId === userDeptId) || (userEmpId && mId === userEmpId);
+      });
+    }
+    cachedEmployeesScopeList = list;
+    return list;
+  } catch {
+    return cachedEmployeesScopeList || [];
+  }
+}
 
 function formatShiftOptionLabel(s) {
   if (!s) return '';
@@ -5544,8 +5585,17 @@ async function loadShiftAssignments() {
     const kpiToday = document.getElementById('kpiShiftTodayAssignments');
     if (kpiToday) kpiToday.innerText = todayCount;
 
+    // Lấy quy mô nhân sự thực tế trong phạm vi quyền hạn để tính định biên tối thiểu
+    let totalActiveEmployeesInScope = 1;
+    try {
+      const inScopeEmps = await getEmployeesInScope();
+      totalActiveEmployeesInScope = Math.max(1, inScopeEmps.length);
+    } catch {
+      totalActiveEmployeesInScope = 1;
+    }
+
     // Render giao diện trực quan theo chế độ xem (Tuần / Ngày / Tháng)
-    renderShiftSchedule(assignments, range);
+    renderShiftSchedule(assignments, range, totalActiveEmployeesInScope);
 
     // Render bảng phân ca (cho chế độ xem dạng bảng)
     renderShiftAssignmentsTable(assignments);
@@ -5560,20 +5610,20 @@ async function loadShiftAssignments() {
   }
 }
 
-function renderShiftSchedule(assignments, range) {
+function renderShiftSchedule(assignments, range, totalActiveEmployeesInScope = 1) {
   const container = document.getElementById('shiftScheduleVisualContainer');
   if (!container) return;
 
   if (currentScheduleView === 'week') {
-    renderWeekSchedule(container, assignments, range);
+    renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope);
   } else if (currentScheduleView === 'day') {
-    renderDaySchedule(container, assignments, range);
+    renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope);
   } else if (currentScheduleView === 'month') {
     renderMonthSchedule(container, assignments, range);
   }
 }
 
-function renderWeekSchedule(container, assignments, range) {
+function renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope = 1) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -5603,11 +5653,23 @@ function renderWeekSchedule(container, assignments, range) {
         return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
       });
 
-      const minQuota = 2;
-      const isSufficient = assigned.length >= minQuota;
+      const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
+      const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
+      const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
+        ? Number(rawMax)
+        : null;
+
+      // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
+      const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
+
+      const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
       const quotaBadge = isSufficient
-        ? `<span class="shift-quota-badge shift-quota-sufficient">✓ Đã đủ mức tối thiểu</span>`
-        : `<span class="shift-quota-badge shift-quota-deficit">Còn thiếu ${minQuota - assigned.length} người</span>`;
+        ? `<span class="shift-quota-badge shift-quota-sufficient">✓ Đã đủ nhân sự</span>`
+        : `<span class="shift-quota-badge shift-quota-deficit">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
+
+      const ratioText = (maxStaff && maxStaff > 0)
+        ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
+        : `<strong>${assigned.length}</strong> nhân viên`;
 
       const cleanName = getCleanShiftName(s);
       const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
@@ -5622,8 +5684,8 @@ function renderWeekSchedule(container, assignments, range) {
           </div>
 
           <div class="shift-card-quota">
-            <span><strong>${assigned.length}/6</strong> nhân viên</span>
-            <span style="font-size: 10.5px; color: #64748b;">Tối thiểu: ${minQuota}</span>
+            <span>${ratioText}</span>
+            <span style="font-size: 10.5px; color: #64748b;">Tối thiểu: ${effectiveMin}</span>
           </div>
 
           <div style="margin-top: -2px;">
@@ -5665,7 +5727,7 @@ function renderWeekSchedule(container, assignments, range) {
   container.innerHTML = html;
 }
 
-function renderDaySchedule(container, assignments, range) {
+function renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope = 1) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
   const targetDate = range.days[0];
@@ -5693,11 +5755,23 @@ function renderDaySchedule(container, assignments, range) {
       return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
     });
 
-    const minQuota = 2;
-    const isSufficient = assigned.length >= minQuota;
+    const minStaff = Number(s.min_staff ?? s.minStaff ?? 1);
+    const rawMax = (s.max_staff !== null && s.max_staff !== undefined) ? s.max_staff : s.maxStaff;
+    const maxStaff = (rawMax !== null && rawMax !== undefined && rawMax !== '' && Number(rawMax) > 0)
+      ? Number(rawMax)
+      : null;
+
+    // Tính ngưỡng tối thiểu thông minh theo quy mô thực tế của phòng ban
+    const effectiveMin = Math.max(1, Math.min(minStaff, totalActiveEmployeesInScope));
+
+    const isSufficient = (assigned.length >= effectiveMin && assigned.length > 0);
     const quotaBadge = isSufficient
-      ? `<span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Đã đủ mức tối thiểu</span>`
-      : `<span class="shift-quota-badge shift-quota-deficit" style="font-size: 11px;">Còn thiếu ${minQuota - assigned.length} người</span>`;
+      ? `<span class="shift-quota-badge shift-quota-sufficient" style="font-size: 11px;">✓ Đã đủ nhân sự</span>`
+      : `<span class="shift-quota-badge shift-quota-deficit" style="font-size: 11px;">Còn thiếu ${effectiveMin - assigned.length} người</span>`;
+
+    const ratioText = (maxStaff && maxStaff > 0)
+      ? `<strong>${assigned.length}/${maxStaff}</strong> nhân viên`
+      : `<strong>${assigned.length}</strong> nhân viên`;
 
     const cleanName = getCleanShiftName(s);
     const timeStr = `${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}`;
@@ -5718,8 +5792,8 @@ function renderDaySchedule(container, assignments, range) {
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 6px;">
-          <span>Định biên phân bổ: <strong>${assigned.length}/6</strong> nhân viên</span>
-          <span>Yêu cầu tối thiểu: <strong>${minQuota}</strong></span>
+          <span>Định biên phân bổ: ${ratioText}</span>
+          <span>Yêu cầu tối thiểu: <strong>${effectiveMin}</strong></span>
         </div>
 
         <div>
@@ -6093,27 +6167,14 @@ async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
 
   let employeeOptions = '';
   try {
-    const empRes = await apiCall('/api/organization/employees');
-    let employees = empRes?.data || [];
-
-    // RBAC: Quản lý chỉ được phân ca cho nhân sự thuộc quyền phụ trách
-    if (isManager) {
-      const userDeptId = state.user?.departmentId || state.user?.department_id;
-      const userEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
-      employees = employees.filter(e => {
-        const dId = e.departmentId || e.department_id;
-        const mId = e.managerId || e.manager_id;
-        return (userDeptId && dId === userDeptId) || (userEmpId && mId === userEmpId);
-      });
-    }
-
+    const employees = await getEmployeesInScope();
     if (!employees.length) {
       showToast('Không tìm thấy nhân viên nào thuộc phạm vi quản lý', 'warning');
       return;
     }
 
     employeeOptions = employees.map(e => `
-      <option value="${e.id}">${e.code || e.id} - ${e.full_name} (${e.department_name || 'Phòng ban'})</option>
+      <option value="${e.id}">${e.code || e.id} - ${e.full_name || e.fullName || 'Nhân viên'} (${e.department_name || e.departmentName || 'Phòng ban'})</option>
     `).join('');
   } catch {
     employeeOptions = '<option value="e0000001-0000-0000-0000-000000000004">NV-001 - Vũ Đức Hiếu</option>';
@@ -6170,11 +6231,30 @@ async function openAssignShiftModal(preShiftId = null, preWorkDate = null) {
 
 async function handleAssignShiftSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
-  const empId = document.getElementById('assignModalEmpId').value;
-  const shiftId = document.getElementById('assignModalShiftId').value;
-  const workDate = document.getElementById('assignModalWorkDate').value;
-  const note = document.getElementById('assignModalNote').value.trim();
+  const empId = document.getElementById('assignModalEmpId')?.value;
+  const shiftId = document.getElementById('assignModalShiftId')?.value;
+  const workDate = document.getElementById('assignModalWorkDate')?.value;
+  const note = document.getElementById('assignModalNote')?.value.trim() || '';
   const btn = document.getElementById('btnSubmitAssignShift');
+
+  // Kiểm tra cảnh báo định biên tối đa (maxStaff)
+  const targetShift = cachedShiftsList.find(s => s.id === shiftId);
+  const maxStaff = targetShift?.max_staff ?? targetShift?.maxStaff ?? null;
+  if (maxStaff && Number(maxStaff) > 0) {
+    const curDateStr = new Date(workDate).toISOString().slice(0, 10);
+    const assignedToShift = (cachedAssignmentsList || []).filter(a => {
+      const aDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      return (a.shift_id === shiftId || a.shiftId === shiftId) && aDate === curDateStr && a.status === 'SCHEDULED';
+    });
+
+    if (assignedToShift.length >= Number(maxStaff)) {
+      const shiftName = getCleanShiftName(targetShift) || 'ca này';
+      const proceed = confirm(`⚠️ Cảnh báo định biên: ${shiftName} vào ngày ${curDateStr} hiện đã có ${assignedToShift.length}/${maxStaff} nhân sự (đã đạt hoặc vượt định biên tối đa).\n\nBạn có muốn tiếp tục phân bổ thêm nhân sự vào ca không?`);
+      if (!proceed) {
+        return;
+      }
+    }
+  }
 
   if (btn) {
     btn.disabled = true;
@@ -6258,7 +6338,7 @@ function openCreateShiftModal(shift = null) {
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
         <div>
           <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Nghỉ giữa ca (phút)</label>
           <input type="number" id="shiftDefBreak" class="topbar-search-input" value="${shift?.break_minutes ?? 60}" min="0">
@@ -6270,6 +6350,19 @@ function openCreateShiftModal(shift = null) {
         <div>
           <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Giờ công chuẩn</label>
           <input type="number" id="shiftDefHours" class="topbar-search-input" value="${shift?.working_hours ? Number(shift.working_hours) : 8.0}" step="0.5" min="1">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Số nhân viên tối thiểu (minStaff)</label>
+          <input type="number" id="shiftDefMinStaff" class="topbar-search-input" value="${shift?.min_staff ?? shift?.minStaff ?? 1}" min="1" placeholder="Mặc định: 1">
+          <small style="color: #64748b; font-size: 11px;">Mức nhân sự tối thiểu để đảm bảo ca vận hành</small>
+        </div>
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px;">Số nhân viên tối đa định biên (maxStaff)</label>
+          <input type="number" id="shiftDefMaxStaff" class="topbar-search-input" value="${(shift?.max_staff ?? shift?.maxStaff) ? (shift?.max_staff ?? shift?.maxStaff) : ''}" min="0" placeholder="Để trống = Không giới hạn">
+          <small style="color: #64748b; font-size: 11px;">Để trống nếu không giới hạn số lượng</small>
         </div>
       </div>
 
@@ -6291,6 +6384,10 @@ async function handleShiftDefSubmit(e, shiftId) {
   const breakMinutes = Number(document.getElementById('shiftDefBreak')?.value || 0);
   const graceLateMinutes = Number(document.getElementById('shiftDefGrace')?.value || 0);
   const workingHours = Number(document.getElementById('shiftDefHours')?.value || 8.0);
+  const minStaffRaw = document.getElementById('shiftDefMinStaff')?.value;
+  const maxStaffRaw = document.getElementById('shiftDefMaxStaff')?.value;
+  const minStaff = (minStaffRaw !== undefined && minStaffRaw !== '' && !isNaN(minStaffRaw)) ? Math.max(1, parseInt(minStaffRaw, 10)) : 1;
+  const maxStaff = (maxStaffRaw !== undefined && maxStaffRaw !== '' && !isNaN(maxStaffRaw) && parseInt(maxStaffRaw, 10) > 0) ? parseInt(maxStaffRaw, 10) : null;
   const btn = document.getElementById('btnSubmitShiftDef');
 
   if (btn) {
@@ -6309,7 +6406,9 @@ async function handleShiftDefSubmit(e, shiftId) {
           endTime,
           breakMinutes,
           graceLateMinutes,
-          workingHours
+          workingHours,
+          minStaff,
+          maxStaff
         })
       });
     } else {
@@ -6322,7 +6421,9 @@ async function handleShiftDefSubmit(e, shiftId) {
           endTime,
           breakMinutes,
           graceLateMinutes,
-          workingHours
+          workingHours,
+          minStaff,
+          maxStaff
         })
       });
     }

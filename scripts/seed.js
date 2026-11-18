@@ -91,6 +91,13 @@ async function seed() {
   // Chuẩn hoá và dọn dẹp danh mục ca làm việc (htqlns_shift)
   try {
     const shiftPool = db.getPool('htqlns_shift');
+    try {
+      await shiftPool.query('ALTER TABLE shifts ADD COLUMN min_staff INT NOT NULL DEFAULT 1 AFTER working_hours');
+    } catch {}
+    try {
+      await shiftPool.query('ALTER TABLE shifts ADD COLUMN max_staff INT NULL DEFAULT NULL AFTER min_staff');
+    } catch {}
+
     await shiftPool.query(`
       DELETE FROM shift_assignments 
       WHERE shift_id IN (SELECT id FROM shifts WHERE code LIKE 'CA_TEST_%' OR name LIKE 'Ca Kiểm Thử%')
@@ -100,23 +107,24 @@ async function seed() {
       WHERE code LIKE 'CA_TEST_%' OR name LIKE 'Ca Kiểm Thử%'
     `);
 
-    // Đảm bảo 4 ca làm việc chuẩn
+    // Đảm bảo 4 ca làm việc chuẩn với định biên minStaff / maxStaff
     const standardShifts = [
-      ['s0000001-0000-0000-0000-000000000001', 'CA-HC', 'Ca Hành Chính (08:00 - 17:30)', '08:00:00', '17:30:00', 90, 15, 0, 8.00, 'ACTIVE'],
-      ['s0000001-0000-0000-0000-000000000002', 'CA-SANG', 'Ca Sáng (06:00 - 14:00)', '06:00:00', '14:00:00', 30, 10, 0, 7.50, 'ACTIVE'],
-      ['s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 'ACTIVE'],
-      ['s0000001-0000-0000-0000-000000000004', 'CA-TOI', 'Ca Tối (22:00 - 06:00)', '22:00:00', '06:00:00', 30, 10, 0, 7.50, 'ACTIVE']
+      ['s0000001-0000-0000-0000-000000000001', 'CA-HC', 'Ca Hành Chính (08:00 - 17:30)', '08:00:00', '17:30:00', 90, 15, 0, 8.00, 1, null, 'ACTIVE'],
+      ['s0000001-0000-0000-0000-000000000002', 'CA-SANG', 'Ca Sáng (06:00 - 14:00)', '06:00:00', '14:00:00', 30, 10, 0, 7.50, 2, 6, 'ACTIVE'],
+      ['s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 2, 6, 'ACTIVE'],
+      ['s0000001-0000-0000-0000-000000000004', 'CA-TOI', 'Ca Tối (22:00 - 06:00)', '22:00:00', '06:00:00', 30, 10, 0, 7.50, 1, 4, 'ACTIVE']
     ];
 
-    for (const [id, code, name, startTime, endTime, breakMin, graceLate, graceEarly, workingHours, status] of standardShifts) {
+    for (const [id, code, name, startTime, endTime, breakMin, graceLate, graceEarly, workingHours, minStaff, maxStaff, status] of standardShifts) {
       await shiftPool.query(`
-        INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours, min_staff, max_staff, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE name = VALUES(name), start_time = VALUES(start_time), end_time = VALUES(end_time),
                                 break_minutes = VALUES(break_minutes), grace_late_minutes = VALUES(grace_late_minutes),
                                 grace_early_minutes = VALUES(grace_early_minutes), working_hours = VALUES(working_hours),
+                                min_staff = VALUES(min_staff), max_staff = VALUES(max_staff),
                                 status = VALUES(status)
-      `, [id, code, name, startTime, endTime, breakMin, graceLate, graceEarly, workingHours, status]);
+      `, [id, code, name, startTime, endTime, breakMin, graceLate, graceEarly, workingHours, minStaff, maxStaff, status]);
     }
     console.log('[SEED] Chuẩn hoá và dọn dẹp ca làm việc (shifts) hoàn tất thành công!');
   } catch (err) {

@@ -134,13 +134,17 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
         endTime: '16:30:00',
         breakMinutes: 60,
         graceLateMinutes: 15,
-        workingHours: 8.0
+        workingHours: 8.0,
+        minStaff: 2,
+        maxStaff: 5
       })
     });
     assert.strictEqual(res.status, 201);
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.code, testShiftCode);
+    assert.strictEqual(data.data.minStaff, 2);
+    assert.strictEqual(data.data.maxStaff, 5);
     createdShiftId = data.data.id;
   });
 
@@ -154,6 +158,8 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.id, createdShiftId);
+    assert.strictEqual(data.data.minStaff, 2);
+    assert.strictEqual(data.data.maxStaff, 5);
   });
 
   // 6. Admin cập nhật ca làm việc (HTTP 200)
@@ -167,7 +173,9 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
       },
       body: JSON.stringify({
         name: 'Ca Kiểm Thử Tự Động (Đã Cập Nhật)',
-        graceLateMinutes: 20
+        graceLateMinutes: 20,
+        minStaff: 3,
+        maxStaff: 8
       })
     });
     assert.strictEqual(res.status, 200);
@@ -175,6 +183,8 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.name, 'Ca Kiểm Thử Tự Động (Đã Cập Nhật)');
     assert.strictEqual(data.data.grace_late_minutes, 20);
+    assert.strictEqual(data.data.minStaff, 3);
+    assert.strictEqual(data.data.maxStaff, 8);
   });
 
   // 7. Manager phân ca cho nhân viên (HTTP 201)

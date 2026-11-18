@@ -256,29 +256,38 @@ class ShiftService {
   /**
    * 5. Danh mục Ca làm việc (Shifts)
    */
-  async getAllShifts(status = null) {
-    const rows = await shiftRepository.getAllShifts(status);
-    return rows.map(s => ({
+  _formatShift(s) {
+    if (!s) return null;
+    return {
       id: s.id,
       code: s.code,
       name: s.name,
-      startTime: formatTime24(s.start_time),
-      start_time: s.start_time,
-      endTime: formatTime24(s.end_time),
-      end_time: s.end_time,
-      breakMinutes: s.break_minutes,
-      break_minutes: s.break_minutes,
-      graceLateMinutes: s.grace_late_minutes,
-      grace_late_minutes: s.grace_late_minutes,
-      graceEarlyMinutes: s.grace_early_minutes,
-      grace_early_minutes: s.grace_early_minutes,
-      workingHours: Number(s.working_hours),
-      working_hours: s.working_hours,
+      startTime: formatTime24(s.start_time || s.startTime),
+      start_time: s.start_time || s.startTime,
+      endTime: formatTime24(s.end_time || s.endTime),
+      end_time: s.end_time || s.endTime,
+      breakMinutes: s.break_minutes ?? s.breakMinutes,
+      break_minutes: s.break_minutes ?? s.breakMinutes,
+      graceLateMinutes: s.grace_late_minutes ?? s.graceLateMinutes,
+      grace_late_minutes: s.grace_late_minutes ?? s.graceLateMinutes,
+      graceEarlyMinutes: s.grace_early_minutes ?? s.graceEarlyMinutes,
+      grace_early_minutes: s.grace_early_minutes ?? s.graceEarlyMinutes,
+      workingHours: Number(s.working_hours ?? s.workingHours),
+      working_hours: s.working_hours ?? s.workingHours,
       otMultiplierWeekday: Number(s.ot_multiplier_weekday || 1.5),
       otMultiplierWeekend: Number(s.ot_multiplier_weekend || 2.0),
       otMultiplierHoliday: Number(s.ot_multiplier_holiday || 3.0),
+      minStaff: Number(s.min_staff ?? s.minStaff ?? 1),
+      min_staff: Number(s.min_staff ?? s.minStaff ?? 1),
+      maxStaff: (s.max_staff !== null && s.max_staff !== undefined) ? Number(s.max_staff) : ((s.maxStaff !== null && s.maxStaff !== undefined) ? Number(s.maxStaff) : null),
+      max_staff: (s.max_staff !== null && s.max_staff !== undefined) ? Number(s.max_staff) : ((s.maxStaff !== null && s.maxStaff !== undefined) ? Number(s.maxStaff) : null),
       status: s.status
-    }));
+    };
+  }
+
+  async getAllShifts(status = null) {
+    const rows = await shiftRepository.getAllShifts(status);
+    return rows.map(s => this._formatShift(s));
   }
 
   async getShiftById(id) {
@@ -288,27 +297,7 @@ class ShiftService {
       err.statusCode = 404;
       throw err;
     }
-    return {
-      id: s.id,
-      code: s.code,
-      name: s.name,
-      startTime: formatTime24(s.start_time),
-      start_time: s.start_time,
-      endTime: formatTime24(s.end_time),
-      end_time: s.end_time,
-      breakMinutes: s.break_minutes,
-      break_minutes: s.break_minutes,
-      graceLateMinutes: s.grace_late_minutes,
-      grace_late_minutes: s.grace_late_minutes,
-      graceEarlyMinutes: s.grace_early_minutes,
-      grace_early_minutes: s.grace_early_minutes,
-      workingHours: Number(s.working_hours),
-      working_hours: s.working_hours,
-      otMultiplierWeekday: Number(s.ot_multiplier_weekday || 1.5),
-      otMultiplierWeekend: Number(s.ot_multiplier_weekend || 2.0),
-      otMultiplierHoliday: Number(s.ot_multiplier_holiday || 3.0),
-      status: s.status
-    };
+    return this._formatShift(s);
   }
 
   async createShift(data) {
@@ -317,7 +306,8 @@ class ShiftService {
       err.statusCode = 400;
       throw err;
     }
-    return await shiftRepository.createShift(data);
+    const created = await shiftRepository.createShift(data);
+    return this._formatShift(created);
   }
 
   async updateShift(id, data) {
@@ -327,7 +317,7 @@ class ShiftService {
       err.statusCode = 404;
       throw err;
     }
-    return updated;
+    return this._formatShift(updated);
   }
 
   async deleteShift(id) {
