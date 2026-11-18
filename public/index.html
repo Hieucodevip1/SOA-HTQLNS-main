@@ -3211,23 +3211,24 @@ input:checked + .slider:before {
           <div class="figma-white-card">
             <div class="card-title-flex" style="flex-wrap: wrap; gap: 12px;">
               <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="date" id="attFilterDate" value="2026-10-30" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
+                <input type="date" id="attFilterDate" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
                 <select id="attFilterDept" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
                   <option value="ALL">Tất cả phòng ban</option>
-                  <option value="Phòng Kỹ Thuật">Phòng Kỹ Thuật</option>
-                  <option value="Phòng Nhân sự">Phòng Nhân sự</option>
-                  <option value="Phòng Tài Chính - Kế Toán">Phòng Tài Chính</option>
-                  <option value="Phòng Kinh Doanh">Phòng Kinh Doanh</option>
+                  <option value="PB-TECH">Phòng Công nghệ & Phần mềm</option>
+                  <option value="PB-HR">Phòng Hành chính Nhân sự</option>
+                  <option value="PB-SALES">Phòng Kinh doanh & Marketing</option>
+                  <option value="PB-BGD">Ban Giám Đốc</option>
                 </select>
                 <select id="attFilterStatus" class="figma-pill-input" style="width: auto; padding: 6px 14px;" onchange="loadAttendanceHistoryData()">
                   <option value="ALL">Tất cả trạng thái</option>
                   <option value="ON_TIME">Đúng giờ</option>
                   <option value="LATE">Đi muộn</option>
                   <option value="LEAVE">Nghỉ phép</option>
+                  <option value="EARLY_LEAVE">Về sớm</option>
                 </select>
               </div>
               <div>
-                <button class="btn-primary-blue" onclick="showToast('Đang trích xuất file Excel báo cáo chấm công...', 'success')">📥 Xuất Excel</button>
+                <button class="btn-primary-blue" onclick="showToast('Đang trích xuất file Excel báo cáo chấm công...', 'success')">Xuất Excel</button>
               </div>
             </div>
 
@@ -3388,9 +3389,9 @@ input:checked + .slider:before {
 
             <!-- Bộ lọc kỳ thống kê -->
             <div style="display: flex; gap: 8px;">
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('2026-10')" style="background: var(--mint-green); color: var(--mint-green-text); font-weight: 700; cursor: pointer;">📅 Tháng 10/2026 (Hiện tại)</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('2026-09')" style="cursor: pointer;">📅 Tháng 09/2026</button>
-              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('2026-Q3')" style="cursor: pointer;">📅 Quý III/2026</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn1" onclick="changeStatPeriod('2026-11')" style="cursor: pointer;">Tháng 11/2026 (Hiện tại)</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn2" onclick="changeStatPeriod('2026-10')" style="cursor: pointer;">Tháng 10/2026</button>
+              <button type="button" class="figma-filter-pill" id="statPeriodBtn3" onclick="changeStatPeriod('2026-Q3')" style="cursor: pointer;">Quý III/2026</button>
             </div>
           </div>
 
@@ -3398,7 +3399,7 @@ input:checked + .slider:before {
           <div class="figma-white-card" id="statEmployeePersonalCard" style="display: none; margin-bottom: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0;">
             <div class="card-title-flex">
               <div>
-                <div class="card-title-text" style="color: #065f46;">📊 Kết quả Chuyên cần Cá nhân Tháng 10/2026 của bạn</div>
+                <div class="card-title-text" style="color: #065f46;" id="statPersonalCardTitle">Kết quả Chuyên cần Cá nhân của bạn</div>
                 <div style="font-size: 12px; color: #047857;">Tóm tắt ngày công, ngày phép và giờ làm việc ghi nhận trên hệ thống</div>
               </div>
               <span class="badge-status badge-approved" style="font-size: 13px; font-weight: 700;">Hạng A+ (Xuất sắc)</span>
@@ -3406,22 +3407,22 @@ input:checked + .slider:before {
             <div class="metrics-row-4" style="margin-top: 14px;">
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Số ngày công thực tế</div>
-                <div style="font-size: 22px; font-weight: 700; color: #059669;">22 / 22 ngày</div>
-                <div style="font-size: 11px; color: #059669;">Đạt 100% công chuẩn</div>
+                <div style="font-size: 22px; font-weight: 700; color: #059669;" id="statPersonalWorkDays">--</div>
+                <div style="font-size: 11px; color: #059669;" id="statPersonalWorkDaysSub">Công chuẩn theo tháng</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Số lần đi muộn</div>
-                <div style="font-size: 22px; font-weight: 700; color: #059669;">0 lần</div>
+                <div style="font-size: 22px; font-weight: 700; color: #059669;" id="statPersonalLateCount">--</div>
                 <div style="font-size: 11px; color: #059669;">Chấp hành tốt giờ giấc</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Quỹ phép năm còn lại</div>
-                <div style="font-size: 22px; font-weight: 700; color: #2563eb;">10 / 12 ngày</div>
-                <div style="font-size: 11px; color: #64748b;">Đã dùng 2 ngày</div>
+                <div style="font-size: 22px; font-weight: 700; color: #2563eb;" id="statPersonalLeaveBalance">--</div>
+                <div style="font-size: 11px; color: #64748b;" id="statPersonalLeaveUsed">Đang tính toán</div>
               </div>
               <div style="background: #ffffff; padding: 14px; border-radius: 12px; border: 1px solid #d1fae5;">
                 <div style="font-size: 12px; color: #64748b;">Giờ tăng ca (OT) tích lũy</div>
-                <div style="font-size: 22px; font-weight: 700; color: #d97706;">4.5 giờ</div>
+                <div style="font-size: 22px; font-weight: 700; color: #d97706;" id="statPersonalOtHours">--</div>
                 <div style="font-size: 11px; color: #64748b;">Trong hạn mức quy định</div>
               </div>
             </div>
@@ -3430,24 +3431,24 @@ input:checked + .slider:before {
           <!-- 4 THẺ CHỈ SỐ KPI TOÀN CƠ QUAN -->
           <div class="metrics-row-4" style="margin-bottom: 20px;">
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ đi làm đúng giờ</span><span>🎯</span></div>
-              <div class="metric-value-huge metric-value-green" id="statMetricOnTime">88.5%</div>
-              <div class="metric-footer-note" id="statMetricOnTimeSub">Tăng 2.1% so với tháng trước</div>
+              <div class="metric-header"><span>Tỷ lệ đi làm đúng giờ</span></div>
+              <div class="metric-value-huge metric-value-green" id="statMetricOnTime">--</div>
+              <div class="metric-footer-note" id="statMetricOnTimeSub">Tỷ lệ chấp hành giờ làm</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ đi muộn</span><span>⚠️</span></div>
-              <div class="metric-value-huge metric-value-orange" id="statMetricLate">6.8%</div>
-              <div class="metric-footer-note" id="statMetricLateSub">Bình quân trễ 12.5 phút/lần</div>
+              <div class="metric-header"><span>Tỷ lệ đi muộn</span></div>
+              <div class="metric-value-huge metric-value-orange" id="statMetricLate">--</div>
+              <div class="metric-footer-note" id="statMetricLateSub">Số lượt vi phạm đi muộn</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tỷ lệ nghỉ phép</span><span>🏖️</span></div>
-              <div class="metric-value-huge metric-value-blue" id="statMetricLeave">4.7%</div>
-              <div class="metric-footer-note" id="statMetricLeaveSub">100% đơn được duyệt đúng quy định</div>
+              <div class="metric-header"><span>Tỷ lệ nghỉ phép</span></div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricLeave">--</div>
+              <div class="metric-footer-note" id="statMetricLeaveSub">Số ngày nghỉ được phê duyệt</div>
             </div>
             <div class="figma-metric-card">
-              <div class="metric-header"><span>Tổng giờ làm việc</span><span>⏱️</span></div>
-              <div class="metric-value-huge metric-value-blue" id="statMetricHours">6,580 h</div>
-              <div class="metric-footer-note" id="statMetricHoursSub">95 nhân sự toàn công ty</div>
+              <div class="metric-header"><span>Tổng giờ làm việc</span></div>
+              <div class="metric-value-huge metric-value-blue" id="statMetricHours">--</div>
+              <div class="metric-footer-note" id="statMetricHoursSub">Tổng nhân sự trong phạm vi</div>
             </div>
           </div>
 
@@ -3456,11 +3457,11 @@ input:checked + .slider:before {
             <div class="card-title-flex">
               <div>
                 <div class="card-title-text">Bảng tổng hợp chuyên cần theo từng phòng ban</div>
-                <div style="font-size: 12px; color: #64748b;">Số liệu tổng kết công chuẩn, công thực tế và ngày nghỉ của 4 phòng ban</div>
+                <div style="font-size: 12px; color: #64748b;" id="statDeptTableDesc">Số liệu tổng kết công chuẩn, công thực tế và ngày nghỉ của các phòng ban</div>
               </div>
               <div style="display: flex; gap: 8px;">
-                <button class="btn-primary-blue" onclick="showToast('Đang xuất dữ liệu Excel (.xlsx)...', 'success')">📊 Xuất Excel</button>
-                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="showToast('Đang tải file PDF báo cáo...', 'success')">📄 Tải PDF</button>
+                <button class="btn-primary-blue" onclick="showToast('Đang xuất dữ liệu Excel (.xlsx)...', 'success')">Xuất Excel</button>
+                <button class="btn-figma-dark" style="padding: 8px 16px; font-size: 13px;" onclick="showToast('Đang tải file PDF báo cáo...', 'success')">Tải PDF</button>
               </div>
             </div>
             <table class="figma-table">
@@ -3476,52 +3477,17 @@ input:checked + .slider:before {
                 </tr>
               </thead>
               <tbody id="statDeptTableBody">
-                <tr>
-                  <td><strong>Phòng Kỹ Thuật</strong></td>
-                  <td>40</td>
-                  <td>880 công</td>
-                  <td>862 công</td>
-                  <td><span style="color: #d97706; font-weight: 600;">8 lượt</span></td>
-                  <td>14 ngày</td>
-                  <td><span class="badge-status badge-approved">97.9%</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Phòng Kinh Doanh</strong></td>
-                  <td>28</td>
-                  <td>616 công</td>
-                  <td>598 công</td>
-                  <td><span style="color: #d97706; font-weight: 600;">5 lượt</span></td>
-                  <td>9 ngày</td>
-                  <td><span class="badge-status badge-approved">97.1%</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Phòng Tài Chính - Kế Toán</strong></td>
-                  <td>15</td>
-                  <td>330 công</td>
-                  <td>325 công</td>
-                  <td><span style="color: #d97706; font-weight: 600;">2 lượt</span></td>
-                  <td>4 ngày</td>
-                  <td><span class="badge-status badge-approved">98.5%</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Phòng Nhân sự</strong></td>
-                  <td>12</td>
-                  <td>264 công</td>
-                  <td>261 công</td>
-                  <td><span style="color: #10b981; font-weight: 600;">0 lượt</span></td>
-                  <td>3 ngày</td>
-                  <td><span class="badge-status badge-approved">98.9%</span></td>
-                </tr>
+                <tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">Đang tải dữ liệu thống kê...</td></tr>
               </tbody>
               <tfoot style="background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1;">
                 <tr>
                   <td>TỔNG TOÀN CÔNG TY</td>
-                  <td id="statFootEmployees">95</td>
-                  <td id="statFootStandardDays">2,090 công</td>
-                  <td id="statFootActualDays">2,046 công</td>
-                  <td id="statFootLateCount" style="color: #d97706;">15 lượt</td>
-                  <td id="statFootLeaveDays">30 ngày</td>
-                  <td><span class="badge-status badge-approved" id="statFootRate">97.9%</span></td>
+                  <td id="statFootEmployees">--</td>
+                  <td id="statFootStandardDays">--</td>
+                  <td id="statFootActualDays">--</td>
+                  <td id="statFootLateCount" style="color: #d97706;">--</td>
+                  <td id="statFootLeaveDays">--</td>
+                  <td><span class="badge-status badge-approved" id="statFootRate">--</span></td>
                 </tr>
               </tfoot>
             </table>

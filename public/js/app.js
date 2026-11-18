@@ -2629,7 +2629,8 @@ async function loadAttendanceHistoryData() {
   const tbody = document.getElementById('attendanceHistoryTableBody');
   if (!tbody) return;
 
-  const filterDate = document.getElementById('attFilterDate')?.value || '';
+  const dateInput = document.getElementById('attFilterDate');
+  const filterDate = dateInput ? dateInput.value : '';
   const filterDept = document.getElementById('attFilterDept')?.value || 'ALL';
   const filterStatus = document.getElementById('attFilterStatus')?.value || 'ALL';
 
@@ -2644,21 +2645,38 @@ async function loadAttendanceHistoryData() {
     const qs = queryParams.length ? `?${queryParams.join('&')}` : '';
 
     const res = await apiCall(`/api/attendance${qs}`);
-    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+    if (res && res.success && Array.isArray(res.data)) {
       records = res.data.map(r => {
         const empCode = r.emp_code || (r.emp_id ? (r.emp_id.length > 10 ? 'NV-' + r.emp_id.slice(-4) : r.emp_id) : 'NV-001');
+        const rawDate = r.work_date ? String(r.work_date).slice(0, 10) : '';
+        const formattedDate = rawDate ? rawDate.split('-').reverse().join('/') : '-';
+
+        let inTime = '-';
+        if (r.check_in_time) {
+          inTime = r.check_in_time.includes('T')
+            ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : String(r.check_in_time).slice(11, 16);
+        }
+
+        let outTime = '-';
+        if (r.check_out_time) {
+          outTime = r.check_out_time.includes('T')
+            ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : String(r.check_out_time).slice(11, 16);
+        }
+
         return {
           id: r.id,
           emp_id: r.emp_id,
           code: empCode,
           name: r.emp_name || `Nhân viên (${empCode})`,
           dept: r.dept_name || '-',
-          dept_code: r.dept_code || 'TECH',
-          work_date: r.work_date ? new Date(r.work_date).toISOString().split('T')[0] : '2026-10-30',
-          date: r.work_date ? new Date(r.work_date).toLocaleDateString('vi-VN') : '30/10/2026',
-          in: r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-          out: r.check_out_time ? new Date(r.check_out_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
-          hours: r.actual_working_hours ? `${r.actual_working_hours} h` : (r.check_in_time && r.check_out_time ? '8.0 h' : '0.0 h'),
+          dept_code: r.dept_code || '',
+          work_date: rawDate,
+          date: formattedDate,
+          in: inTime,
+          out: outTime,
+          hours: r.actual_working_hours ? `${r.actual_working_hours} h` : (inTime !== '-' && outTime !== '-' ? '8.0 h' : '0.0 h'),
           status: r.status,
           late_minutes: r.late_minutes || 0,
           adj_id: r.adjustment_id || null,
@@ -2668,23 +2686,12 @@ async function loadAttendanceHistoryData() {
       });
     }
   } catch (err) {
-    console.warn('Lỗi tải dữ liệu attendance toàn công ty, sử dụng fallback demo:', err.message);
+    console.warn('Lỗi tải dữ liệu attendance:', err.message);
   }
 
-  if (!records.length) {
-    records = [
-      { id: 'att-1', code: 'NV-001', name: 'Vũ Đức Hiếu', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:55', out: '16:05', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-2', code: 'NV-002', name: 'Huỳnh Gia Kiệt', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:12', out: '16:00', hours: '7.8 h', status: 'LATE', late_minutes: 12, adj_id: 'adj-02', adj_reason: 'Kẹt xe ngập đường tại giao lộ Nguyễn Tri Phương', adj_status: 'PENDING' },
-      { id: 'att-3', code: 'NV-003', name: 'Nguyễn Gia Hảo', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:07', out: '16:10', hours: '8.0 h', status: 'LATE', late_minutes: 7, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-4', code: 'NV-004', name: 'Thầy Lâm (Quản lý)', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '07:45', out: '17:00', hours: '9.2 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-5', code: 'NV-005', name: 'Lê Ngọc Mai', dept: 'Phòng Nhân sự', dept_code: 'HR', work_date: '2026-10-30', date: '30/10/2026', in: '07:50', out: '16:00', hours: '8.1 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-6', code: 'NV-006', name: 'Phạm Minh Tuân', dept: 'Phòng Kinh Doanh', dept_code: 'BIZ', work_date: '2026-10-30', date: '30/10/2026', in: '07:58', out: '16:30', hours: '8.5 h', status: 'ON_TIME', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-7', code: 'NV-007', name: 'Đỗ Thu Hà', dept: 'Phòng Tài Chính - Kế Toán', dept_code: 'FIN', work_date: '2026-10-30', date: '30/10/2026', in: '-', out: '-', hours: '0.0 h', status: 'LEAVE', late_minutes: 0, adj_id: null, adj_reason: null, adj_status: null },
-      { id: 'att-8', code: 'NV-008', name: 'Trần Hoài An', dept: 'Phòng Kỹ Thuật', dept_code: 'TECH', work_date: '2026-10-30', date: '30/10/2026', in: '08:21', out: '16:00', hours: '7.6 h', status: 'LATE', late_minutes: 21, adj_id: 'adj-08', adj_reason: 'Hỏng xe máy giữa cầu vượt', adj_status: 'PENDING' }
-    ];
-  }
+  // Cô lập trạng thái dữ liệu công ty / đội nhóm, không ghi đè state.myAttendance cá nhân
+  state.attendanceHistory = records;
 
-  // Áp dụng bộ lọc chính xác
   let filtered = records;
   if (filterDept && filterDept !== 'ALL') {
     filtered = filtered.filter(r => (r.dept && r.dept.includes(filterDept)) || (r.dept_code && r.dept_code === filterDept));
@@ -2697,14 +2704,16 @@ async function loadAttendanceHistoryData() {
   }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 20px;">Không có bản ghi chấm công nào phù hợp bộ lọc</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 24px;">Không có bản ghi chấm công nào trong phạm vi quản lý hoặc bộ lọc đã chọn</td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtered.map(r => {
     let badge = '<span class="badge-status badge-approved">Đúng giờ</span>';
-    if (r.status === 'LATE') badge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 15}p)</span>`;
-    if (r.status === 'LEAVE') badge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+    if (r.status === 'LATE') badge = `<span class="badge-status" style="background:#fef3c7; color:#d97706;">Đi muộn (${r.late_minutes || 0}p)</span>`;
+    else if (r.status === 'EARLY_LEAVE') badge = '<span class="badge-status" style="background:#fff7ed; color:#c2410c;">Về sớm</span>';
+    else if (r.status === 'LEAVE') badge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb;">Nghỉ phép</span>';
+    else if (r.status === 'ABSENT') badge = '<span class="badge-status" style="background:#fee2e2; color:#ef4444;">Vắng mặt</span>';
 
     const cleanName = (r.name || '').replace(/'/g, "\\'");
     const cleanDept = (r.dept || '').replace(/'/g, "\\'");
@@ -2712,9 +2721,9 @@ async function loadAttendanceHistoryData() {
 
     let actionBtn = `<a class="link-action-blue" style="cursor: pointer;" onclick="openOnTimeDetailModal('${cleanName}', '${r.code}', '${r.in}', '${r.out}', '${cleanDept}')">Chi tiết</a>`;
     if (r.status === 'LATE') {
-      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #d97706; font-weight: 600;" onclick="openLateDetailModal('${cleanName}', '${r.code}', '${r.late_minutes || 15} phút', '${r.in}', '${cleanDept}', '${cleanReason}', '${r.adj_id || ''}', '${r.adj_status || ''}')">Xem xét giải trình →</a>`;
+      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #d97706; font-weight: 600;" onclick="openLateDetailModal('${cleanName}', '${r.code}', '${r.late_minutes || 15} phút', '${r.in}', '${cleanDept}', '${cleanReason}', '${r.adj_id || ''}', '${r.adj_status || ''}')">Xem giải trình</a>`;
     } else if (r.status === 'LEAVE') {
-      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #2563eb;" onclick="navigateToView('requests')">Xem đơn nghỉ ↗</a>`;
+      actionBtn = `<a class="link-action-blue" style="cursor: pointer; color: #2563eb;" onclick="navigateToView('requests')">Xem đơn nghỉ</a>`;
     }
 
     return `
@@ -3037,127 +3046,149 @@ async function handleUpdateUserRole(userId, username) {
 // ==============================================================================
 // NẠP VÀ ĐIỀU KHIỂN BÁO CÁO THỐNG KÊ (ANALYTICS & ATTENDANCE)
 // ==============================================================================
-function loadStatsData() {
-  // Đồng bộ giao diện báo cáo với chu kỳ mặc định Tháng 10/2026
-  changeStatPeriod('2026-10');
+async function loadStatsData() {
+  const isEmployee = (state.user && state.user.role === 'EMPLOYEE');
+  const personalCard = document.getElementById('statEmployeePersonalCard');
+
+  if (isEmployee) {
+    if (personalCard) personalCard.style.display = 'block';
+    // Nạp thống kê cá nhân cho nhân viên
+    try {
+      const histRes = await apiCall('/api/v1/attendances/history?month=11&year=2026');
+      if (histRes && histRes.success && histRes.meta && histRes.meta.summary) {
+        const s = histRes.meta.summary;
+        const workDaysEl = document.getElementById('statPersonalWorkDays');
+        const workDaysSubEl = document.getElementById('statPersonalWorkDaysSub');
+        const lateEl = document.getElementById('statPersonalLateCount');
+        const leaveEl = document.getElementById('statPersonalLeaveBalance');
+        const leaveUsedEl = document.getElementById('statPersonalLeaveUsed');
+        const otEl = document.getElementById('statPersonalOtHours');
+
+        if (workDaysEl) workDaysEl.innerText = `${s.attendedDays || 0} / ${s.standardDays || 22} ngày`;
+        if (workDaysSubEl) workDaysSubEl.innerText = s.attendedDays >= (s.standardDays || 22) ? 'Đạt 100% công chuẩn' : `Đạt ${Math.round(((s.attendedDays || 0) / (s.standardDays || 22)) * 100)}% công chuẩn`;
+        if (lateEl) lateEl.innerText = `${s.lateCount || 0} lần`;
+        if (leaveEl) leaveEl.innerText = `${12 - (s.leaveDays || 0)} / 12 ngày`;
+        if (leaveUsedEl) leaveUsedEl.innerText = `Đã dùng ${s.leaveDays || 0} ngày`;
+        if (otEl) otEl.innerText = `${s.otHours || 0} giờ`;
+      }
+    } catch (err) {
+      console.warn('Lỗi tải thống kê cá nhân:', err.message);
+    }
+  } else {
+    if (personalCard) personalCard.style.display = 'none';
+  }
+
+  // Đồng bộ giao diện báo cáo với chu kỳ mặc định Tháng 11/2026
+  await changeStatPeriod('2026-11');
 }
 
-function changeStatPeriod(period) {
+async function changeStatPeriod(period) {
   // Đặt lại style các nút chọn chu kỳ
   ['statPeriodBtn1', 'statPeriodBtn2', 'statPeriodBtn3'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) {
-      btn.className = 'btn-figma-dark';
+      btn.className = 'figma-filter-pill';
       btn.style.background = '#f8fafc';
       btn.style.color = '#1e293b';
       btn.style.border = '1px solid #e2e8f0';
+      btn.style.fontWeight = '500';
     }
   });
 
   let activeBtnId = 'statPeriodBtn1';
-  let periodLabel = 'Tháng 10/2026';
-  let kpiRate = '97.9%';
-  let kpiHours = '16,368 h';
-  let kpiLate = '15';
-  let kpiLeave = '30';
-  let footStandard = '2,090 công';
-  let footActual = '2,046 công';
-  let footLate = '15 lượt';
-  let footLeave = '30 ngày';
-  let footRate = '97.9%';
-
-  let deptsData = [
-    { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 864, late: 5, leave: 11, rate: '98.2%' },
-    { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 602, late: 6, leave: 8, rate: '97.7%' },
-    { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 325, late: 1, leave: 4, rate: '98.5%' },
-    { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 255, late: 3, leave: 7, rate: '96.6%' }
-  ];
-
-  if (period === '2026-09') {
+  let periodLabel = 'Tháng 11/2026';
+  if (period === '2026-10') {
     activeBtnId = 'statPeriodBtn2';
-    periodLabel = 'Tháng 09/2026';
-    kpiRate = '97.1%';
-    kpiHours = '16,020 h';
-    kpiLate = '22';
-    kpiLeave = '38';
-    footStandard = '2,090 công';
-    footActual = '2,029 công';
-    footLate = '22 lượt';
-    footLeave = '38 ngày';
-    footRate = '97.1%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 880, act: 858, late: 8, leave: 14, rate: '97.5%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 616, act: 595, late: 9, leave: 12, rate: '96.6%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 330, act: 324, late: 2, leave: 4, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 264, act: 252, late: 3, leave: 8, rate: '95.5%' }
-    ];
+    periodLabel = 'Tháng 10/2026';
   } else if (period === '2026-Q3') {
     activeBtnId = 'statPeriodBtn3';
-    periodLabel = 'Quý 3/2026';
-    kpiRate = '96.8%';
-    kpiHours = '48,150 h';
-    kpiLate = '68';
-    kpiLeave = '112';
-    footStandard = '6,270 công';
-    footActual = '6,070 công';
-    footLate = '68 lượt';
-    footLeave = '112 ngày';
-    footRate = '96.8%';
-    deptsData = [
-      { name: 'Phòng Kỹ Thuật', emp: 40, std: 2640, act: 2560, late: 25, leave: 42, rate: '97.0%' },
-      { name: 'Phòng Kinh Doanh', emp: 28, std: 1848, act: 1780, late: 28, leave: 36, rate: '96.3%' },
-      { name: 'Phòng Tài Chính - Kế Toán', emp: 15, std: 990, act: 972, late: 6, leave: 12, rate: '98.2%' },
-      { name: 'Phòng Nhân sự', emp: 12, std: 792, act: 758, late: 9, leave: 22, rate: '95.7%' }
-    ];
+    periodLabel = 'Quý III/2026';
   }
 
   const activeBtn = document.getElementById(activeBtnId);
   if (activeBtn) {
-    activeBtn.className = 'btn-primary-blue';
-    activeBtn.style.background = '#2563eb';
-    activeBtn.style.color = '#ffffff';
-    activeBtn.style.border = 'none';
+    activeBtn.style.background = 'var(--mint-green, #ecfdf5)';
+    activeBtn.style.color = 'var(--mint-green-text, #065f46)';
+    activeBtn.style.border = '1px solid #a7f3d0';
+    activeBtn.style.fontWeight = '700';
   }
 
-  // Cập nhật số liệu các thẻ KPI báo cáo
-  const rEl = document.getElementById('statMetricRateVal');
-  const hEl = document.getElementById('statMetricHoursVal');
-  const lEl = document.getElementById('statMetricLateVal');
-  const lvEl = document.getElementById('statMetricLeaveVal');
-  if (rEl) rEl.innerText = kpiRate;
-  if (hEl) hEl.innerText = kpiHours;
-  if (lEl) lEl.innerText = kpiLate;
-  if (lvEl) lvEl.innerText = kpiLeave;
-
-  // Cập nhật bảng chi tiết phòng ban
   const tbody = document.getElementById('statDeptTableBody');
   if (tbody) {
-    tbody.innerHTML = deptsData.map(d => `
-      <tr>
-        <td><strong>${d.name}</strong></td>
-        <td>${d.emp}</td>
-        <td>${d.std.toLocaleString('vi-VN')} công</td>
-        <td><strong>${d.act.toLocaleString('vi-VN')} công</strong></td>
-        <td><span class="badge-status" style="background: ${d.late > 5 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.late} lượt</span></td>
-        <td>${d.leave} ngày</td>
-        <td><span class="badge-status badge-approved">${d.rate}</span></td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">Đang tải số liệu từ Analytics Service (:3008)...</td></tr>`;
   }
 
-  // Cập nhật footer tổng kết bảng
-  const fStd = document.getElementById('statFootStandardDays');
-  const fAct = document.getElementById('statFootActualDays');
-  const fLate = document.getElementById('statFootLateCount');
-  const fLeave = document.getElementById('statFootLeaveDays');
-  const fRate = document.getElementById('statFootRate');
-  if (fStd) fStd.innerText = footStandard;
-  if (fAct) fAct.innerText = footActual;
-  if (fLate) fLate.innerText = footLate;
-  if (fLeave) fLeave.innerText = footLeave;
-  if (fRate) fRate.innerText = footRate;
+  try {
+    const res = await apiCall(`/api/v1/analytics/stats?period=${period}`);
+    if (res && res.success && res.data) {
+      const summary = res.data.summary || {};
+      const depts = res.data.departments || [];
 
-  showToast(`Đã chuyển đổi số liệu thống kê sang: ${periodLabel}`, 'success');
+      // Cập nhật 4 thẻ KPI chính
+      const onTimeEl = document.getElementById('statMetricOnTime');
+      const onTimeSubEl = document.getElementById('statMetricOnTimeSub');
+      const lateEl = document.getElementById('statMetricLate');
+      const lateSubEl = document.getElementById('statMetricLateSub');
+      const leaveEl = document.getElementById('statMetricLeave');
+      const leaveSubEl = document.getElementById('statMetricLeaveSub');
+      const hoursEl = document.getElementById('statMetricHours');
+      const hoursSubEl = document.getElementById('statMetricHoursSub');
+
+      if (onTimeEl) onTimeEl.innerText = summary.onTimeRate || '0.0%';
+      if (onTimeSubEl) onTimeSubEl.innerText = `${summary.totalWorkDays || 0} ngày công thực tế`;
+      if (lateEl) lateEl.innerText = summary.lateRate || '0.0%';
+      if (lateSubEl) lateSubEl.innerText = `${summary.totalLateCount || 0} lượt vi phạm đi muộn`;
+      if (leaveEl) leaveEl.innerText = summary.leaveRate || '0.0%';
+      if (leaveSubEl) leaveSubEl.innerText = `${summary.totalLeaveDays || 0} ngày nghỉ phép`;
+      if (hoursEl) hoursEl.innerText = summary.totalWorkingHours || '0 h';
+      if (hoursSubEl) hoursSubEl.innerText = `${summary.totalEmployees || 0} nhân sự trong phạm vi`;
+
+      // Cập nhật bảng tổng hợp phòng ban
+      if (tbody) {
+        if (!depts.length) {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 24px;">Không có nhân sự nào trong phạm vi quản lý của bạn</td></tr>`;
+        } else {
+          tbody.innerHTML = depts.map(d => `
+            <tr>
+              <td><strong>${d.name || d.code}</strong></td>
+              <td>${d.employeeCount || 0}</td>
+              <td>${(d.standardDays || 0).toLocaleString('vi-VN')} công</td>
+              <td><strong>${(d.actualDays || 0).toLocaleString('vi-VN')} công</strong></td>
+              <td><span class="badge-status" style="background: ${d.lateCount > 0 ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'}">${d.lateCount || 0} lượt</span></td>
+              <td>${d.leaveDays || 0} ngày</td>
+              <td><span class="badge-status badge-approved">${d.onTimeRate || '100.0%'}</span></td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      // Cập nhật dòng tổng kết (footer)
+      const fEmp = document.getElementById('statFootEmployees');
+      const fStd = document.getElementById('statFootStandardDays');
+      const fAct = document.getElementById('statFootActualDays');
+      const fLate = document.getElementById('statFootLateCount');
+      const fLeave = document.getElementById('statFootLeaveDays');
+      const fRate = document.getElementById('statFootRate');
+
+      const totalStd = depts.reduce((acc, cur) => acc + (cur.standardDays || 0), 0);
+      if (fEmp) fEmp.innerText = summary.totalEmployees || 0;
+      if (fStd) fStd.innerText = `${totalStd.toLocaleString('vi-VN')} công`;
+      if (fAct) fAct.innerText = `${(summary.totalWorkDays || 0).toLocaleString('vi-VN')} công`;
+      if (fLate) fLate.innerText = `${summary.totalLateCount || 0} lượt`;
+      if (fLeave) fLeave.innerText = `${summary.totalLeaveDays || 0} ngày`;
+      if (fRate) fRate.innerText = summary.onTimeRate || '0.0%';
+
+      showToast(`Đã nạp số liệu thống kê ${periodLabel} từ Analytics Service`, 'success');
+      return;
+    }
+  } catch (err) {
+    console.warn('Lỗi gọi API thống kê analytics:', err.message);
+  }
+
+  // Nếu API lỗi hoặc rỗng
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">Không thể kết nối Analytics Service hoặc không có dữ liệu</td></tr>`;
+  }
 }
 
 // Nạp dữ liệu hồ sơ cá nhân (Động 100%, không còn lỗi gán sẵn Phòng Kỹ Thuật)

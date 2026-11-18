@@ -165,34 +165,47 @@ class AttendanceController {
    */
   async getAttendances(req, res, next) {
     try {
-      const { empId, fromDate, toDate, status, department, dept, workDate } = req.query;
+      const { empId, fromDate, toDate, status, department, dept, workDate, month, year } = req.query;
       const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
       const currentEmpId = req.headers['x-user-id'] || req.user?.empId || req.user?.id;
+      const isManager = callerRole === 'MANAGER';
+      const isEmployee = callerRole === 'EMPLOYEE';
 
-      if (callerRole === 'EMPLOYEE') {
+      if (isEmployee) {
         const isAssigned = await repository.isEmployeeAssigned(currentEmpId, req);
         if (!isAssigned) {
           return success(res, [], 200, 'Thành công', { total: 0, unassigned: true });
         }
       }
 
+      let managerSubordinateIds = null;
+      if (isManager) {
+        managerSubordinateIds = await repository.getManagerSubordinateIds(currentEmpId);
+        if (!managerSubordinateIds || managerSubordinateIds.length === 0) {
+          return success(res, [], 200, 'Chưa có nhân sự nào trong phạm vi quản lý', { total: 0 });
+        }
+      }
+
       const conditions = [];
       const params = [];
 
-      if (callerRole === 'EMPLOYEE') {
+      if (isEmployee) {
         conditions.push('a.emp_id = ?');
         params.push(currentEmpId);
-      } else if (callerRole === 'MANAGER') {
-        conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
-        params.push(currentEmpId, currentEmpId);
+      } else if (isManager) {
+        conditions.push(`a.emp_id IN (${managerSubordinateIds.map(() => '?').join(',')})`);
+        params.push(...managerSubordinateIds);
       } else if (empId) {
         conditions.push('a.emp_id = ?');
         params.push(empId);
+      } else {
+        // ADMIN / HR: Chỉ lấy các nhân sự ACTIVE
+        conditions.push("(e.status = 'ACTIVE' OR e.status IS NULL)");
       }
 
       if (workDate) {
         conditions.push('a.work_date = ?');
-        params.push(workDate);
+        params.push(String(workDate).slice(0, 10));
       }
       if (fromDate) {
         conditions.push('a.work_date >= ?');
@@ -201,6 +214,10 @@ class AttendanceController {
       if (toDate) {
         conditions.push('a.work_date <= ?');
         params.push(toDate);
+      }
+      if (month && year) {
+        conditions.push('MONTH(a.work_date) = ? AND YEAR(a.work_date) = ?');
+        params.push(Number(month), Number(year));
       }
       if (status && status !== 'ALL') {
         conditions.push('a.status = ?');
@@ -212,8 +229,15 @@ class AttendanceController {
         params.push(filterDept, `%${filterDept}%`);
       }
 
-      const rows = await repository.getAttendanceLogs(conditions, params);
-      return success(res, rows, 200, 'Thành công');
+      const rows = await repository.getAttendanceLogs(conditions, params, {
+        isManager,
+        managerSubordinateIds,
+        isEmployee,
+        currentEmpId,
+        workDate: workDate ? String(workDate).slice(0, 10) : null,
+        status
+      });
+      return success(res, rows, 200, 'Thành công', { total: rows.length });
     } catch (err) {
       next(err);
     }

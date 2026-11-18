@@ -255,4 +255,71 @@ describe('Kiểm thử Phân hệ Analytics Service (:3108)', () => {
     assert.ok(typeof body.data.kpis.totalWorkDays === 'number');
     assert.ok(typeof body.data.kpis.totalLateMinutes === 'number');
   });
+
+  // 9. Admin tra cứu báo cáo & thống kê /api/v1/analytics/stats động 100%
+  test('Admin tra cứu thống kê /api/v1/analytics/stats nhận đầy đủ summary và departments', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(body.data.summary, 'Phải có summary');
+    assert.ok(body.data.departments, 'Phải có departments');
+    assert.strictEqual(body.data.period, '2026-11');
+    assert.ok(typeof body.data.summary.onTimeRate === 'string');
+    assert.ok(typeof body.data.summary.totalEmployees === 'number');
+    assert.ok(body.data.summary.totalEmployees > 0);
+  });
+
+  // 10. Quản lý có đội nhóm tra cứu /api/v1/analytics/stats chỉ nhận số liệu cấp dưới
+  test('Quản lý có đội nhóm tra cứu /api/v1/analytics/stats chỉ nhận số liệu cấp dưới', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${managerWithTeamToken}`
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.data.scope.isScoped, true);
+    assert.ok(body.data.summary.totalEmployees >= 1, 'Manager phải có ít nhất 1 nhân viên cấp dưới');
+    // Danh sách phòng ban chỉ chứa phòng ban thuộc quyền quản lý
+    assert.ok(body.data.departments.every(d => d.code === 'PB-TECH'));
+  });
+
+  // 11. Quản lý chưa có nhân viên tra cứu /api/v1/analytics/stats trả về 0 và mảng departments rỗng
+  test('Quản lý chưa có nhân viên tra cứu /api/v1/analytics/stats trả về 0 và departments rỗng', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${emptyManagerToken}`
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.data.summary.totalEmployees, 0);
+    assert.strictEqual(body.data.summary.totalWorkDays, 0);
+    assert.deepStrictEqual(body.data.departments, []);
+  });
+
+  // 12. Tra cứu thống kê theo quý /api/v1/analytics/stats?period=2026-Q3
+  test('Tra cứu thống kê theo quý /api/v1/analytics/stats?period=2026-Q3', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-Q3`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.data.period, '2026-Q3');
+    assert.ok(body.data.summary);
+  });
 });

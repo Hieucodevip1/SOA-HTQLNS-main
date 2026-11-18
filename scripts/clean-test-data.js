@@ -62,6 +62,18 @@ async function cleanTestData() {
       console.log(`[AUTH] Đã xóa thành công ${delUserRes.affectedRows} tài khoản user test khỏi MySQL.`);
     }
 
+    // 3. Dọn dẹp bản ghi chấm công mồ côi (orphaned attendance logs)
+    const attPool = db.getPool('htqlns_attendance');
+    const [delAttRes] = await attPool.query(`
+      DELETE FROM attendance_logs 
+      WHERE emp_id NOT IN (SELECT id FROM htqlns_organization.employees)
+         OR emp_id LIKE 'e_test_%'
+         OR emp_id LIKE 'emp_test_%'
+    `);
+    if (delAttRes.affectedRows > 0) {
+      console.log(`[ATTENDANCE] Đã xóa thành công ${delAttRes.affectedRows} bản ghi chấm công mồ côi khỏi MySQL.`);
+    }
+
     // 3. Hiển thị danh sách nhân sự và tài khoản còn lại
     const [remainingEmps] = await orgPool.query('SELECT id, code, full_name, email, status FROM employees');
     console.log(`\n[ORG] Danh sách nhân sự đang hoạt động (${remainingEmps.length} nhân sự):`);

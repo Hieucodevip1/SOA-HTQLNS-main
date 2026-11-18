@@ -180,8 +180,9 @@ async function resolveEmployeeScope(req, options = {}) {
       try {
         const [rows] = await options.pool.query(
           `SELECT id FROM htqlns_organization.employees 
-           WHERE manager_id = ? 
-              OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?)`,
+           WHERE status = 'ACTIVE'
+             AND (manager_id = ? 
+                  OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?))`,
           [empId, empId]
         );
         if (rows && rows.length > 0) {

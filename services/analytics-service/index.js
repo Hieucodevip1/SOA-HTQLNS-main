@@ -397,6 +397,246 @@ app.get([
   '/api/analytics/dashboard/overview'
 ], requireAuth(['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN', 'MANAGER']), getOverviewHandler);
 
+// 4. API Thống kê Chuyên cần theo Chu kỳ (SCR_REP_01, SCR_REP_02)
+const getStatsHandler = async (req, res, next) => {
+  try {
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const callerUserId = req.headers['x-user-id'] || req.user?.empId || req.user?.userId || req.user?.id;
+    const isManager = callerRole === 'MANAGER';
+
+    const periodParam = req.query.period || '';
+    let month = Number(req.query.month || 0);
+    let year = Number(req.query.year || 0);
+    let isQuarter = false;
+    let quarterNum = 0;
+    let periodLabel = '';
+
+    if (periodParam.includes('-Q')) {
+      isQuarter = true;
+      const parts = periodParam.split('-Q');
+      year = Number(parts[0]) || 2026;
+      quarterNum = Number(parts[1]) || 3;
+      periodLabel = `Quý ${quarterNum}/${year}`;
+    } else if (periodParam.match(/^\d{4}-\d{2}$/)) {
+      const parts = periodParam.split('-');
+      year = Number(parts[0]);
+      month = Number(parts[1]);
+      periodLabel = `Tháng ${String(month).padStart(2, '0')}/${year}`;
+    } else {
+      if (!month) month = new Date().getMonth() + 1;
+      if (!year) year = new Date().getFullYear();
+      periodLabel = `Tháng ${String(month).padStart(2, '0')}/${year}`;
+    }
+
+    let allEmployees = [];
+    let allDepartments = [];
+    let logs = [];
+    let leaves = [];
+    let ots = [];
+    let hasDb = await isDbAvailable();
+
+    if (hasDb) {
+      try {
+        const [depts] = await pool.query('SELECT * FROM htqlns_organization.departments WHERE status = "ACTIVE"');
+        allDepartments = depts;
+
+        const [emps] = await pool.query(`
+          SELECT e.id, e.code, e.full_name, e.department_id, e.manager_id, e.status,
+                 d.name AS department_name, d.code AS department_code
+          FROM htqlns_organization.employees e
+          LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+          WHERE e.status = 'ACTIVE'
+        `);
+        allEmployees = emps;
+
+        let attDateCond = isQuarter
+          ? 'QUARTER(a.work_date) = ? AND YEAR(a.work_date) = ?'
+          : 'MONTH(a.work_date) = ? AND YEAR(a.work_date) = ?';
+        let attDateParams = isQuarter ? [quarterNum, year] : [month, year];
+
+        const [attRows] = await pool.query(`
+          SELECT a.*, e.department_id
+          FROM htqlns_attendance.attendance_logs a
+          JOIN htqlns_organization.employees e ON a.emp_id = e.id
+          WHERE ${attDateCond}
+        `, attDateParams);
+        logs = attRows;
+
+        let leaveDateCond = isQuarter
+          ? 'QUARTER(lr.start_date) = ? AND YEAR(lr.start_date) = ?'
+          : 'MONTH(lr.start_date) = ? AND YEAR(lr.start_date) = ?';
+        let leaveDateParams = isQuarter ? [quarterNum, year] : [month, year];
+
+        const [leaveRows] = await pool.query(`
+          SELECT lr.*, e.department_id
+          FROM htqlns_leave.leave_requests lr
+          JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+          WHERE lr.status = 'APPROVED' AND ${leaveDateCond}
+        `, leaveDateParams);
+        leaves = leaveRows;
+
+        let otDateCond = isQuarter
+          ? 'QUARTER(ot.work_date) = ? AND YEAR(ot.work_date) = ?'
+          : 'MONTH(ot.work_date) = ? AND YEAR(ot.work_date) = ?';
+        let otDateParams = isQuarter ? [quarterNum, year] : [month, year];
+
+        const [otRows] = await pool.query(`
+          SELECT ot.*, e.department_id
+          FROM htqlns_shift.ot_requests ot
+          JOIN htqlns_organization.employees e ON ot.emp_id = e.id
+          WHERE ot.status = 'APPROVED' AND ${otDateCond}
+        `, otDateParams);
+        ots = otRows;
+      } catch (err) {
+        console.warn('[Analytics-Service] Lỗi truy vấn DB thống kê, fallback memory:', err.message);
+        hasDb = false;
+      }
+    }
+
+    if (!hasDb) {
+      allDepartments = memoryFallbackDepartments;
+      allEmployees = memoryFallbackEmployees.filter((e) => e.status === 'ACTIVE');
+      logs = [];
+      leaves = [];
+      ots = [];
+    }
+
+    let scopedEmployees = [];
+    if (isManager) {
+      const managedDeptIds = allDepartments.filter((d) => d.manager_id === callerUserId).map((d) => d.id);
+      scopedEmployees = allEmployees.filter(
+        (e) => (e.manager_id && e.manager_id === callerUserId) || (e.department_id && managedDeptIds.includes(e.department_id))
+      );
+    } else {
+      scopedEmployees = allEmployees;
+    }
+
+    const scopedEmpIds = new Set(scopedEmployees.map((e) => e.id));
+    const totalEmployees = scopedEmployees.length;
+    const periodKey = (typeof periodParam === 'string' && periodParam.trim())
+      ? periodParam.trim()
+      : (isQuarter ? `${year}-Q${quarterNum}` : `${year}-${String(month).padStart(2, '0')}`);
+
+    if (totalEmployees === 0) {
+      return res.json({
+        success: true,
+        data: {
+          period: periodKey,
+          periodInfo: { month, year, label: periodLabel },
+          scope: {
+            role: callerRole,
+            managerId: isManager ? callerUserId : null,
+            isScoped: isManager
+          },
+          summary: {
+            onTimeRate: '0%',
+            lateRate: '0%',
+            leaveRate: '0%',
+            totalWorkingHours: '0 h',
+            totalEmployees: 0,
+            totalWorkDays: 0,
+            totalLateCount: 0,
+            totalEarlyLeaveCount: 0,
+            totalLeaveDays: 0,
+            totalOtHours: 0
+          },
+          departments: []
+        }
+      });
+    }
+
+    const scopedLogs = logs.filter((l) => scopedEmpIds.has(l.emp_id));
+    const scopedLeaves = leaves.filter((l) => scopedEmpIds.has(l.emp_id));
+    const scopedOts = ots.filter((o) => scopedEmpIds.has(o.emp_id));
+
+    const deptMap = new Map();
+    allDepartments.forEach((d) => {
+      const deptEmps = scopedEmployees.filter((e) => e.department_id === d.id);
+      if (deptEmps.length > 0) {
+        deptMap.set(d.id, {
+          id: d.id,
+          name: d.name,
+          code: d.code,
+          empCount: deptEmps.length,
+          empIds: new Set(deptEmps.map((e) => e.id))
+        });
+      }
+    });
+
+    const standardDaysMultiplier = isQuarter ? 66 : 22;
+    const departmentsStats = [];
+
+    deptMap.forEach((d) => {
+      const dLogs = scopedLogs.filter((l) => d.empIds.has(l.emp_id));
+      const dLeaves = scopedLeaves.filter((l) => d.empIds.has(l.emp_id));
+      const standardDays = d.empCount * standardDaysMultiplier;
+      const actualDays = dLogs.filter((l) => l.check_in_time || ['ON_TIME', 'LATE', 'EARLY_LEAVE'].includes(l.status)).length;
+      const lateCount = dLogs.filter((l) => l.status === 'LATE' || Number(l.late_minutes) > 0).length;
+      const leaveDays = dLeaves.reduce((acc, cur) => acc + (Number(cur.total_days) || 1), 0);
+      const rateNum = standardDays > 0 ? Math.min(100, Math.round((actualDays / standardDays) * 1000) / 10) : 0;
+
+      departmentsStats.push({
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        empCount: d.empCount,
+        standardDays,
+        actualDays,
+        lateCount,
+        leaveDays,
+        attendanceRate: `${rateNum}%`
+      });
+    });
+
+    const totalWorkDays = scopedLogs.filter((l) => l.check_in_time || ['ON_TIME', 'LATE', 'EARLY_LEAVE'].includes(l.status)).length;
+    const totalLateCount = scopedLogs.filter((l) => l.status === 'LATE' || Number(l.late_minutes) > 0).length;
+    const totalEarlyLeaveCount = scopedLogs.filter((l) => l.status === 'EARLY_LEAVE' || Number(l.early_leave_minutes) > 0).length;
+    const totalLeaveDays = scopedLeaves.reduce((acc, cur) => acc + (Number(cur.total_days) || 1), 0);
+    const totalOtHours = Math.round(scopedOts.reduce((acc, cur) => acc + (Number(cur.total_hours || cur.ot_hours) || 0), 0) * 10) / 10;
+    const totalWorkingHours = Math.round(scopedLogs.reduce((acc, cur) => acc + (Number(cur.actual_working_hours) || (cur.check_in_time && cur.check_out_time ? 8 : 0)), 0) * 10) / 10;
+
+    const onTimeRate = totalWorkDays > 0 ? Math.round(((totalWorkDays - totalLateCount) / totalWorkDays) * 1000) / 10 : 0;
+    const lateRate = totalWorkDays > 0 ? Math.round((totalLateCount / totalWorkDays) * 1000) / 10 : 0;
+    const totalStandardDays = totalEmployees * standardDaysMultiplier;
+    const leaveRate = totalStandardDays > 0 ? Math.round((totalLeaveDays / totalStandardDays) * 1000) / 10 : 0;
+
+    return res.json({
+      success: true,
+      data: {
+        period: periodKey,
+        periodInfo: { month, year, label: periodLabel },
+        scope: {
+          role: callerRole,
+          managerId: isManager ? callerUserId : null,
+          isScoped: isManager
+        },
+        summary: {
+          onTimeRate: `${onTimeRate}%`,
+          lateRate: `${lateRate}%`,
+          leaveRate: `${leaveRate}%`,
+          totalWorkingHours: `${totalWorkingHours.toLocaleString('vi-VN')} h`,
+          totalEmployees,
+          totalWorkDays,
+          totalLateCount,
+          totalEarlyLeaveCount,
+          totalLeaveDays,
+          totalOtHours
+        },
+        departments: departmentsStats
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+app.get([
+  '/api/v1/analytics/stats',
+  '/api/analytics/stats',
+  '/api/v1/analytics/dashboard/stats',
+  '/api/analytics/dashboard/stats'
+], requireAuth(['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN', 'MANAGER']), getStatsHandler);
+
 app.useErrorHandler();
 app.start(PORT, () => {
   registrar.register({ name: SERVICE_NAME, port: PORT, host: 'localhost', prefix: '/api/v1/analytics' });

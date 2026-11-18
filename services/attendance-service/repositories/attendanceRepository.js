@@ -611,9 +611,36 @@ class AttendanceRepository {
   }
 
   /**
+   * Lấy danh sách ID nhân viên cấp dưới trực thuộc Manager
+   */
+  async getManagerSubordinateIds(managerId) {
+    if (!managerId) return [];
+    // Demo manager: NV-QL01 (Nguyễn Thanh Lâm)
+    if (managerId === 'e0000001-0000-0000-0000-000000000003') {
+      return ['e0000001-0000-0000-0000-000000000004', '156b8a4c-1cc6-4b66-b610-ffecd714ce9d'];
+    }
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        const [rows] = await pool.query(
+          `SELECT id FROM htqlns_organization.employees 
+           WHERE status = 'ACTIVE' 
+             AND (manager_id = ? 
+                  OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?))`,
+          [managerId, managerId]
+        );
+        return rows.map((r) => r.id);
+      } catch (err) {
+        console.warn('[ATT-REPO] Lỗi truy vấn cấp dưới của manager:', err.message);
+      }
+    }
+    return [];
+  }
+
+  /**
    * Truy vấn danh sách tổng hợp công cho các API chung /api/attendance
    */
-  async getAttendanceLogs(conditions = [], params = []) {
+  async getAttendanceLogs(conditions = [], params = [], scopeOptions = {}) {
     const useDb = await this.isDbAvailable();
     if (useDb) {
       try {
@@ -623,7 +650,7 @@ class AttendanceRepository {
                   w.name AS location_name,
                   COALESCE(e.full_name, a.emp_id) AS emp_name,
                   COALESCE(e.code, CONCAT('NV-', RIGHT(a.emp_id, 4))) AS emp_code,
-                  COALESCE(d.name, 'Phòng Kỹ Thuật') AS dept_name,
+                  COALESCE(d.name, 'Phòng Công nghệ & Phần mềm') AS dept_name,
                   d.code AS dept_code,
                   adj.id AS adjustment_id,
                   adj.reason AS adjustment_reason,
@@ -648,24 +675,25 @@ class AttendanceRepository {
       return {
         ...l,
         location_name: l.location_name || loc?.name || 'Trụ sở chính HTQLNS',
-        emp_name: l.emp_name || (l.emp_id === defaultEmpId ? 'Phạm Văn Tuấn' : (l.emp_id === otherEmpId ? 'Nguyễn Văn An' : l.emp_id)),
-        emp_code: l.emp_code || (l.emp_id === defaultEmpId ? 'NV-004' : 'NV-' + String(l.emp_id).slice(-4)),
-        dept_name: l.dept_name || 'Phòng Kỹ Thuật'
+        emp_name: l.emp_name || (l.emp_id === defaultEmpId ? 'Vũ Đức Hiếu' : (l.emp_id === otherEmpId ? 'Nguyễn Văn An' : l.emp_id)),
+        emp_code: l.emp_code || (l.emp_id === defaultEmpId ? 'NV-001' : 'NV-' + String(l.emp_id).slice(-4)),
+        dept_name: l.dept_name || 'Phòng Công nghệ & Phần mềm'
       };
     });
 
-    conditions.forEach((cond, idx) => {
-      const p = params[idx];
-      if (!p) return;
-      if (cond.includes('work_date =')) {
-        const target = String(p).slice(0, 10);
-        logs = logs.filter((l) => (l.work_date ? String(l.work_date).slice(0, 10) === target : false));
-      } else if (cond.includes('emp_id =')) {
-        logs = logs.filter((l) => l.emp_id === p);
-      } else if (cond.includes('status =')) {
-        logs = logs.filter((l) => l.status === p);
-      }
-    });
+    if (scopeOptions.isManager) {
+      const subIds = scopeOptions.managerSubordinateIds || [];
+      logs = logs.filter((l) => subIds.includes(l.emp_id));
+    } else if (scopeOptions.isEmployee) {
+      logs = logs.filter((l) => l.emp_id === scopeOptions.currentEmpId);
+    }
+
+    if (scopeOptions.workDate) {
+      logs = logs.filter((l) => l.work_date && String(l.work_date).slice(0, 10) === scopeOptions.workDate);
+    }
+    if (scopeOptions.status && scopeOptions.status !== 'ALL') {
+      logs = logs.filter((l) => l.status === scopeOptions.status);
+    }
 
     return logs;
   }

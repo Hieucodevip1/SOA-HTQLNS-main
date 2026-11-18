@@ -36,6 +36,20 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     role: 'EMPLOYEE'
   });
 
+  const managerToken = jwt.signToken({
+    userId: 'e0000001-0000-0000-0000-000000000003',
+    empId: 'e0000001-0000-0000-0000-000000000003',
+    username: 'manager_tech',
+    role: 'MANAGER'
+  });
+
+  const emptyManagerToken = jwt.signToken({
+    userId: 'emp_empty_manager_uuid',
+    empId: 'emp_empty_manager_uuid',
+    username: 'new_manager',
+    role: 'MANAGER'
+  });
+
   before(async () => {
     // Khởi chạy attendance-service trên cổng kiểm thử độc lập :3103
     attProcess = fork(path.resolve(__dirname, '..', 'services', 'attendance-service', 'index.js'), [], {
@@ -381,5 +395,69 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     assert.deepStrictEqual(body.data, []);
     assert.strictEqual(body.meta.unassigned, true);
     assert.strictEqual(body.meta.total, 0);
+  });
+
+  // 18. Manager có đội nhóm tra cứu danh sách chấm công /api/attendance chỉ nhận nhân sự cấp dưới
+  test('Manager có đội nhóm tra cứu /api/attendance chỉ nhận nhân sự cấp dưới', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance`, {
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000003',
+        'x-user-role': 'MANAGER'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data), 'Dữ liệu trả về phải là mảng');
+    const allowedSubordinateIds = [
+      'e0000001-0000-0000-0000-000000000004',
+      '156b8a4c-1cc6-4b66-b610-ffecd714ce9d'
+    ];
+    for (const record of body.data) {
+      assert.ok(
+        allowedSubordinateIds.includes(record.emp_id),
+        `Bản ghi ${record.id} của emp ${record.emp_id} không thuộc quyền quản lý`
+      );
+    }
+  });
+
+  // 19. Manager chưa có nhân sự tra cứu /api/attendance nhận mảng rỗng [] và total 0
+  test('Manager chưa có nhân sự tra cứu /api/attendance nhận mảng rỗng [] và total 0', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance`, {
+      headers: {
+        Authorization: `Bearer ${emptyManagerToken}`,
+        'x-user-id': 'emp_empty_manager_uuid',
+        'x-user-role': 'MANAGER'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.deepStrictEqual(body.data, []);
+    assert.strictEqual(body.meta.total, 0);
+  });
+
+  // 20. Admin tra cứu /api/attendance nhận đầy đủ bản ghi của nhân sự ACTIVE toàn công ty
+  test('Admin tra cứu /api/attendance nhận đầy đủ bản ghi của nhân sự ACTIVE toàn công ty', async () => {
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000001',
+        'x-user-role': 'ADMIN'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data));
+    assert.ok(body.data.length > 0, 'Phải có ít nhất 1 bản ghi chấm công');
+    const first = body.data[0];
+    assert.ok(first.emp_id, 'Phải có emp_id');
+    assert.ok(first.emp_name, 'Phải có emp_name');
+    assert.ok(first.emp_code, 'Phải có emp_code');
   });
 });
