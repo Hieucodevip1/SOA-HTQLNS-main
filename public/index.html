@@ -1505,7 +1505,9 @@ input:checked + .slider:before {
     <!-- SIDEBAR BÊN TRÁI (CHUẨN FIGMA IMAGES 2, 3, 4) -->
     <aside class="figma-sidebar">
       <div class="sidebar-header-branding">
-        <img src="images/logo.png" alt="Logo" class="sidebar-logo-img" style="width: 44px; max-width: 44px; height: auto; display: block; margin: 0 auto 10px;">
+        <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+          <img src="images/logo.png" alt="" class="sidebar-logo-img" style="width: 42px; height: 42px; object-fit: contain; display: block;" onerror="this.style.display='none'">
+        </div>
         <div class="sidebar-brand-name">Trang admin quản lý chấm công</div>
       </div>
 
@@ -1646,7 +1648,7 @@ input:checked + .slider:before {
                   </div>
                 </div>
                 <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px; border-radius: 8px;" onclick="navigateToView('employees')">
-                  ⚡ Xem &amp; Tiếp nhận nhân sự →
+                  Xem &amp; Tiếp nhận nhân sự →
                 </button>
               </div>
             </div>
@@ -2372,7 +2374,7 @@ input:checked + .slider:before {
               <div class="page-heading-desc">Quản lý ca làm việc, phân bổ ca nhân sự và quy trình đăng ký, xét duyệt tăng ca trực tuyến.</div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button class="btn-primary-blue" id="btnShiftOpenCreateOt" onclick="openCreateOtModal()">⚡ Đăng ký tăng ca (OT)</button>
+              <button class="btn-primary-blue" id="btnShiftOpenCreateOt" onclick="openCreateOtModal()">Đăng ký tăng ca (OT)</button>
               <button class="btn-secondary-outline" id="btnShiftOpenAssign" onclick="openAssignShiftModal()" style="display: inline-flex; align-items: center; gap: 6px;">
                 <span>📅</span> Phân ca nhân viên
               </button>
@@ -2406,7 +2408,7 @@ input:checked + .slider:before {
             <div class="figma-metric-card" onclick="switchShiftTab('ot')" style="cursor: pointer;">
               <div class="metric-header">
                 <span>Đơn OT chờ duyệt</span>
-                <span>⚡</span>
+                <span>⏳</span>
               </div>
               <div class="metric-value-huge metric-value-orange" id="kpiOtPendingCount">0</div>
               <div class="metric-footer-note">Cần cấp quản lý xử lý →</div>
@@ -2428,7 +2430,7 @@ input:checked + .slider:before {
               📅 Lịch phân ca nhân viên
             </button>
             <button type="button" id="tabBtnOt" class="btn-secondary-outline" onclick="switchShiftTab('ot')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
-              ⚡ Quản lý đơn tăng ca (OT)
+              Quản lý đơn tăng ca (OT)
             </button>
             <button type="button" id="tabBtnShifts" class="btn-secondary-outline" onclick="switchShiftTab('shifts')" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: #f8fafc; color: #64748b;">
               ⚙️ Danh mục ca làm việc
@@ -2552,7 +2554,7 @@ input:checked + .slider:before {
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               <button class="btn-primary-blue" id="btnPayrollCalculate" onclick="openCalculatePayrollModal()" style="display: inline-flex; align-items: center; gap: 6px;">
-                <span>⚡</span> Tính lương tự động
+                Tính lương tự động
               </button>
               <button class="btn-secondary-outline" id="btnPayrollPublish" onclick="handlePublishPayrollClick()" style="display: inline-flex; align-items: center; gap: 6px; color: #047857; border-color: #a7f3d0;">
                 <span>🔒</span> Chốt &amp; Phát hành lương
@@ -3047,7 +3049,7 @@ input:checked + .slider:before {
             </div>
             <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6;">
               <div>• <strong>ADMIN (Quản trị viên):</strong> Toàn quyền kiểm soát hệ thống, phân quyền vai trò tài khoản, cấu hình ca làm việc, giám sát hạ tầng SOA.</div>
-              <div>• <strong>HR (Phòng Nhân sự):</strong> Quản lý hồ sơ nhân sự, cơ cấu phòng ban, chấm công và chế độ nghỉ phép toàn công ty.</div>
+              <div>• <strong>HR (Phòng Hành chính Nhân sự):</strong> Quản lý hồ sơ nhân sự, cơ cấu phòng ban, chấm công và chế độ nghỉ phép toàn công ty.</div>
               <div>• <strong>MANAGER (Quản lý bộ phận):</strong> Quản lý nhân sự và duyệt đơn từ thuộc phòng ban quản lý, theo dõi thống kê chuyên cần.</div>
               <div>• <strong>EMPLOYEE (Nhân viên):</strong> Tự chấm công cá nhân, theo dõi lịch sử và tạo đơn nghỉ phép của mình. <em>Tuyệt đối không có quyền phân quyền hay can thiệp dữ liệu người khác.</em></div>
             </div>

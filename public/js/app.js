@@ -195,7 +195,7 @@ function syncUserOnboardingState() {
   }
   if (username === 'hr_admin') {
     state.user.isOnboarded = true;
-    state.user.department = 'Phòng Nhân sự';
+    state.user.department = 'Phòng Hành chính Nhân sự';
     state.user.position = 'Trưởng phòng Nhân sự';
     state.user.managerName = 'Ban Giám Đốc';
     state.user.officeLocation = 'Văn phòng Quy Nhơn (170 An Dương Vương)';
@@ -689,6 +689,21 @@ function showScreenView(screen) {
   navigateToView(screen);
 }
 
+/**
+ * Trích xuất 2 ký tự viết tắt đại diện cho avatar từ họ tên.
+ * Tự động loại bỏ các chú thích trong dấu ngoặc đơn/vuông như (Admin), (HR), [Manager]...
+ * Đảm bảo không bao giờ xuất hiện ký tự mở ngoặc '(' trong avatar initials.
+ */
+function getInitialsFromName(nameStr) {
+  if (!nameStr) return 'NV';
+  const clean = nameStr.replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^\p{L}\s]/gu, '').trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
+  return (clean.slice(0, 2) || 'NV').toUpperCase();
+}
+
 function updateTopbarUser() {
   if (!state.user) return;
   const isManager = state.user.role === 'MANAGER' || state.user.username === 'manager';
@@ -706,7 +721,7 @@ function updateTopbarUser() {
   const deptLabel = state.user.department || state.user.departmentName;
   const deptSuffix = deptLabel ? ` | ${deptLabel}` : ' | Chưa phân phòng ban (Chờ tiếp nhận)';
   const displayRole = state.user.role === 'ADMIN' ? 'Quản trị viên Hệ thống' :
-                      (state.user.role === 'HR' ? 'Phòng Nhân sự' :
+                      (state.user.role === 'HR' ? 'Phòng Hành chính Nhân sự' :
                       (state.user.role === 'MANAGER' ? `Quản lý${deptSuffix}` : `Nhân viên${deptSuffix}`));
 
   const nameEl = document.getElementById('topbarUserName');
@@ -717,8 +732,7 @@ function updateTopbarUser() {
   if (nameEl) nameEl.innerText = `Xin chào, ${displayName}`;
   if (roleEl) roleEl.innerText = displayRole;
   if (avatarEl) {
-    const parts = displayName.trim().split(' ');
-    avatarEl.innerText = (parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : displayName.slice(0, 2)).toUpperCase();
+    avatarEl.innerText = getInitialsFromName(displayName);
   }
   if (greetSub) {
     if (state.user.role === 'EMPLOYEE') {
@@ -776,7 +790,7 @@ function applyRoleBasedUI() {
   // 2. Tùy biến Sidebar theo vai trò:
   const navDashboard = document.getElementById('nav-dashboard');
   if (navDashboard) {
-    navDashboard.innerHTML = `<span class="figma-nav-icon">🏠</span> ${isEmployee ? 'Tổng quan cá nhân' : 'Tổng quan'}`;
+    navDashboard.innerText = isEmployee ? 'Tổng quan cá nhân' : 'Tổng quan';
   }
 
   const navRbac = document.getElementById('nav-rbac');
@@ -2308,11 +2322,11 @@ function renderEmployeesTable(list) {
     let actionBtn = '-';
 
     if (e.status === 'PENDING_ASSIGNMENT') {
-      statusBadge = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span>';
+      statusBadge = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">Chờ tiếp nhận ban phòng</span>';
       if (canManage) {
         actionBtn = `
           <button class="btn-primary-blue" style="padding: 5px 12px; font-size: 11.5px; border-radius: 6px; font-weight: 700;" onclick="openOnboardEmployeeModal('${e.username || ''}', '${e.full_name || ''}', '${e.email || ''}', '${e.id || ''}')">
-            ⚡ Tiếp nhận &amp; Phân ca, Lương
+            Tiếp nhận &amp; Phân ca, Lương
           </button>
         `;
       }
@@ -2324,20 +2338,37 @@ function renderEmployeesTable(list) {
       }
 
       if (canManage) {
+        const currentUserId = state.user?.id || state.user?.userId || state.user?.empId || '';
+        const currentUserName = state.user?.username || '';
+        const currentUserCode = state.user?.code || state.user?.empCode || '';
+        const isSelf = (currentUserId && (e.id === currentUserId || e.emp_id === currentUserId)) ||
+                       (currentUserCode && (e.code === currentUserCode || e.employee_code === currentUserCode)) ||
+                       (currentUserName === 'admin' && (e.code === 'EMP001' || e.email === 'admin@htqlns.com')) ||
+                       (currentUserName && (e.email === state.user?.email || e.username === currentUserName));
+
         actionBtn = `
           <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
             <button class="btn-secondary-outline" onclick="openEditEmployeeModal('${e.id}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px; font-weight: 600; color: #2563eb; border-color: #93c5fd; background: #eff6ff;" title="Sửa thông tin nhân viên">
-              ✏️ Sửa
+              Sửa
             </button>
+            ${!isSelf ? `
             <button class="btn-reject-sm" onclick="confirmDeleteEmployee('${e.id}', '${e.full_name || e.code}')" style="cursor: pointer; padding: 4px 10px; font-size: 11.5px; border-radius: 6px;" title="Xóa nhân viên">
-              🗑️ Xóa
-            </button>
+              Xóa
+            </button>` : ''}
           </div>
         `;
       }
     }
 
+    let deptName = e.department_name || '-';
     let posTitle = e.position_title || e.position_name || '-';
+    if (e.status === 'ACTIVE') {
+      if (!deptName || deptName === '-') deptName = 'Phòng Công nghệ & Phần mềm';
+      if (!posTitle || posTitle === '-') posTitle = 'Kỹ sư phần mềm';
+    }
+    if (deptName === 'Phòng Nhân sự' || (deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+      deptName = 'Phòng Hành chính Nhân sự';
+    }
     if (posTitle.includes('Kỹ sư phần mềm SOA') || posTitle.includes('Kỹ Sư Phần Mềm SOA')) {
       posTitle = 'Kỹ sư phần mềm';
     }
@@ -2348,7 +2379,7 @@ function renderEmployeesTable(list) {
         <td><strong>${e.full_name}</strong></td>
         <td>${e.email}</td>
         <td>${e.phone || '-'}</td>
-        <td>${e.department_name || '-'}</td>
+        <td>${deptName}</td>
         <td>${posTitle}</td>
         <td><span class="badge-status" style="background:#f1f5f9; color:#475569;">${e.contract_type || 'OFFICIAL'}</span></td>
         <td>${statusBadge}</td>
@@ -2396,7 +2427,7 @@ function openEditEmployeeModal(empId) {
   const html = `
     <div style="padding: 10px 0;">
       <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px;">
-        <div style="font-weight: 700; color: #0f172a; font-size: 14.5px;">✏️ Chỉnh sửa hồ sơ nhân sự</div>
+        <div style="font-weight: 700; color: #0f172a; font-size: 14.5px;">Chỉnh sửa hồ sơ nhân sự</div>
         <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">
           Cập nhật thông tin định danh, ca làm việc, văn phòng và mức lương cơ bản cho nhân viên.
         </div>
@@ -2433,7 +2464,7 @@ function openEditEmployeeModal(empId) {
             <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Phòng ban (departmentId) *</label>
             <select id="editEmpDept" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;" required>
               <option value="Phòng Kỹ Thuật" ${currentDept.includes('Kỹ Thuật') || currentDept.includes('Công nghệ') ? 'selected' : ''}>Phòng Kỹ Thuật</option>
-              <option value="Phòng Nhân sự" ${currentDept.includes('Nhân sự') ? 'selected' : ''}>Phòng Nhân sự</option>
+              <option value="Phòng Hành chính Nhân sự" ${currentDept.includes('Nhân sự') ? 'selected' : ''}>Phòng Hành chính Nhân sự</option>
               <option value="Phòng Kinh Doanh" ${currentDept.includes('Kinh Doanh') ? 'selected' : ''}>Phòng Kinh Doanh</option>
               <option value="Phòng Tài Chính - Kế Toán" ${currentDept.includes('Tài Chính') ? 'selected' : ''}>Phòng Tài Chính - Kế Toán</option>
               <option value="Ban Giám Đốc" ${currentDept.includes('Giám Đốc') ? 'selected' : ''}>Ban Giám Đốc</option>
@@ -2496,9 +2527,9 @@ function openEditEmployeeModal(empId) {
         <div style="margin-bottom: 22px;">
           <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 5px;">Trạng thái hoạt động *</label>
           <select id="editEmpStatus" class="input-filter-select" style="width: 100%; height: 40px; border-radius: 8px;">
-            <option value="ACTIVE" ${currentStatus === 'ACTIVE' ? 'selected' : ''}>🟢 ACTIVE (Đang làm việc)</option>
-            <option value="INACTIVE" ${currentStatus === 'INACTIVE' ? 'selected' : ''}>🟡 INACTIVE (Tạm ngưng)</option>
-            <option value="RESIGNED" ${currentStatus === 'RESIGNED' ? 'selected' : ''}>🔴 RESIGNED (Đã nghỉ việc)</option>
+            <option value="ACTIVE" ${currentStatus === 'ACTIVE' ? 'selected' : ''}>ACTIVE (Đang làm việc)</option>
+            <option value="INACTIVE" ${currentStatus === 'INACTIVE' ? 'selected' : ''}>INACTIVE (Tạm ngưng)</option>
+            <option value="RESIGNED" ${currentStatus === 'RESIGNED' ? 'selected' : ''}>RESIGNED (Đã nghỉ việc)</option>
           </select>
         </div>
 
@@ -2506,7 +2537,7 @@ function openEditEmployeeModal(empId) {
         <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
           <button type="button" class="btn-secondary-outline" onclick="closeModal()">Hủy bỏ</button>
           <button type="submit" class="btn-primary-blue" style="padding: 9px 20px; font-weight: 700; border-radius: 8px;">
-            💾 Lưu thay đổi
+            Lưu thay đổi
           </button>
         </div>
       </form>
@@ -2840,19 +2871,19 @@ async function loadMyAttendanceData() {
 
   tbody.innerHTML = records.map(r => {
     // 1. Huy hiệu trạng thái
-    let statusBadge = '<span class="badge-status badge-approved">🟢 Đúng giờ</span>';
+    let statusBadge = '<span class="badge-status badge-approved">Đúng giờ</span>';
     if (r.status === 'LATE') {
-      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706; font-weight:700;">🟡 Đi muộn (${r.lateMinutes || 0}p)</span>`;
+      statusBadge = `<span class="badge-status" style="background:#fef3c7; color:#d97706; font-weight:700;">Đi muộn (${r.lateMinutes || 0}p)</span>`;
     } else if (r.status === 'EARLY_LEAVE') {
-      statusBadge = `<span class="badge-status" style="background:#fef9c3; color:#a16207; font-weight:700;">🟠 Về sớm (${r.earlyLeaveMinutes || 0}p)</span>`;
+      statusBadge = `<span class="badge-status" style="background:#fef9c3; color:#a16207; font-weight:700;">Về sớm (${r.earlyLeaveMinutes || 0}p)</span>`;
     } else if (r.status === 'LATE_AND_EARLY') {
-      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#c2410c; font-weight:700;">🔴 Đi muộn & Về sớm</span>`;
+      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#c2410c; font-weight:700;">Đi muộn & Về sớm</span>`;
     } else if (r.status === 'MISSING_CHECKOUT') {
-      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🔴 Thiếu check-out</span>`;
+      statusBadge = `<span class="badge-status" style="background:#fee2e2; color:#b91c1c; font-weight:700;">Thiếu check-out</span>`;
     } else if (r.status === 'ON_LEAVE') {
-      statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb; font-weight:700;">🏖️ Nghỉ phép</span>';
+      statusBadge = '<span class="badge-status" style="background:#eff6ff; color:#2563eb; font-weight:700;">Nghỉ phép</span>';
     } else if (r.status === 'ABSENT') {
-      statusBadge = '<span class="badge-status" style="background:#f1f5f9; color:#64748b; font-weight:700;">⚪ Vắng mặt</span>';
+      statusBadge = '<span class="badge-status" style="background:#f1f5f9; color:#64748b; font-weight:700;">Vắng mặt</span>';
     }
 
     // 2. Ô Thao tác / Giải trình
@@ -3021,14 +3052,14 @@ async function loadRbacUsersData() {
         <td>
           <select id="role-select-${u.id}" class="figma-pill-input" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">
             <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN (Quản trị viên)</option>
-            <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Nhân sự)</option>
+            <option value="HR" ${u.role === 'HR' ? 'selected' : ''}>HR (Phòng Hành chính Nhân sự)</option>
             <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>MANAGER (Quản lý)</option>
             <option value="EMPLOYEE" ${u.role === 'EMPLOYEE' ? 'selected' : ''}>EMPLOYEE (Nhân viên)</option>
           </select>
         </td>
         <td>
           <button class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" onclick="handleUpdateUserRole('${u.id}', '${u.username}')">
-            💾 Lưu quyền
+            Lưu quyền
           </button>
         </td>
       </tr>
@@ -3408,13 +3439,12 @@ function loadProfileData() {
     if (isOnboarded) {
       statusEl.innerHTML = '<span class="badge-status badge-approved">✓ Đang hoạt động (Đã tiếp nhận)</span>';
     } else {
-      statusEl.innerHTML = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">🟡 Chờ tiếp nhận ban phòng</span>';
+      statusEl.innerHTML = '<span class="badge-status" style="background:#fef3c7; color:#b45309; font-weight:700;">Chờ tiếp nhận ban phòng</span>';
     }
   }
 
   if (avatarEl) {
-    const parts = displayName.trim().split(' ');
-    avatarEl.innerText = (parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : displayName.slice(0, 2)).toUpperCase();
+    avatarEl.innerText = getInitialsFromName(displayName);
   }
 }
 
@@ -5937,7 +5967,7 @@ function openCalculatePayrollModal() {
       </div>
 
       <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; font-size: 12px; color: #166534; margin-bottom: 16px; line-height: 1.5;">
-        <strong>⚡ Quy trình tổng hợp tự động:</strong>
+        <strong>Quy trình tổng hợp tự động:</strong>
         <div style="margin-top: 4px;">
           • Lấy dữ liệu công thực tế và phạt đi muộn từ <strong>attendance-service</strong><br>
           • Lấy ngày nghỉ phép năm có lương từ <strong>leave-service</strong><br>

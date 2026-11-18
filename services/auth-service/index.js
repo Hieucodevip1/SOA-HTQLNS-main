@@ -146,7 +146,7 @@ async function enrichUserProfile(user, useDb) {
     if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; departmentId = 'd0000001-0000-0000-0000-000000000001'; }
     else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; }
     else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; managerId = 'e0000001-0000-0000-0000-000000000003'; }
-    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; }
+    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Hành chính Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; }
   }
 
   const isAssigned = Boolean(departmentId || managerId);

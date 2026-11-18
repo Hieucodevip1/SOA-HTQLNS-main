@@ -690,6 +690,41 @@ const getEmployeesHandler = async (req, res) => {
       }
     }
 
+    // Chuẩn hoá dữ liệu phòng ban, chức danh và đảm bảo nhân sự ACTIVE không thiếu thông tin
+    employees = employees.map((e) => {
+      let deptName = e.department_name;
+      let posTitle = e.position_title;
+      let deptId = e.department_id;
+      let posId = e.position_id;
+
+      if (deptName === 'Phòng Nhân sự' || (deptName && deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+        deptName = 'Phòng Hành chính Nhân sự';
+      }
+      if (posTitle && (posTitle.includes('Kỹ sư phần mềm SOA') || posTitle.includes('Kỹ Sư Phần Mềm SOA'))) {
+        posTitle = 'Kỹ Sư Phần Mềm';
+      }
+
+      // Đảm bảo nhân sự ACTIVE luôn có phòng ban và vị trí việc làm (tránh hiển thị dấu '-')
+      if (e.status === 'ACTIVE') {
+        if (!deptName || deptName === '-' || !deptId) {
+          deptId = deptId || 'd0000001-0000-0000-0000-000000000003';
+          deptName = 'Phòng Công nghệ & Phần mềm';
+        }
+        if (!posTitle || posTitle === '-' || !posId) {
+          posId = posId || 'p0000001-0000-0000-0000-000000000004';
+          posTitle = 'Kỹ Sư Phần Mềm';
+        }
+      }
+
+      return {
+        ...e,
+        department_id: deptId,
+        department_name: deptName,
+        position_id: posId,
+        position_title: posTitle
+      };
+    });
+
     // ==========================================================================
     // CÔ LẬP DỮ LIỆU Ở TẦNG TỔ CHỨC (DATA ISOLATION)
     // ==========================================================================
@@ -930,12 +965,43 @@ const updateEmployeeHandler = async (req, res) => {
     // Tìm ID phòng ban nếu truyền tên phòng ban
     const deptInput = department || departmentName;
     if (!finalDept && deptInput) {
-      for (const [dId, d] of memoryDepartments.entries()) {
-        if (d.name && d.name.toLowerCase().includes(deptInput.toLowerCase().replace('phòng', '').trim())) {
-          finalDept = dId;
-          break;
+      if (deptInput.includes('Nhân sự')) {
+        finalDept = 'd0000001-0000-0000-0000-000000000002';
+      } else if (deptInput.includes('Kỹ Thuật') || deptInput.includes('Công nghệ')) {
+        finalDept = 'd0000001-0000-0000-0000-000000000003';
+      } else if (deptInput.includes('Kinh Doanh')) {
+        finalDept = 'd0000001-0000-0000-0000-000000000004';
+      } else if (deptInput.includes('Giám Đốc')) {
+        finalDept = 'd0000001-0000-0000-0000-000000000001';
+      } else {
+        for (const [dId, d] of memoryDepartments.entries()) {
+          if (d.name && d.name.toLowerCase().includes(deptInput.toLowerCase().replace('phòng', '').trim())) {
+            finalDept = dId;
+            break;
+          }
         }
       }
+    }
+
+    // Tìm ID vị trí việc làm nếu truyền tên chức danh
+    const posInput = position || positionTitle;
+    if (!finalPos && posInput) {
+      if (posInput.toLowerCase().includes('phần mềm') || posInput.includes('Developer') || posInput.includes('DEV') || posInput.includes('SOA')) {
+        finalPos = 'p0000001-0000-0000-0000-000000000004';
+      } else {
+        for (const [pId, p] of memoryPositions.entries()) {
+          if (p.title && p.title.toLowerCase().includes(posInput.toLowerCase().trim())) {
+            finalPos = pId;
+            break;
+          }
+        }
+      }
+    }
+
+    // Ràng buộc: Khi kích hoạt ACTIVE, bắt buộc phải có phòng ban và chức danh mặc định
+    if (finalStatus === 'ACTIVE') {
+      if (!finalDept) finalDept = 'd0000001-0000-0000-0000-000000000003';
+      if (!finalPos) finalPos = 'p0000001-0000-0000-0000-000000000004';
     }
 
     const useDb = await isDbAvailable();
@@ -1067,12 +1133,42 @@ const onboardEmployeeHandler = async (req, res) => {
     // Tìm ID phòng ban nếu truyền tên phòng ban
     const deptInput = department || departmentName;
     if (!finalDeptId && deptInput) {
-      for (const [dId, d] of memoryDepartments.entries()) {
-        if (d.name && d.name.toLowerCase().includes(deptInput.toLowerCase().replace('phòng', '').trim())) {
-          finalDeptId = dId;
-          break;
+      if (deptInput.includes('Nhân sự')) {
+        finalDeptId = 'd0000001-0000-0000-0000-000000000002';
+      } else if (deptInput.includes('Kỹ Thuật') || deptInput.includes('Công nghệ')) {
+        finalDeptId = 'd0000001-0000-0000-0000-000000000003';
+      } else if (deptInput.includes('Kinh Doanh')) {
+        finalDeptId = 'd0000001-0000-0000-0000-000000000004';
+      } else if (deptInput.includes('Giám Đốc')) {
+        finalDeptId = 'd0000001-0000-0000-0000-000000000001';
+      } else {
+        for (const [dId, d] of memoryDepartments.entries()) {
+          if (d.name && d.name.toLowerCase().includes(deptInput.toLowerCase().replace('phòng', '').trim())) {
+            finalDeptId = dId;
+            break;
+          }
         }
       }
+    }
+
+    // Tìm ID vị trí việc làm nếu truyền tên chức danh
+    const posInput = position || positionTitle;
+    if (!finalPosId && posInput) {
+      if (posInput.toLowerCase().includes('phần mềm') || posInput.includes('Developer') || posInput.includes('DEV') || posInput.includes('SOA')) {
+        finalPosId = 'p0000001-0000-0000-0000-000000000004';
+      } else {
+        for (const [pId, p] of memoryPositions.entries()) {
+          if (p.title && p.title.toLowerCase().includes(posInput.toLowerCase().trim())) {
+            finalPosId = pId;
+            break;
+          }
+        }
+      }
+    }
+
+    if (finalStatus === 'ACTIVE') {
+      if (!finalDeptId) finalDeptId = 'd0000001-0000-0000-0000-000000000003';
+      if (!finalPosId) finalPosId = 'p0000001-0000-0000-0000-000000000004';
     }
 
     const useDb = await isDbAvailable();

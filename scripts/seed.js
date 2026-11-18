@@ -47,7 +47,43 @@ async function seed() {
       ON DUPLICATE KEY UPDATE title = 'Kỹ Sư Phần Mềm'
     `);
 
-    console.log('[SEED] Chuẩn hoá chức danh hoàn tất thành công!');
+    // 4. Chuẩn hoá tên phòng ban thống nhất về 'Phòng Hành chính Nhân sự'
+    await pool.query(`
+      UPDATE departments 
+      SET name = 'Phòng Hành chính Nhân sự' 
+      WHERE name = 'Phòng Nhân sự'
+    `);
+
+    // 5. Chuẩn hoá phòng ban và vị trí việc làm cho các nhân sự ACTIVE
+    await pool.query(`
+      UPDATE employees 
+      SET department_id = 'd0000001-0000-0000-0000-000000000002',
+          position_id = 'p0000001-0000-0000-0000-000000000004'
+      WHERE code = 'EMP_11800' OR full_name LIKE '%Nguyễn Huy%'
+    `);
+
+    await pool.query(`
+      UPDATE employees 
+      SET department_id = 'd0000001-0000-0000-0000-000000000003',
+          position_id = 'p0000001-0000-0000-0000-000000000004',
+          manager_id = 'e0000001-0000-0000-0000-000000000003'
+      WHERE code IN ('EMP_VUONGLAM', 'EMP_DUCHIEUNGOPT') 
+         OR email LIKE '%vuonglam%' OR email LIKE '%duchieungopt%'
+    `);
+
+    await pool.query(`
+      UPDATE employees 
+      SET department_id = 'd0000001-0000-0000-0000-000000000003'
+      WHERE status = 'ACTIVE' AND (department_id IS NULL OR department_id = '')
+    `);
+
+    await pool.query(`
+      UPDATE employees 
+      SET position_id = 'p0000001-0000-0000-0000-000000000004'
+      WHERE status = 'ACTIVE' AND (position_id IS NULL OR position_id = '')
+    `);
+
+    console.log('[SEED] Chuẩn hoá chức danh và nhân sự hoàn tất thành công!');
   } catch (err) {
     console.warn('[SEED] Cảnh báo khi chuẩn hoá DB positions:', err.message);
   }
