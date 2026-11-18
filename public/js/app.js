@@ -5656,9 +5656,8 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
       if (!myShiftsToday.length) {
         html += `
           <div class="schedule-day-off-card">
-            <div style="font-size: 26px; line-height: 1;">☕</div>
             <div style="font-weight: 700; font-size: 13px; color: #475569;">Ngày nghỉ / Không có ca</div>
-            <div style="font-size: 11px; color: #94a3b8;">Không có ca làm việc nào được phân bổ</div>
+            <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Không có ca làm việc nào được phân bổ</div>
           </div>
         `;
       } else {
@@ -5795,10 +5794,9 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
 
     if (!myDayAssignments.length) {
       html += `
-        <div style="grid-column: 1 / -1; padding: 48px 16px; text-align: center; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 10px; color: #64748b;">
-          <div style="font-size: 32px; margin-bottom: 8px;">☕</div>
+        <div style="grid-column: 1 / -1; padding: 36px 16px; text-align: center; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 10px; color: #64748b;">
           <div style="font-size: 15px; font-weight: 700; color: #334155;">Hôm nay là ngày nghỉ / Không có ca làm việc</div>
-          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Bạn không có lịch làm việc được phân bổ vào ngày này (${formatLeaveDate(curDateStr)}).</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">Bạn không có lịch làm việc được phân bổ vào ngày này (${formatLeaveDate(curDateStr)}).</div>
         </div>
       `;
     } else {
@@ -5911,6 +5909,8 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
 }
 
 function renderMonthSchedule(container, assignments, range) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
   const todayStr = new Date().toISOString().slice(0, 10);
   const targetMonth = range.targetMonth;
   const headerDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
@@ -5956,6 +5956,9 @@ function renderMonthSchedule(container, assignments, range) {
             </div>
           `).join('')}
           ${Object.keys(shiftCounts).length > 3 ? `<div style="font-size: 9px; color: #64748b;">+${Object.keys(shiftCounts).length - 3} ca khác</div>` : ''}
+          ${(!dayAssignments.length && isEmployee && !isDiffMonth) ? `
+            <div style="font-size: 9px; color: #94a3b8; font-style: italic; padding: 2px 0;">Ngày nghỉ / Không có ca</div>
+          ` : ''}
         </div>
       </div>
     `;
