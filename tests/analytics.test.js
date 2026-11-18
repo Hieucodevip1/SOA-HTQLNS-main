@@ -355,4 +355,115 @@ describe('Kiểm thử Phân hệ Analytics Service (:3108)', () => {
     assert.notStrictEqual(totalDeptStdDays, 2090, 'Tổng công chuẩn toàn công ty không được hardcode 2090');
     assert.strictEqual(totalDeptStdDays, totalDeptEmps * 22, 'Tổng công chuẩn toàn công ty phải = totalDeptEmps * 22');
   });
+
+  // 14. API cảnh báo ngưỡng /api/v1/analytics/thresholds tính toán động từ dữ liệu thật, không chứa hardcode Huỳnh Gia Kiệt, Trần Hoài An
+  test('API giám sát ngưỡng cảnh báo /api/v1/analytics/thresholds tính toán động, không chứa hardcode Huỳnh Gia Kiệt, Trần Hoài An', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/thresholds?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'x-user-role': 'ADMIN'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data), 'data phải là mảng cấu hình ngưỡng');
+    assert.ok(body.data.length >= 2, 'Phải có ít nhất 2 quy tắc ngưỡng (TH-LATE-3 và TH-OT-40)');
+
+    const thLate = body.data.find(t => t.code === 'TH-LATE-3');
+    const thOt = body.data.find(t => t.code === 'TH-OT-40');
+
+    assert.ok(thLate, 'Phải có ngưỡng TH-LATE-3');
+    assert.ok(thOt, 'Phải có ngưỡng TH-OT-40');
+
+    // Kiểm tra không chứa chuỗi hardcode Huỳnh Gia Kiệt, Trần Hoài An
+    const rawDataStr = JSON.stringify(body.data);
+    assert.ok(
+      !rawDataStr.includes('Huỳnh Gia Kiệt, Trần Hoài An'),
+      'Dữ liệu vi phạm ngưỡng không được chứa chuỗi hardcode "Huỳnh Gia Kiệt, Trần Hoài An"'
+    );
+
+    // Kiểm tra tính hợp lệ của TH-LATE-3
+    assert.ok(typeof thLate.violationCount === 'number');
+    assert.ok(['An toàn', 'Cần nhắc nhở'].includes(thLate.status));
+    if (thLate.violationCount === 0) {
+      assert.strictEqual(thLate.status, 'An toàn');
+      assert.strictEqual(thLate.violationDisplay, '0 nhân sự (Không có vi phạm)');
+    } else {
+      assert.strictEqual(thLate.status, 'Cần nhắc nhở');
+      assert.ok(thLate.violationDisplay.includes(`${thLate.violationCount} nhân sự`));
+    }
+
+    // Kiểm tra tính hợp lệ của TH-OT-40
+    assert.ok(typeof thOt.violationCount === 'number');
+    assert.ok(['An toàn', 'Vượt ngưỡng quy định'].includes(thOt.status));
+    if (thOt.violationCount === 0) {
+      assert.strictEqual(thOt.status, 'An toàn');
+      assert.strictEqual(thOt.violationDisplay, '0 nhân sự (Tuân thủ trần quy định)');
+    } else {
+      assert.strictEqual(thOt.status, 'Vượt ngưỡng quy định');
+      assert.ok(thOt.violationDisplay.includes(`${thOt.violationCount} nhân sự`));
+    }
+
+    assert.ok(body.meta, 'Phải có trường meta');
+    assert.ok(typeof body.meta.activeCount === 'number');
+    assert.strictEqual(body.meta.activeCount, body.data.filter(t => t.isTriggered).length);
+  });
+
+  // 15. Endpoint thống kê /api/v1/analytics/stats tích hợp đồng bộ dữ liệu thresholds
+  test('Endpoint /api/v1/analytics/stats trả về trường thresholds và thresholdActiveCount đồng bộ', async () => {
+    const res = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/stats?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'x-user-role': 'ADMIN'
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.ok(Array.isArray(body.data.thresholds), 'stats.thresholds phải là mảng');
+    assert.ok(typeof body.data.thresholdActiveCount === 'number', 'stats.thresholdActiveCount phải là số');
+    assert.strictEqual(
+      body.data.thresholdActiveCount,
+      body.data.thresholds.filter(t => t.isTriggered).length,
+      'thresholdActiveCount phải khớp với số ngưỡng isTriggered = true'
+    );
+  });
+
+  // 16. Phân quyền Quản lý (MANAGER) tra cứu ngưỡng cảnh báo chỉ trong phạm vi đội nhóm
+  test('Quản lý tra cứu /api/v1/analytics/thresholds chỉ giám sát vi phạm trong phạm vi đội nhóm', async () => {
+    // Quản lý chưa có nhân viên (empty manager)
+    const emptyMgrRes = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/thresholds?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${emptyManagerToken}`,
+        'x-user-id': 'emp_empty_manager_test',
+        'x-user-role': 'MANAGER'
+      }
+    });
+
+    assert.strictEqual(emptyMgrRes.status, 200);
+    const emptyBody = await emptyMgrRes.json();
+    assert.strictEqual(emptyBody.success, true);
+    assert.strictEqual(emptyBody.meta.activeCount, 0, 'Quản lý không có nhân sự thì activeCount phải bằng 0');
+    for (const t of emptyBody.data) {
+      assert.strictEqual(t.violationCount, 0);
+      assert.strictEqual(t.status, 'An toàn');
+    }
+
+    // Quản lý có nhân sự (Nguyễn Thanh Lâm)
+    const teamMgrRes = await fetch(`http://localhost:${ANALYTICS_PORT}/api/v1/analytics/thresholds?period=2026-11`, {
+      headers: {
+        Authorization: `Bearer ${managerWithTeamToken}`,
+        'x-user-id': 'e0000001-0000-0000-0000-000000000003',
+        'x-user-role': 'MANAGER'
+      }
+    });
+
+    assert.strictEqual(teamMgrRes.status, 200);
+    const teamBody = await teamMgrRes.json();
+    assert.strictEqual(teamBody.success, true);
+    assert.ok(Array.isArray(teamBody.data));
+  });
 });

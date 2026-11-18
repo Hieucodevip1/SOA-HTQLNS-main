@@ -3117,6 +3117,10 @@ async function changeStatPeriod(period) {
   if (tbody) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">Đang tải số liệu từ Analytics Service (:3008)...</td></tr>`;
   }
+  const threshBody = document.getElementById('statThresholdTableBody');
+  if (threshBody) {
+    threshBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">Đang tải danh sách cảnh báo ngưỡng...</td></tr>`;
+  }
 
   try {
     const res = await apiCall(`/api/v1/analytics/stats?period=${period}`);
@@ -3196,6 +3200,22 @@ async function changeStatPeriod(period) {
       if (fLeave) fLeave.innerText = `${sumLeave.toLocaleString('vi-VN')} ngày`;
       if (fRate) fRate.innerText = overallRate;
 
+      // Cập nhật Cảnh báo Vi phạm Ngưỡng (Threshold Monitoring)
+      if (res.data.thresholds) {
+        renderThresholdAlerts(res.data.thresholds, res.data.thresholdActiveCount);
+      } else {
+        try {
+          const tRes = await apiCall(`/api/v1/analytics/thresholds?period=${period}`);
+          if (tRes && tRes.success && tRes.data) {
+            renderThresholdAlerts(tRes.data, tRes.meta ? tRes.meta.activeCount : 0);
+          } else {
+            renderThresholdAlerts([], 0);
+          }
+        } catch (_) {
+          renderThresholdAlerts([], 0);
+        }
+      }
+
       showToast(`Đã nạp số liệu thống kê ${periodLabel} từ Analytics Service`, 'success');
       return;
     }
@@ -3207,6 +3227,7 @@ async function changeStatPeriod(period) {
   if (tbody) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">Không thể kết nối Analytics Service hoặc không có dữ liệu</td></tr>`;
   }
+  renderThresholdAlerts([], 0);
   const fEmp = document.getElementById('statFootEmployees');
   const fStd = document.getElementById('statFootStandardDays');
   const fAct = document.getElementById('statFootActualDays');
@@ -3219,6 +3240,80 @@ async function changeStatPeriod(period) {
   if (fLate) fLate.innerText = '0 lượt';
   if (fLeave) fLeave.innerText = '0 ngày';
   if (fRate) fRate.innerText = '0%';
+}
+
+// Render danh sách cảnh báo vi phạm ngưỡng tự động từ Analytics Service
+function renderThresholdAlerts(thresholds = [], activeCount = 0) {
+  const badge = document.getElementById('statThresholdActiveBadge');
+  const tbody = document.getElementById('statThresholdTableBody');
+
+  if (badge) {
+    const act = Number(activeCount) || 0;
+    if (act > 0) {
+      badge.textContent = `${act} ngưỡng kích hoạt`;
+      badge.className = 'badge-status';
+      badge.style.background = '#fef3c7';
+      badge.style.color = '#b45309';
+      badge.style.border = '1px solid #fde68a';
+    } else {
+      badge.textContent = '0 ngưỡng kích hoạt';
+      badge.className = 'badge-status badge-approved';
+      badge.style.background = '#ecfdf5';
+      badge.style.color = '#065f46';
+      badge.style.border = '1px solid #a7f3d0';
+    }
+  }
+
+  if (!tbody) return;
+
+  if (!thresholds || !thresholds.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">Không có cấu hình cảnh báo vi phạm ngưỡng</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = thresholds.map(t => {
+    const violationCount = Number(t.violationCount) || 0;
+    const names = (t.violatingNames && t.violatingNames.length) ? t.violatingNames.join(', ') : '';
+    const violationText = violationCount > 0
+      ? `<span style="color: #dc2626; font-weight: 600;">${violationCount} nhân sự</span> <span style="font-size: 12px; color: #64748b;">(${names})</span>`
+      : `<span style="color: #059669; font-weight: 600;">0 nhân sự</span> <span style="font-size: 12px; color: #64748b;">(${t.code === 'TH-OT-40' ? 'Tuân thủ trần quy định' : 'Không có vi phạm'})</span>`;
+
+    let severityHtml = '';
+    if (t.severity === 'CRITICAL') {
+      severityHtml = `<span class="badge-status badge-rejected">CRITICAL</span>`;
+    } else if (t.severity === 'WARNING') {
+      severityHtml = `<span class="badge-status" style="background: #fef3c7; color: #b45309; font-weight: 600;">WARNING</span>`;
+    } else {
+      severityHtml = `<span class="badge-status">${t.severity || 'INFO'}</span>`;
+    }
+
+    let statusHtml = '';
+    const statusText = t.status || (violationCount > 0 ? (t.severity === 'CRITICAL' ? 'Vượt ngưỡng quy định' : 'Cần nhắc nhở') : 'An toàn');
+    if (statusText === 'An toàn') {
+      statusHtml = `<span class="badge-status badge-approved">An toàn</span>`;
+    } else if (statusText === 'Cần nhắc nhở') {
+      statusHtml = `<span class="badge-status" style="background: #fef3c7; color: #b45309; font-weight: 600;">Cần nhắc nhở</span>`;
+    } else {
+      statusHtml = `<span class="badge-status badge-rejected">${statusText}</span>`;
+    }
+
+    const actionHtml = violationCount > 0
+      ? `<a href="javascript:void(0)" class="link-action-blue" style="cursor: pointer; font-size: 13px;" onclick="showToast('Đã gửi thông báo nhắc nhở đến các nhân sự vi phạm ngưỡng', 'info')">Xem xét →</a>`
+      : `<span style="color: #94a3b8; font-size: 12px;">Bình thường</span>`;
+
+    return `
+      <tr>
+        <td><strong>${t.code || '--'}</strong></td>
+        <td>${t.name || '--'}</td>
+        <td>${t.metricTarget || t.metric_target || '--'}</td>
+        <td>${t.activationLevel || t.activation_level || '--'}</td>
+        <td>${severityHtml}</td>
+        <td>${violationText}</td>
+        <td>${statusHtml}</td>
+        <td style="text-align: center;">${actionHtml}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // Nạp dữ liệu hồ sơ cá nhân (Động 100%, không còn lỗi gán sẵn Phòng Kỹ Thuật)

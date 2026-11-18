@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node scripts/run-all.js",
     "clean:test-data": "node scripts/clean-test-data.js",
-    "test": "node --test --test-concurrency=1 tests/infra.test.js tests/auth-org.test.js tests/employee-scope.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/e2e.test.js",
+    "test": "node --test --test-concurrency=1 tests/infra.test.js tests/auth-org.test.js tests/employee-scope.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/analytics.test.js tests/e2e.test.js",
     "test:infra": "node --test tests/infra.test.js",
     "test:auth-org": "node --test tests/auth-org.test.js",
     "test:scope": "node --test tests/employee-scope.test.js",
@@ -14,6 +14,7 @@
     "test:leave": "node --test tests/leave.test.js",
     "test:shift": "node --test tests/shift.test.js",
     "test:payroll": "node --test tests/payroll.test.js",
+    "test:analytics": "node --test tests/analytics.test.js",
     "test:e2e": "node --test tests/e2e.test.js",
     "start:gateway": "node gateway/server.js",
     "start:registry": "node registry/server.js",

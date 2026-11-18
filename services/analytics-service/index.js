@@ -136,11 +136,240 @@ app.get(['/api/v1/analytics/dashboard', '/api/analytics/dashboard', '/api/analyt
   }
 });
 
-// 2. Danh sách cấu hình ngưỡng cảnh báo (SCR_REP_01)
-app.get(['/api/v1/analytics/thresholds', '/api/analytics/thresholds'], requireAuth(['ADMIN', 'HR']), async (req, res, next) => {
+// 2. Hàm tính toán và giám sát ngưỡng cảnh báo từ dữ liệu thực tế
+function calculateThresholdsFromData(scopedEmployees, scopedLogs, scopedOts) {
+  // 1. Ngưỡng TH-LATE-3: Đi muộn > 3 lần/tháng
+  const empLateCounts = new Map();
+  (scopedLogs || []).forEach((l) => {
+    if (l.status === 'LATE' || Number(l.late_minutes) > 0) {
+      empLateCounts.set(l.emp_id, (empLateCounts.get(l.emp_id) || 0) + 1);
+    }
+  });
+
+  const lateViolators = [];
+  empLateCounts.forEach((count, empId) => {
+    if (count > 3) {
+      const emp = (scopedEmployees || []).find((e) => e.id === empId);
+      const name = emp ? (emp.full_name || emp.name || emp.code) : empId;
+      lateViolators.push({
+        empId,
+        name,
+        code: emp?.code || '',
+        count
+      });
+    }
+  });
+
+  // 2. Ngưỡng TH-OT-40: Vượt trần 40 giờ OT/tháng
+  const empOtHours = new Map();
+  (scopedOts || []).forEach((o) => {
+    const hours = Number(o.total_hours || o.ot_hours) || 0;
+    empOtHours.set(o.emp_id, (empOtHours.get(o.emp_id) || 0) + hours);
+  });
+
+  const otViolators = [];
+  empOtHours.forEach((hours, empId) => {
+    if (hours > 40.0) {
+      const emp = (scopedEmployees || []).find((e) => e.id === empId);
+      const name = emp ? (emp.full_name || emp.name || emp.code) : empId;
+      otViolators.push({
+        empId,
+        name,
+        code: emp?.code || '',
+        hours: Math.round(hours * 10) / 10
+      });
+    }
+  });
+
+  const thresholds = [
+    {
+      id: 'th000001-0000-0000-0000-000000000001',
+      code: 'TH-LATE-3',
+      name: 'Cảnh báo đi muộn quá 3 lần/tháng',
+      metric_type: 'LATE_COUNT_MONTH',
+      metricTarget: 'Số lần check-in trễ',
+      metric_target: 'Số lần check-in trễ',
+      activationLevel: '> 3 lần / tháng',
+      activation_level: '> 3 lần / tháng',
+      severity: 'WARNING',
+      threshold_value: '3.00',
+      thresholdValue: 3,
+      violationCount: lateViolators.length,
+      violatingEmployees: lateViolators,
+      violatingNames: lateViolators.map((v) => v.name),
+      violationDisplay: lateViolators.length > 0
+        ? `${lateViolators.length} nhân sự (${lateViolators.map((v) => v.name).join(', ')})`
+        : '0 nhân sự (Không có vi phạm)',
+      status: lateViolators.length > 0 ? 'Cần nhắc nhở' : 'An toàn',
+      isTriggered: lateViolators.length > 0
+    },
+    {
+      id: 'th000001-0000-0000-0000-000000000002',
+      code: 'TH-OT-40',
+      name: 'Cảnh báo vượt trần 40 giờ OT/tháng (Bộ luật LĐ)',
+      metric_type: 'OT_HOURS_MONTH',
+      metricTarget: 'Tổng số giờ tăng ca',
+      metric_target: 'Tổng số giờ tăng ca',
+      activationLevel: '> 40.0 giờ / tháng',
+      activation_level: '> 40.0 giờ / tháng',
+      severity: 'CRITICAL',
+      threshold_value: '40.00',
+      thresholdValue: 40,
+      violationCount: otViolators.length,
+      violatingEmployees: otViolators,
+      violatingNames: otViolators.map((v) => v.name),
+      violationDisplay: otViolators.length > 0
+        ? `${otViolators.length} nhân sự (${otViolators.map((v) => v.name).join(', ')})`
+        : '0 nhân sự (Tuân thủ trần quy định)',
+      status: otViolators.length > 0 ? 'Vượt ngưỡng quy định' : 'An toàn',
+      isTriggered: otViolators.length > 0
+    }
+  ];
+
+  const activeCount = thresholds.filter((t) => t.isTriggered).length;
+  return { thresholds, activeCount };
+}
+
+async function computeThresholdAlerts({ callerRole, callerUserId, periodParam, month, year }) {
+  let isQuarter = false;
+  let quarterNum = 0;
+  let periodLabel = '';
+
+  if (periodParam && periodParam.includes('-Q')) {
+    isQuarter = true;
+    const parts = periodParam.split('-Q');
+    year = Number(parts[0]) || 2026;
+    quarterNum = Number(parts[1]) || 3;
+    periodLabel = `Quý ${quarterNum}/${year}`;
+  } else if (periodParam && periodParam.match(/^\d{4}-\d{2}$/)) {
+    const parts = periodParam.split('-');
+    year = Number(parts[0]);
+    month = Number(parts[1]);
+    periodLabel = `Tháng ${String(month).padStart(2, '0')}/${year}`;
+  } else {
+    if (!month) month = new Date().getMonth() + 1;
+    if (!year) year = new Date().getFullYear();
+    periodLabel = `Tháng ${String(month).padStart(2, '0')}/${year}`;
+  }
+
+  const isManager = callerRole === 'MANAGER';
+  let allEmployees = [];
+  let allDepartments = [];
+  let logs = [];
+  let ots = [];
+  let hasDb = await isDbAvailable();
+
+  if (hasDb) {
+    try {
+      const [depts] = await pool.query('SELECT * FROM htqlns_organization.departments WHERE status = "ACTIVE"');
+      allDepartments = depts;
+
+      const [emps] = await pool.query(`
+        SELECT e.id, e.code, e.full_name, e.department_id, e.manager_id, e.status,
+               d.name AS department_name, d.code AS department_code
+        FROM htqlns_organization.employees e
+        LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+        WHERE e.status = 'ACTIVE'
+      `);
+      allEmployees = emps;
+
+      let attDateCond = isQuarter
+        ? 'QUARTER(a.work_date) = ? AND YEAR(a.work_date) = ?'
+        : 'MONTH(a.work_date) = ? AND YEAR(a.work_date) = ?';
+      let attDateParams = isQuarter ? [quarterNum, year] : [month, year];
+
+      const [attRows] = await pool.query(`
+        SELECT a.*, e.department_id, e.full_name
+        FROM htqlns_attendance.attendance_logs a
+        JOIN htqlns_organization.employees e ON a.emp_id = e.id
+        WHERE ${attDateCond}
+      `, attDateParams);
+      logs = attRows;
+
+      let otDateCond = isQuarter
+        ? 'QUARTER(ot.work_date) = ? AND YEAR(ot.work_date) = ?'
+        : 'MONTH(ot.work_date) = ? AND YEAR(ot.work_date) = ?';
+      let otDateParams = isQuarter ? [quarterNum, year] : [month, year];
+
+      const [otRows] = await pool.query(`
+        SELECT ot.*, e.department_id, e.full_name
+        FROM htqlns_shift.ot_requests ot
+        JOIN htqlns_organization.employees e ON ot.emp_id = e.id
+        WHERE ot.status = 'APPROVED' AND ${otDateCond}
+      `, otDateParams);
+      ots = otRows;
+    } catch (err) {
+      console.warn('[Analytics-Service] Lỗi truy vấn DB cho thresholds, fallback memory:', err.message);
+      hasDb = false;
+    }
+  }
+
+  if (!hasDb) {
+    allDepartments = memoryFallbackDepartments;
+    allEmployees = memoryFallbackEmployees.filter((e) => e.status === 'ACTIVE');
+    logs = [];
+    ots = [];
+  }
+
+  let scopedEmployees = [];
+  if (isManager) {
+    const managerUser = allEmployees.find((e) => e.id === callerUserId);
+    const managerDeptId = managerUser ? managerUser.department_id : null;
+    const managedDeptIds = allDepartments.filter((d) => d.manager_id === callerUserId || (managerDeptId && d.id === managerDeptId)).map((d) => d.id);
+    const targetDeptIds = new Set(managedDeptIds);
+    scopedEmployees = allEmployees.filter(
+      (e) => (e.manager_id && e.manager_id === callerUserId) || (e.department_id && targetDeptIds.has(e.department_id))
+    );
+  } else {
+    scopedEmployees = allEmployees;
+  }
+
+  const scopedEmpIds = new Set(scopedEmployees.map((e) => e.id));
+  const scopedLogs = logs.filter((l) => scopedEmpIds.has(l.emp_id));
+  const scopedOts = ots.filter((o) => scopedEmpIds.has(o.emp_id));
+
+  const { thresholds, activeCount } = calculateThresholdsFromData(scopedEmployees, scopedLogs, scopedOts);
+  const periodKey = (typeof periodParam === 'string' && periodParam.trim())
+    ? periodParam.trim()
+    : (isQuarter ? `${year}-Q${quarterNum}` : `${year}-${String(month).padStart(2, '0')}`);
+
+  return {
+    thresholds,
+    thresholdActiveCount: activeCount,
+    periodKey,
+    periodLabel
+  };
+}
+
+// 2. Danh sách cấu hình ngưỡng cảnh báo & kết quả vi phạm thực tế (SCR_REP_01)
+app.get([
+  '/api/v1/analytics/thresholds',
+  '/api/analytics/thresholds',
+  '/api/v1/analytics/threshold-monitoring'
+], requireAuth(['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN', 'MANAGER']), async (req, res, next) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM alert_thresholds');
-    res.json({ success: true, data: rows });
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const callerUserId = req.headers['x-user-id'] || req.user?.empId || req.user?.userId || req.user?.id;
+    const periodParam = req.query.period || '';
+    const month = Number(req.query.month || 0);
+    const year = Number(req.query.year || 0);
+
+    const result = await computeThresholdAlerts({
+      callerRole,
+      callerUserId,
+      periodParam,
+      month,
+      year
+    });
+
+    res.json({
+      success: true,
+      data: result.thresholds,
+      meta: {
+        activeCount: result.thresholdActiveCount,
+        period: result.periodKey
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -525,6 +754,7 @@ const getStatsHandler = async (req, res, next) => {
       : (isQuarter ? `${year}-Q${quarterNum}` : `${year}-${String(month).padStart(2, '0')}`);
 
     if (totalEmployees === 0) {
+      const { thresholds: emptyThresholds, activeCount: emptyActiveCount } = calculateThresholdsFromData([], [], []);
       return res.json({
         success: true,
         data: {
@@ -549,7 +779,9 @@ const getStatsHandler = async (req, res, next) => {
             totalLeaveDays: 0,
             totalOtHours: 0
           },
-          departments: []
+          departments: [],
+          thresholds: emptyThresholds,
+          thresholdActiveCount: emptyActiveCount
         }
       });
     }
@@ -602,6 +834,8 @@ const getStatsHandler = async (req, res, next) => {
     const leaveRate = totalStandardDays > 0 ? Math.round((totalLeaveDays / totalStandardDays) * 1000) / 10 : 0;
     const overallAttendanceRate = totalStandardDays > 0 ? Math.min(100, Math.round((totalWorkDays / totalStandardDays) * 1000) / 10) : 0;
 
+    const { thresholds: thresholdsStats, activeCount: thresholdActiveCount } = calculateThresholdsFromData(scopedEmployees, scopedLogs, scopedOts);
+
     return res.json({
       success: true,
       data: {
@@ -626,7 +860,9 @@ const getStatsHandler = async (req, res, next) => {
           totalLeaveDays,
           totalOtHours
         },
-        departments: departmentsStats
+        departments: departmentsStats,
+        thresholds: thresholdsStats,
+        thresholdActiveCount
       }
     });
   } catch (err) {

@@ -3500,7 +3500,7 @@ input:checked + .slider:before {
                 <div class="card-title-text">Cảnh báo Vi phạm Ngưỡng (Analytics Alert Thresholds)</div>
                 <div style="font-size: 12px; color: #64748b;">Giám sát tự động từ Analytics Service (:3008) theo quy định Luật Lao động & Nội quy công ty</div>
               </div>
-              <span class="badge-status badge-approved">2 ngưỡng kích hoạt</span>
+              <span class="badge-status badge-approved" id="statThresholdActiveBadge">0 ngưỡng kích hoạt</span>
             </div>
             <table class="figma-table">
               <thead>
@@ -3515,25 +3515,8 @@ input:checked + .slider:before {
                   <th style="text-align: center;">Thao tác / Giải trình</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td><strong>TH-LATE-3</strong></td>
-                  <td>Cảnh báo đi muộn quá 3 lần/tháng</td>
-                  <td>Số lần check-in trễ</td>
-                  <td>&gt; 3 lần / tháng</td>
-                  <td><span class="badge-status" style="background: #fef3c7; color: #b45309;">WARNING</span></td>
-                  <td><strong>2 nhân sự</strong> (Huỳnh Gia Kiệt, Trần Hoài An)</td>
-                  <td><span class="badge-status" style="background: #fef3c7; color: #b45309;">Cần nhắc nhở</span></td>
-                </tr>
-                <tr>
-                  <td><strong>TH-OT-40</strong></td>
-                  <td>Cảnh báo vượt trần 40 giờ OT/tháng (Bộ luật LĐ)</td>
-                  <td>Tổng số giờ tăng ca</td>
-                  <td>&gt; 40.0 giờ / tháng</td>
-                  <td><span class="badge-status badge-rejected">CRITICAL</span></td>
-                  <td><strong>0 nhân sự</strong> (Tuân thủ trần quy định)</td>
-                  <td><span class="badge-status badge-approved">An toàn</span></td>
-                </tr>
+              <tbody id="statThresholdTableBody">
+                <tr><td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">Đang tải danh sách cảnh báo ngưỡng...</td></tr>
               </tbody>
             </table>
           </div>
