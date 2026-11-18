@@ -414,31 +414,17 @@ function toggleAuthMode(mode) {
   const regForm = document.getElementById('authRegisterFormContainer');
   if (loginForm) loginForm.style.display = isLogin ? 'block' : 'none';
   if (regForm) regForm.style.display = isLogin ? 'none' : 'block';
-
-  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
-  const targetDemoBtn = document.getElementById(isLogin ? 'btn-demo-login' : 'btn-demo-register');
-  if (targetDemoBtn) targetDemoBtn.classList.add('active-demo');
 }
 
-function togglePasswordVisibility(inputId) {
+function togglePasswordVisibility(inputId, btn) {
   const input = document.getElementById(inputId);
   if (input) {
-    input.type = input.type === 'password' ? 'text' : 'password';
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    if (btn) {
+      btn.textContent = isPassword ? 'Ẩn' : 'Hiện';
+    }
   }
-}
-
-// Chọn nhanh tài khoản kiểm thử 1-click
-async function quickFillAuth(role) {
-  const accounts = {
-    admin: { u: 'admin', p: '123456' },
-    manager: { u: 'manager', p: '123456' },
-    hr_admin: { u: 'hr_admin', p: '123456' },
-    employee: { u: 'employee', p: '123456' }
-  };
-  const acc = accounts[role] || { u: role, p: '123456' };
-  document.getElementById('loginUsername').value = acc.u;
-  document.getElementById('loginPassword').value = acc.p;
-  await handleLoginSubmit(new Event('submit'));
 }
 
 async function handleLoginSubmit(e) {
@@ -593,11 +579,6 @@ function handleForgotPasswordClick() {
 // 6. CHUYỂN ĐỔI GIAO DIỆN & ĐIỀU HƯỚNG
 // ==============================================================================
 function showScreenView(screen) {
-  // Cập nhật trạng thái nút demo bar
-  document.querySelectorAll('.btn-demo-view').forEach(btn => btn.classList.remove('active-demo'));
-  const activeBtn = document.getElementById(`btn-demo-${screen}`);
-  if (activeBtn) activeBtn.classList.add('active-demo');
-
   if (screen === 'login') {
     document.getElementById('portalApp').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';

@@ -136,27 +136,24 @@ body {
   }
 }
 
-/* Điểm ghim tròn đỏ ở góc trên bên trái card */
-.card-pin-indicator {
+.password-toggle {
   position: absolute;
-  top: -14px;
-  left: -14px;
-  width: 36px;
-  height: 36px;
-  background: #ffffff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  z-index: 12;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  outline: none;
+  transition: color 0.15s;
 }
 
-.card-pin-dot {
-  width: 20px;
-  height: 20px;
-  background: #d84349;
-  border-radius: 50%;
+.password-toggle:hover {
+  color: #1e293b;
 }
 
 .auth-card-header {
@@ -322,45 +319,7 @@ body {
   gap: 6px;
 }
 
-/* Quick Fill Demo buttons */
-.quick-login-pills {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px dashed #cbd5e1;
-}
 
-.quick-login-pills-title {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-
-.quick-pills-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pill-btn-role {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: var(--radius-pill);
-  padding: 5px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.pill-btn-role:hover {
-  background: #de4b4b;
-  color: #ffffff;
-  border-color: #de4b4b;
-}
 
 .auth-switch-link {
   text-align: center;
@@ -1163,77 +1122,7 @@ input:checked + .slider:before {
 .toast-error { background: #b91c1c; }
 .toast-warning { background: #c2410c; }
 
-/* ==============================================================================
-   THANH ĐIỀU HƯỚNG DEMO WIREFRAME FIGMA (1-CLICK XEM TẤT CẢ MÀN HÌNH MẪU)
-   ============================================================================== */
-.demo-screen-bar {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: #ffffff;
-  padding: 8px 16px;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 99999;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 12px;
-}
 
-.demo-screen-label {
-  font-weight: 600;
-  color: #cbd5e1;
-  margin-right: 2px;
-  white-space: nowrap;
-}
-
-.btn-demo-view {
-  background: rgba(255, 255, 255, 0.12);
-  color: #f8fafc;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 9999px;
-  padding: 6px 13px;
-  font-size: 11.5px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.btn-demo-view:hover {
-  background: #d84349;
-  border-color: #d84349;
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
-.btn-demo-view.active-demo {
-  background: #10b981;
-  border-color: #10b981;
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.btn-demo-close {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 4px 6px;
-  font-size: 13px;
-  border-radius: 50%;
-  margin-left: 4px;
-}
-
-.btn-demo-close:hover {
-  color: #ffffff;
-}
 
 /* ==============================================================================
    DASHBOARD NHÂN VIÊN (EMPLOYEE DASHBOARD STYLES - KHU VỰC 1, 2, 3, 4)
