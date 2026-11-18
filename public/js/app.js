@@ -533,11 +533,26 @@ async function handleRegisterSubmit(e) {
     };
     saveRegisteredUser(newUserObj);
 
-    const roleLabel = role === 'MANAGER' ? 'Quản lý' : 'Nhân viên';
-    showToast(`Đăng ký tài khoản ${username} (${roleLabel}) thành công! Mời bạn đăng nhập.`, 'success');
+    // Chuyển sang form Đăng nhập và để trống hoàn toàn 2 ô nhập liệu
     toggleAuthMode('login');
-    document.getElementById('loginUsername').value = username;
-    document.getElementById('loginPassword').value = password;
+    const uInput = document.getElementById('loginUsername');
+    const pInput = document.getElementById('loginPassword');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+
+    // Xóa trắng các trường trên form Đăng ký
+    const fName = document.getElementById('regFirstName');
+    const lName = document.getElementById('regLastName');
+    const eMail = document.getElementById('regEmail');
+    const pWord = document.getElementById('regPassword');
+    const cPword = document.getElementById('regConfirmPassword');
+    if (fName) fName.value = '';
+    if (lName) lName.value = '';
+    if (eMail) eMail.value = '';
+    if (pWord) pWord.value = '';
+    if (cPword) cPword.value = '';
+
+    showToast('Đăng ký thành công, vui lòng đăng nhập', 'success');
   } catch (err) {
     console.error('Lỗi đăng ký:', err);
     showToast(err.message || 'Đăng ký thất bại, vui lòng thử lại', 'error');
