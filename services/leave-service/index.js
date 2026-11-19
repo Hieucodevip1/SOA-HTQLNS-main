@@ -277,6 +277,7 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
               COALESCE(e.full_name, 'Nhân viên') AS emp_name,
               COALESCE(e.code, lr.emp_id) AS emp_code,
               e.department_id,
+              COALESCE(e.manager_id, d.manager_id) AS manager_id,
               COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
@@ -285,7 +286,17 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
        WHERE lr.id = ?`,
       [id]
     );
-    events.publish('LEAVE_REQUEST_CREATED', { requestId: id, empId, startDate, endDate, totalDays }).catch(() => {});
+    events.publish('LEAVE_REQUEST_CREATED', {
+      requestId: id,
+      empId,
+      employeeName: created[0]?.emp_name || 'Nhân viên',
+      departmentId: created[0]?.department_id,
+      managerId: created[0]?.manager_id || null,
+      startDate,
+      endDate,
+      totalDays,
+      leaveName: created[0]?.leave_name
+    }).catch(() => {});
 
     res.status(201).json({ success: true, message: 'Gửi đơn xin nghỉ phép thành công', data: created[0] });
   } catch (err) {
@@ -422,6 +433,7 @@ const handleLeaveDecision = async (req, res, next) => {
     events.publish(`LEAVE_REQUEST_${decision}`, {
       requestId: leave.id,
       empId: leave.emp_id,
+      employeeName: leave.emp_name || 'Nhân viên',
       startDate: leave.start_date,
       endDate: leave.end_date,
       totalDays: leave.total_days,
@@ -429,7 +441,8 @@ const handleLeaveDecision = async (req, res, next) => {
       approvedBy: approverId,
       approverId,
       approverRole: callerRole,
-      isOverride: isAdminOrHr
+      isOverride: isAdminOrHr,
+      rejectReason: req.body?.rejectReason || req.body?.reject_reason || null
     }).catch(() => {});
 
     const [updated] = await pool.query(

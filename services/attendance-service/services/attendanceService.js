@@ -532,7 +532,7 @@ class AttendanceService {
     const attendanceId = existingLog ? existingLog.id : (body.attendanceId || body.attendance_id || null);
 
     const id = crypto.randomUUID();
-    return await repository.createAdjustment({
+    const created = await repository.createAdjustment({
       id,
       empId,
       attendanceId,
@@ -543,6 +543,20 @@ class AttendanceService {
       reason: reason.trim(),
       evidenceUrl: evidenceUrl || null
     });
+
+    const employeeName = user?.fullName || user?.full_name || user?.name || user?.username || 'Nhân viên';
+    events.publish('ADJUSTMENT_REQUEST_CREATED', {
+      adjustmentId: id,
+      requestId: id,
+      empId,
+      employeeName,
+      departmentId: user?.departmentId || user?.department_id || null,
+      workDate,
+      adjustmentType,
+      reason: reason.trim()
+    }).catch(() => {});
+
+    return created;
   }
 
   /**

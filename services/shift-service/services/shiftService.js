@@ -360,6 +360,20 @@ class ShiftService {
       assignedBy
     });
 
+    try {
+      const shift = await shiftRepository.getShiftById(shiftId);
+      const shiftName = shift?.name || shiftId;
+      events.publish('SHIFT_ASSIGNED', {
+        empIds,
+        shiftId,
+        shiftName,
+        workDates,
+        startTime,
+        endTime,
+        assignedBy
+      }).catch(() => {});
+    } catch (_) {}
+
     return {
       count,
       message: `Đã phân ca thành công cho ${count} lượt ngày công`
@@ -649,11 +663,16 @@ class ShiftService {
     });
 
     // Phát sự kiện Pub/Sub
+    const employeeName = req.user?.fullName || req.user?.full_name || req.user?.name || req.user?.username || 'Nhân viên';
     events.publish('OT_REQUEST_CREATED', {
       requestId: created.id,
       empId,
+      employeeName,
+      departmentId: req.user?.departmentId || req.user?.department_id || null,
       workDate,
-      totalHours: hours
+      totalHours: hours,
+      startTime,
+      endTime
     }).catch(() => {});
 
     return created;
@@ -710,11 +729,13 @@ class ShiftService {
     events.publish(`OT_REQUEST_${decision}`, {
       requestId: id,
       empId: result.data.emp_id,
+      employeeName: result.data.emp_name || user?.fullName || 'Nhân viên',
+      workDate: result.data.work_date,
+      totalHours: result.data.total_hours,
+      rejectReason: rejectReason || null,
       approverId,
       approverRole: callerRole,
-      isOverride: isAdminOrHr,
-      workDate: result.data.work_date,
-      totalHours: result.data.total_hours
+      isOverride: isAdminOrHr
     }).catch(() => {});
 
     return result.data;

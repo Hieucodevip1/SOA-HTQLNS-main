@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   id VARCHAR(36) NOT NULL PRIMARY KEY,
   emp_id VARCHAR(36) NULL COMMENT 'ID người nhận (NULL nếu gửi broadcast theo role)',
   target_role VARCHAR(30) NULL COMMENT 'Vai trò nhận thông báo (ADMIN, HR, MANAGER, EMPLOYEE)',
-  type ENUM('ATTENDANCE_ALERT', 'LEAVE_STATUS', 'OT_STATUS', 'PAYROLL', 'SYSTEM') NOT NULL DEFAULT 'SYSTEM',
+  type VARCHAR(50) NOT NULL DEFAULT 'SYSTEM' COMMENT 'Loại thông báo (ATTENDANCE_ALERT, LEAVE_STATUS, OT_STATUS, SHIFT_ASSIGNED, PAYROLL, SYSTEM)',
   title VARCHAR(255) NOT NULL,
   content TEXT NOT NULL,
   reference_id VARCHAR(36) NULL COMMENT 'ID đối tượng liên quan (đơn nghỉ, phiếu lương...)',

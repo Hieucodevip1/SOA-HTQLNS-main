@@ -734,6 +734,9 @@ async function handleRegisterSubmit(e) {
 function handleLogoutClick() {
   if (!confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) return;
 
+  stopNotificationPolling();
+  cachedNotifications = [];
+
   state.token = null;
   state.user = null;
 
@@ -4572,6 +4575,67 @@ async function submitCreateTeam() {
   }
 }
 
+// ==============================================================================
+// 9B. PHÂN HỆ THÔNG BÁO & CẢNH BÁO XUYÊN SUỐT (SCR_NOTIF_01)
+// ==============================================================================
+
+let cachedNotifications = [];
+let notificationPollInterval = null;
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Tải danh sách thông báo của người dùng từ Backend qua Gateway
+async function loadNotifications() {
+  if (!state.user || !state.token) return;
+  try {
+    const res = await apiCall('/api/v1/notifications/my');
+    if (res && res.success && Array.isArray(res.data)) {
+      cachedNotifications = res.data;
+      renderTopbarNotifications();
+      return;
+    }
+  } catch (err) {
+    try {
+      const res = await apiCall('/api/v1/notifications');
+      if (res && res.success && Array.isArray(res.data)) {
+        cachedNotifications = res.data;
+        renderTopbarNotifications();
+        return;
+      }
+    } catch (_) {}
+  }
+  renderTopbarNotifications();
+}
+
+// Bắt đầu vòng lặp thăm dò thông báo thời gian thực (15-30s một lần)
+function startNotificationPolling() {
+  if (notificationPollInterval) {
+    clearInterval(notificationPollInterval);
+    notificationPollInterval = null;
+  }
+  loadNotifications();
+  notificationPollInterval = setInterval(() => {
+    if (state.user && state.token) {
+      loadNotifications();
+    }
+  }, 20000);
+}
+
+function stopNotificationPolling() {
+  if (notificationPollInterval) {
+    clearInterval(notificationPollInterval);
+    notificationPollInterval = null;
+  }
+}
+
 // Dropdown Thông Báo trên Header
 function toggleTopbarNotifDropdown(e) {
   if (e) {
@@ -4582,6 +4646,9 @@ function toggleTopbarNotifDropdown(e) {
   if (!dropdown) return;
   const isShown = dropdown.style.display === 'block';
   dropdown.style.display = isShown ? 'none' : 'block';
+  if (!isShown) {
+    loadNotifications();
+  }
 }
 
 function openNotificationsModal(e) {
@@ -4599,50 +4666,64 @@ function renderTopbarNotifications() {
   const isOnboarded = state.user.isOnboarded;
   const displayName = state.user.fullName || state.user.username || 'Nhân viên';
 
-  let userNotifs = getUserEntityList('notifications');
-  if (!userNotifs.length && isEmployee && !isOnboarded) {
-    userNotifs = [
+  let list = Array.isArray(cachedNotifications) && cachedNotifications.length > 0
+    ? [...cachedNotifications]
+    : getUserEntityList('notifications');
+
+  if (!list.length && isEmployee && !isOnboarded) {
+    list = [
       {
         id: 'notif-welcome',
         title: `Chào mừng ${displayName} gia nhập Hệ thống HTQLNS!`,
-        message: 'Tài khoản của bạn đã được khởi tạo thành công. Vui lòng chờ Ban Quản trị tiếp nhận vào ban/phòng, xếp ca trực và cấu hình mức lương.',
+        content: 'Tài khoản của bạn đã được khởi tạo thành công. Vui lòng chờ Ban Quản trị tiếp nhận vào ban/phòng, xếp ca trực và cấu hình mức lương.',
         type: 'SYSTEM',
         created_at: new Date().toISOString(),
         is_read: false
       }
     ];
-    saveUserEntityList('notifications', userNotifs);
   }
 
-  const unreadCount = userNotifs.filter(n => !n.is_read).length;
+  const unreadCount = list.filter(n => !n.is_read && n.is_read !== 1 && n.is_read !== true).length;
   const topbarBadge = document.getElementById('topbarNotifCountBadge');
   if (topbarBadge) topbarBadge.innerText = `${unreadCount} mới`;
 
   const topbarDot = document.getElementById('topbarNotifBadgeDot');
-  if (topbarDot) topbarDot.style.display = unreadCount > 0 ? 'block' : 'none';
+  if (topbarDot) {
+    if (unreadCount > 0) {
+      topbarDot.style.display = 'flex';
+      topbarDot.innerText = unreadCount > 99 ? '99+' : String(unreadCount);
+    } else {
+      topbarDot.style.display = 'none';
+      topbarDot.innerText = '';
+    }
+  }
 
   const topbarList = document.getElementById('topbarNotifList');
   if (topbarList) {
-    if (!userNotifs.length) {
-      topbarList.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 12.5px;">Không có thông báo mới nào.</div>';
+    if (!list.length) {
+      topbarList.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 24px; font-size: 13px;">Không có thông báo mới nào.</div>';
     } else {
-      topbarList.innerHTML = userNotifs.map(n => {
-        const isUnread = !n.is_read;
+      topbarList.innerHTML = list.map(n => {
+        const isUnread = !n.is_read && n.is_read !== 1 && n.is_read !== true;
         const d = n.created_at ? new Date(n.created_at) : new Date();
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         const MM = String(d.getMonth() + 1).padStart(2, '0');
-        const timeStr = `${hh}:${mm} ${dd}-${MM}`;
-        const titleText = n.title || n.message;
+        const timeStr = `${hh}:${mm} ${dd}/${MM}`;
+        const titleText = escapeHtml(n.title || n.content || n.message || 'Thông báo hệ thống');
+        const contentText = escapeHtml(n.content || n.message || '');
+        const notifId = escapeHtml(String(n.id));
 
         return `
-          <div class="topbar-notif-item ${isUnread ? 'unread' : ''}" onclick="markNotifRead('${n.id}')">
+          <div class="topbar-notif-item ${isUnread ? 'unread' : ''}" onclick="handleNotificationClick('${notifId}')" style="cursor: pointer;">
             <div style="flex: 1;">
-              <div style="font-size: 13px; font-weight: ${isUnread ? '700' : '500'}; color: #1e293b; line-height: 1.4;">${titleText} - ${timeStr}</div>
-              ${n.title && n.message && n.title !== n.message ? `<div style="font-size: 11.5px; color: #64748b; margin-top: 3px; line-height: 1.35;">${n.message}</div>` : ''}
+              <div style="font-size: 13px; font-weight: ${isUnread ? '700' : '500'}; color: #1e293b; line-height: 1.4;">
+                ${titleText} <span style="font-size: 11px; font-weight: normal; color: #94a3b8; margin-left: 4px;">${timeStr}</span>
+              </div>
+              ${contentText && titleText !== contentText ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">${contentText}</div>` : ''}
             </div>
-            ${isUnread ? '<div style="width: 7px; height: 7px; background: #2563eb; border-radius: 50%; margin-top: 5px; flex-shrink: 0;"></div>' : ''}
+            ${isUnread ? '<div style="width: 8px; height: 8px; background: #2563eb; border-radius: 50%; margin-top: 6px; flex-shrink: 0;"></div>' : ''}
           </div>
         `;
       }).join('');
@@ -4657,26 +4738,114 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Đánh dấu đã đọc thông báo
-function markNotifRead(notifId) {
+// Đánh dấu đã đọc 1 thông báo
+async function markNotifRead(notifId) {
+  if (!notifId) return;
+  if (Array.isArray(cachedNotifications)) {
+    const target = cachedNotifications.find(n => String(n.id) === String(notifId));
+    if (target) {
+      target.is_read = true;
+      target.read_at = new Date().toISOString();
+    }
+  }
   let userNotifs = getUserEntityList('notifications');
-  const target = userNotifs.find(n => n.id === notifId);
-  if (target) target.is_read = true;
+  const localTarget = userNotifs.find(n => String(n.id) === String(notifId));
+  if (localTarget) {
+    localTarget.is_read = true;
+    localTarget.read_at = new Date().toISOString();
+  }
   saveUserEntityList('notifications', userNotifs);
+
   renderTopbarNotifications();
+
+  try {
+    await apiCall(`/api/v1/notifications/${notifId}/read`, 'PATCH');
+  } catch (err) {
+    try {
+      await apiCall(`/api/notifications/${notifId}/read`, 'PATCH');
+    } catch (_) {}
+  }
+
   if (state.currentView === 'dashboard' && state.user?.role === 'EMPLOYEE') {
     loadEmployeeDashboardData();
   }
 }
 
-function markAllEmployeeNotifsRead() {
+// Xử lý khi click vào từng thông báo: Đánh dấu đã đọc và tự động chuyển phân hệ tương ứng
+async function handleNotificationClick(notifId) {
+  if (!notifId) return;
+  const list = Array.isArray(cachedNotifications) && cachedNotifications.length > 0
+    ? cachedNotifications
+    : getUserEntityList('notifications');
+  const target = list.find(n => String(n.id) === String(notifId));
+
+  await markNotifRead(notifId);
+  closeTopbarNotifDropdown();
+
+  if (!target) return;
+
+  const type = target.type || '';
+  const text = `${target.title || ''} ${target.content || ''} ${target.message || ''}`.toLowerCase();
+
+  // Đơn từ (Nghỉ phép, Tăng ca OT, Giải trình chấm công)
+  if (
+    ['LEAVE_STATUS', 'OT_STATUS', 'ATTENDANCE_ALERT'].includes(type) ||
+    /đơn|nghỉ phép|tăng ca|ot|giải trình/i.test(text)
+  ) {
+    navigateToView('requests');
+    if (state.user?.role === 'MANAGER') {
+      const isSubordinateRequest = /cần phê duyệt|vừa gửi đơn|chờ duyệt/i.test(text);
+      setTimeout(() => {
+        if (typeof switchRequestTab === 'function') {
+          switchRequestTab(isSubordinateRequest ? 'department' : 'personal');
+        }
+      }, 100);
+    }
+  } else if (
+    type === 'SHIFT_ASSIGNED' ||
+    /phân ca|ca làm việc|lịch ca/i.test(text)
+  ) {
+    navigateToView('shifts');
+  } else if (
+    type === 'PAYROLL' ||
+    /lương|phiếu lương|bảng lương/i.test(text)
+  ) {
+    navigateToView('payroll');
+  } else if (
+    /chấm công|điểm danh|check-in|check-out/i.test(text)
+  ) {
+    navigateToView('attendance');
+  } else {
+    navigateToView('dashboard');
+  }
+}
+
+// Đánh dấu đã đọc toàn bộ thông báo
+async function markAllEmployeeNotifsRead() {
+  if (Array.isArray(cachedNotifications)) {
+    cachedNotifications.forEach(n => {
+      n.is_read = true;
+      n.read_at = new Date().toISOString();
+    });
+  }
   let userNotifs = getUserEntityList('notifications');
-  userNotifs.forEach(n => { n.is_read = true; });
+  userNotifs.forEach(n => {
+    n.is_read = true;
+    n.read_at = new Date().toISOString();
+  });
   saveUserEntityList('notifications', userNotifs);
-  const badge = document.getElementById('dashEmpNotifCountBadge');
-  if (badge) badge.innerText = '0 mới';
+
   renderTopbarNotifications();
   showToast('Đã đánh dấu tất cả thông báo là đã đọc', 'success');
+
+  try {
+    await apiCall('/api/v1/notifications/read-all', 'PATCH');
+  } catch (err) {
+    try {
+      await apiCall('/api/notifications/read-all', 'PATCH');
+    } catch (_) {}
+  }
+
   if (state.currentView === 'dashboard' && state.user?.role === 'EMPLOYEE') {
     loadEmployeeDashboardData();
   }
@@ -5252,6 +5421,9 @@ function initPortalDashboard(targetView = null) {
   const savedView = targetView || safeGetStorage('htqlns_current_view', 'dashboard');
   navigateToView(savedView);
   checkTodayAttendanceStatus();
+
+  // Bắt đầu thăm dò thông báo thời gian thực từ Backend
+  startNotificationPolling();
 
   // Tự động kiểm tra và đồng bộ hồ sơ mới nhất từ Backend khi vào Dashboard
   if (savedView === 'dashboard') {
