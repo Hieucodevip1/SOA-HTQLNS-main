@@ -413,6 +413,26 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       );
     });
 
+    test('Quản lý mới chưa được phân công phòng ban gọi /api/organization/invitations bị từ chối (HTTP 400)', async () => {
+      const newMgrId = 'mgr-unassigned-' + Date.now();
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/invitations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': newMgrId,
+          'x-user-role': 'MANAGER',
+          'Authorization': `Bearer ${jwt.signToken({ userId: newMgrId, empId: newMgrId, role: 'MANAGER' })}`
+        },
+        body: JSON.stringify({
+          email: 'subordinate@htqlns.com'
+        })
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.ok((data.error || data.message || '').includes('chưa được phân công phòng ban'));
+    });
+
     test('Xóa phòng ban thử nghiệm /api/organization/departments/:id', async () => {
       assert.ok(createdDeptId, 'Phải có createdDeptId');
       const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/departments/${createdDeptId}`, {

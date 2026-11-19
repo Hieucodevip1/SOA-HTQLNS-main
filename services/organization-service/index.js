@@ -849,7 +849,9 @@ const getEmployeeMeHandler = async (req, res) => {
       posTitle = 'Kỹ Sư Phần Mềm';
     }
 
-    if (employee.status === 'ACTIVE') {
+    // Chỉ tự gán phòng ban cho tài khoản nhân sự mẫu có sẵn (demo)
+    const isDemoEmployee = (employee.code === 'NV-001' || employee.id === 'e0000001-0000-0000-0000-000000000004');
+    if (employee.status === 'ACTIVE' && isDemoEmployee) {
       if (!deptName || deptName === '-' || !deptId) {
         deptId = deptId || 'd0000001-0000-0000-0000-000000000003';
         deptName = 'Phòng Công nghệ & Phần mềm';
@@ -1752,8 +1754,11 @@ app.post(['/api/organization/invitations', '/api/invitations'], async (req, res)
       }
     }
 
-    // Nếu vẫn chưa có phòng ban, fallback về phòng ban đầu tiên hoặc tạo tạm
+    // Nếu vẫn chưa có phòng ban: Quản lý chưa được phân công phòng ban không được gửi lời mời
     if (!targetDept) {
+      if (callerRole === 'MANAGER') {
+        return badRequest(res, 'Tài khoản Quản lý chưa được phân công phòng ban phụ trách nên không thể gửi lời mời tham gia');
+      }
       targetDept = Array.from(memoryDepartments.values())[0];
       targetDeptId = targetDept?.id;
     }
@@ -2009,15 +2014,32 @@ app.get('/internal/organization/employee-scope', async (req, res) => {
     }
 
     if (empRole === 'MANAGER') {
-      const managedDepts = Array.from(memoryDepartments.values())
-        .filter((d) => d.manager_id === empId)
-        .map((d) => d.id);
-      const subordinates = Array.from(memoryEmployees.values()).filter(
-        (e) => e.manager_id === empId || (e.department_id && managedDepts.includes(e.department_id))
-      );
+      let managedDepts = [];
+      let subordinates = [];
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          const deptRows = await db.query('SELECT id FROM departments WHERE manager_id = ?', [empId], DB_NAME);
+          managedDepts = deptRows.map((d) => d.id);
+          const subRows = await db.query(
+            'SELECT id FROM employees WHERE manager_id = ? OR (department_id IS NOT NULL AND department_id IN (?))',
+            [empId, managedDepts.length > 0 ? managedDepts : ['__none__']],
+            DB_NAME
+          );
+          subordinates = subRows;
+        } catch {}
+      } else {
+        managedDepts = Array.from(memoryDepartments.values())
+          .filter((d) => d.manager_id === empId)
+          .map((d) => d.id);
+        subordinates = Array.from(memoryEmployees.values()).filter(
+          (e) => e.manager_id === empId || (e.department_id && managedDepts.includes(e.department_id))
+        );
+      }
       const allowedEmpIds = subordinates.map((e) => e.id);
+      const isUnassigned = managedDepts.length === 0 && (!emp || !emp.department_id);
       return success(res, {
-        isUnassigned: false,
+        isUnassigned,
         allowedEmpIds,
         managedDepts,
         count: allowedEmpIds.length

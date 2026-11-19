@@ -930,7 +930,17 @@ function applyRoleBasedUI() {
     if (pendingRequestsCard) pendingRequestsCard.style.display = 'block';
     if (role === 'MANAGER') {
       loadManagerTeamInfo();
+    } else {
+      const mgrCard = document.getElementById('managerTeamManagementCard');
+      if (mgrCard) mgrCard.style.display = 'none';
     }
+  }
+
+  // Giới hạn quyền hiển thị banner nhân sự mới chờ tiếp nhận: Chỉ dành cho ADMIN và HR_ADMIN
+  const adminAlert = document.getElementById('dashAdminPendingAlert');
+  const canReceivePersonnel = (role === 'ADMIN' || role === 'HR_ADMIN' || role === 'HR');
+  if (adminAlert && !canReceivePersonnel) {
+    adminAlert.style.display = 'none';
   }
 
   // 2. Tùy biến Sidebar theo vai trò:
@@ -2141,24 +2151,44 @@ async function submitCreateLeaveRequest() {
 // 7. NẠP DỮ LIỆU CÁC DỊCH VỤ & GIAO DIỆN
 // ==============================================================================
 async function loadDashboardData() {
-  // Kiểm tra nhân sự mới chờ tiếp nhận vào ban/phòng
-  const regUsers = getRegisteredUsersList();
-  const pendingUsers = regUsers.filter(u => {
-    const a = getUserAssignment(u.username, u.id);
-    return !a || a.status !== 'ACTIVE';
-  });
-
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const canReceivePersonnel = (role === 'ADMIN' || role === 'HR_ADMIN' || role === 'HR');
   const adminAlert = document.getElementById('dashAdminPendingAlert');
   const alertTitle = document.getElementById('dashAdminPendingAlertTitle');
   const alertSub = document.getElementById('dashAdminPendingAlertSub');
 
-  if (adminAlert) {
-    if (pendingUsers.length > 0) {
-      adminAlert.style.display = 'block';
-      if (alertTitle) alertTitle.innerText = `Có ${pendingUsers.length} nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!`;
-      if (alertSub) alertSub.innerText = `Bao gồm: ${pendingUsers.map(u => u.fullName || u.username).join(', ')}. Nhấp để phân bổ ban phòng, ca trực và kích hoạt mức lương.`;
-    } else {
-      adminAlert.style.display = 'none';
+  // Chỉ hiển thị banner xanh dương "Nhân sự mới chờ tiếp nhận" đối với ADMIN và HR_ADMIN; tuyệt đối ẩn với MANAGER và EMPLOYEE
+  if (!canReceivePersonnel) {
+    if (adminAlert) adminAlert.style.display = 'none';
+  } else {
+    // Luôn loại trừ chính bản thân tài khoản đang đăng nhập khỏi danh sách chờ tiếp nhận
+    const currentId = state.user?.id || state.user?.userId || state.user?.empId || state.user?.sub;
+    const currentUsername = state.user?.username;
+    const currentEmail = state.user?.email;
+
+    const regUsers = getRegisteredUsersList();
+    const pendingUsers = regUsers.filter(u => {
+      if (currentId && (String(u.id) === String(currentId) || String(u.empId) === String(currentId))) {
+        return false;
+      }
+      if (currentUsername && u.username && String(u.username).toLowerCase() === String(currentUsername).toLowerCase()) {
+        return false;
+      }
+      if (currentEmail && u.email && String(u.email).toLowerCase() === String(currentEmail).toLowerCase()) {
+        return false;
+      }
+      const a = getUserAssignment(u.username, u.id);
+      return !a || a.status !== 'ACTIVE';
+    });
+
+    if (adminAlert) {
+      if (pendingUsers.length > 0) {
+        adminAlert.style.display = 'block';
+        if (alertTitle) alertTitle.innerText = `Có ${pendingUsers.length} nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!`;
+        if (alertSub) alertSub.innerText = `Bao gồm: ${pendingUsers.map(u => u.fullName || u.username).join(', ')}. Nhấp để phân bổ ban phòng, ca trực và kích hoạt mức lương.`;
+      } else {
+        adminAlert.style.display = 'none';
+      }
     }
   }
 
@@ -2166,7 +2196,8 @@ async function loadDashboardData() {
     loadDepartmentsData(),
     loadEmployeesData(),
     loadDashboardPendingRequests(),
-    loadDashboardOverview()
+    loadDashboardOverview(),
+    (role === 'MANAGER' ? loadManagerTeamInfo() : Promise.resolve())
   ]);
 }
 
@@ -4505,8 +4536,8 @@ async function loadManagerTeamInfo() {
   const card = document.getElementById('managerTeamManagementCard');
   if (!card) return;
 
-  const role = state.user?.role;
-  if (role !== 'MANAGER' && role !== 'ADMIN') {
+  const role = (state.user?.role || '').toUpperCase();
+  if (role !== 'MANAGER') {
     card.style.display = 'none';
     return;
   }
@@ -4514,21 +4545,79 @@ async function loadManagerTeamInfo() {
   card.style.display = 'block';
   const deptTitle = document.getElementById('mgrDeptNameTitle');
   const inviteVal = document.getElementById('mgrInviteCodeVal');
+  const inviteBadge = document.getElementById('mgrInviteCodeBadge');
+  const subtitle = document.getElementById('mgrTeamSubtitle');
+  const inviteBtn = document.getElementById('btnMgrInviteEmail') || document.querySelector("button[onclick='openManagerInviteModal()']");
 
   try {
     const res = await apiCall('/api/organization/departments');
     const depts = res?.data || [];
-    const myDept = depts.find(d => d.manager_id === state.user?.empId || d.manager_id === state.user?.id) || depts[0];
+    
+    const userEmpId = state.user?.empId || state.user?.id;
+    const userDeptId = state.user?.departmentId || state.user?.department_id;
+    const userDeptName = state.user?.department || state.user?.departmentName;
 
+    // Tìm phòng ban do Manager này thực sự phụ trách hoặc được phân bổ
+    let myDept = null;
+    if (userEmpId) {
+      myDept = depts.find(d => d.manager_id && (d.manager_id === userEmpId || d.manager_id === state.user?.id));
+    }
+    if (!myDept && userDeptId) {
+      myDept = depts.find(d => d.id === userDeptId);
+    }
+    if (!myDept && userDeptName && userDeptName !== '-' && !userDeptName.includes('Chưa phân') && !userDeptName.includes('Ban Giám Đốc')) {
+      myDept = depts.find(d => d.name === userDeptName);
+    }
+
+    // Không tự gán mặc định Ban Giám Đốc khi departmentId đang trống (null)
     if (myDept) {
-      if (deptTitle) deptTitle.innerText = `Phòng ban phụ trách: ${myDept.name}`;
-      if (inviteVal) inviteVal.innerText = myDept.invite_code || `TEAM-${myDept.code.replace(/^PB-/, '')}`;
+      card.style.background = '#ffffff';
+      card.style.border = '1px solid #e2e8f0';
+      if (deptTitle) {
+        deptTitle.innerText = `Phòng ban phụ trách: ${myDept.name}`;
+        deptTitle.style.color = '#0f172a';
+      }
+      if (inviteBadge) {
+        inviteBadge.style.display = 'inline-flex';
+      }
+      if (inviteVal) {
+        inviteVal.innerText = myDept.invite_code || `TEAM-${(myDept.code || 'TECH').replace(/^PB-/, '')}`;
+      }
+      if (subtitle) {
+        subtitle.innerText = 'Gửi mã mời hoặc nhập email nhân viên để họ tham gia vào đội ngũ của bạn.';
+        subtitle.style.color = '#64748b';
+      }
+      if (inviteBtn) {
+        inviteBtn.style.display = 'inline-flex';
+      }
     } else {
-      if (deptTitle) deptTitle.innerText = 'Chưa có phòng ban phụ trách (Nhấn Tạo phòng ban)';
-      if (inviteVal) inviteVal.innerText = 'TEAM-NEW';
+      // Manager mới chưa được phân công phòng ban phụ trách: Hiển thị trạng thái rõ ràng và ẩn nút mời
+      card.style.background = '#fffbeb';
+      card.style.border = '1.5px solid #fde68a';
+      if (deptTitle) {
+        deptTitle.innerText = 'Tài khoản Quản lý chưa được phân công phòng ban phụ trách — Vui lòng liên hệ HR/Admin để gán bộ phận quản lý';
+        deptTitle.style.color = '#b45309';
+      }
+      if (inviteBadge) {
+        inviteBadge.style.display = 'none';
+      }
+      if (subtitle) {
+        subtitle.innerText = 'Tài khoản đang chờ phân bổ phòng ban. Sau khi được phân công, bạn có thể xem số liệu và quản lý nhân sự thuộc bộ phận.';
+        subtitle.style.color = '#92400e';
+      }
+      if (inviteBtn) {
+        inviteBtn.style.display = 'none';
+      }
     }
   } catch (err) {
-    if (inviteVal) inviteVal.innerText = 'TEAM-TECH';
+    card.style.background = '#fffbeb';
+    card.style.border = '1.5px solid #fde68a';
+    if (deptTitle) {
+      deptTitle.innerText = 'Tài khoản Quản lý chưa được phân công phòng ban phụ trách — Vui lòng liên hệ HR/Admin để gán bộ phận quản lý';
+      deptTitle.style.color = '#b45309';
+    }
+    if (inviteBadge) inviteBadge.style.display = 'none';
+    if (inviteBtn) inviteBtn.style.display = 'none';
   }
 }
 
@@ -4549,6 +4638,11 @@ function copyManagerInviteCode() {
 
 // 7. Phía Quản lý: Mở Modal Mời nhân viên qua email
 function openManagerInviteModal() {
+  const deptTitle = document.getElementById('mgrDeptNameTitle')?.innerText || '';
+  if (deptTitle.includes('chưa được phân công phòng ban')) {
+    showToast('Tài khoản Quản lý chưa được phân công phòng ban phụ trách — Vui lòng liên hệ HR/Admin để gán bộ phận quản lý.', 'warning');
+    return;
+  }
   const currentCode = document.getElementById('mgrInviteCodeVal')?.innerText || 'TEAM-TECH';
   openModal(
     'Mời nhân viên tham gia phòng ban',
