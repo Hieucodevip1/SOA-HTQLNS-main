@@ -50,6 +50,23 @@ function formatTime24(timeInput) {
   return timeInput;
 }
 
+/**
+ * Helper lấy chuỗi ngày địa phương dạng yyyy-MM-dd
+ */
+function toLocalDateStr(dateInput) {
+  if (!dateInput) return null;
+  if (typeof dateInput === 'string') {
+    return dateInput.split('T')[0];
+  }
+  if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    const y = dateInput.getFullYear();
+    const m = String(dateInput.getMonth() + 1).padStart(2, '0');
+    const day = String(dateInput.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return String(dateInput);
+}
+
 const dayNamesVi = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 
 class ShiftService {
@@ -62,11 +79,17 @@ class ShiftService {
     if (scope.isEmployee && scope.isUnassigned) {
       return {
         schedule: [],
+        approvedOts: [],
         meta: { total: 0, unassigned: true, message: 'Nhân viên chưa thuộc phòng ban' }
       };
     }
 
-    const empId = scope.empId;
+    const queryEmpId = req.query.employeeId || req.query.empId;
+    let empId = scope.empId;
+    if (queryEmpId && (scope.isAdmin || scope.isHr || (scope.isManager && Array.isArray(scope.allowedEmpIds) && scope.allowedEmpIds.includes(queryEmpId)))) {
+      empId = queryEmpId;
+    }
+
     const now = new Date();
     const queryFromDate = req.query.fromDate;
     const queryToDate = req.query.toDate;
@@ -76,12 +99,12 @@ class ShiftService {
 
     // Nếu không truyền khoảng ngày: Mặc định lấy 7 ngày (từ hôm nay đến 6 ngày tới)
     if (!fromDate) {
-      fromDate = now.toISOString().split('T')[0];
+      fromDate = toLocalDateStr(now);
     }
     if (!toDate) {
       const endD = new Date(now);
-      endD.setDate(now.getDate() + 7);
-      toDate = endD.toISOString().split('T')[0];
+      endD.setDate(now.getDate() + 6);
+      toDate = toLocalDateStr(endD);
     }
 
     const assignments = await shiftRepository.getShiftAssignments({
@@ -90,38 +113,90 @@ class ShiftService {
       toDate
     });
 
+    const approvedOtRows = await shiftRepository.getOtRequests({
+      empId,
+      status: 'APPROVED',
+      fromDate,
+      toDate
+    });
+
     // Chuẩn hóa định dạng hiển thị cho từng ngày
     const formatted = assignments.map(a => {
-      const d = new Date(a.work_date);
+      const workDateStr = toLocalDateStr(a.work_date);
+      const d = new Date(workDateStr + 'T00:00:00');
       const dayName = !isNaN(d.getTime()) ? dayNamesVi[d.getDay()] : 'Ngày làm việc';
       return {
         id: a.id,
         empId: a.emp_id,
+        emp_id: a.emp_id,
         empName: a.emp_name,
+        emp_name: a.emp_name,
         empCode: a.emp_code,
+        emp_code: a.emp_code,
         departmentName: a.department_name,
+        department_name: a.department_name,
         shiftId: a.shift_id,
+        shift_id: a.shift_id,
         shiftCode: a.shift_code,
+        shift_code: a.shift_code,
         shiftName: a.shift_name,
-        workDate: a.work_date,
-        workDateFormatted: formatDateVN(a.work_date),
+        shift_name: a.shift_name,
+        workDate: workDateStr,
+        work_date: workDateStr,
+        workDateFormatted: formatDateVN(workDateStr),
         dayOfWeek: dayName,
         startTime: formatTime24(a.start_time),
+        start_time: a.start_time,
         endTime: formatTime24(a.end_time),
+        end_time: a.end_time,
         workingHours: Number(a.working_hours),
+        working_hours: a.working_hours,
         status: a.status,
         isWorkingDay: a.status === 'SCHEDULED',
         note: a.note || ''
       };
     });
 
+    const approvedOts = (approvedOtRows || []).map(o => {
+      const workDateStr = toLocalDateStr(o.work_date);
+      const d = new Date(workDateStr + 'T00:00:00');
+      const dayName = !isNaN(d.getTime()) ? dayNamesVi[d.getDay()] : 'Ngày làm việc';
+      return {
+        id: o.id,
+        empId: o.emp_id,
+        emp_id: o.emp_id,
+        empName: o.emp_name,
+        emp_name: o.emp_name,
+        empCode: o.emp_code,
+        emp_code: o.emp_code,
+        departmentName: o.department_name,
+        department_name: o.department_name,
+        workDate: workDateStr,
+        work_date: workDateStr,
+        workDateFormatted: formatDateVN(workDateStr),
+        dayOfWeek: dayName,
+        startTime: formatTime24(o.start_time),
+        start_time: o.start_time,
+        endTime: formatTime24(o.end_time),
+        end_time: o.end_time,
+        hours: Number(o.hours),
+        multiplier: Number(o.multiplier || 1.5),
+        reason: o.reason || o.note || '',
+        note: o.note || o.reason || '',
+        status: o.status
+      };
+    });
+
     return {
       schedule: formatted,
+      approvedOts,
       meta: {
         total: formatted.length,
+        totalOt: approvedOts.length,
         fromDate,
         toDate,
-        empId
+        empId,
+        approvedOts
       }
     };
   }
@@ -132,7 +207,7 @@ class ShiftService {
   async getShiftAssignments(req) {
     const scope = await resolveEmployeeScope(req, { pool });
     if (scope.isEmployee && scope.isUnassigned) {
-      return { assignments: [], meta: { total: 0, unassigned: true } };
+      return { assignments: [], approvedOts: [], meta: { total: 0, unassigned: true } };
     }
 
     const { empId, fromDate, toDate } = req.query;
@@ -164,36 +239,86 @@ class ShiftService {
       toDate
     });
 
-    const data = rows.map(r => ({
-      id: r.id,
-      empId: r.emp_id,
-      emp_id: r.emp_id,
-      empCode: r.emp_code,
-      emp_code: r.emp_code,
-      empName: r.emp_name,
-      emp_name: r.emp_name,
-      departmentName: r.department_name,
-      department_name: r.department_name,
-      shiftId: r.shift_id,
-      shift_id: r.shift_id,
-      shiftCode: r.shift_code,
-      shift_code: r.shift_code,
-      shiftName: r.shift_name,
-      shift_name: r.shift_name,
-      workDate: r.work_date,
-      work_date: r.work_date,
-      workDateFormatted: formatDateVN(r.work_date),
-      startTime: formatTime24(r.start_time),
-      start_time: r.start_time,
-      endTime: formatTime24(r.end_time),
-      end_time: r.end_time,
-      workingHours: Number(r.working_hours),
-      working_hours: r.working_hours,
-      status: r.status,
-      note: r.note || ''
-    }));
+    const approvedOtRows = await shiftRepository.getOtRequests({
+      empId: allowedEmpIds ? null : empId,
+      allowedEmpIds,
+      managerId,
+      status: 'APPROVED',
+      fromDate,
+      toDate
+    });
 
-    return { assignments: data, meta: { total: data.length } };
+    const data = rows.map(r => {
+      const workDateStr = toLocalDateStr(r.work_date);
+      return {
+        id: r.id,
+        empId: r.emp_id,
+        emp_id: r.emp_id,
+        empCode: r.emp_code,
+        emp_code: r.emp_code,
+        empName: r.emp_name,
+        emp_name: r.emp_name,
+        departmentName: r.department_name,
+        department_name: r.department_name,
+        shiftId: r.shift_id,
+        shift_id: r.shift_id,
+        shiftCode: r.shift_code,
+        shift_code: r.shift_code,
+        shiftName: r.shift_name,
+        shift_name: r.shift_name,
+        workDate: workDateStr,
+        work_date: workDateStr,
+        workDateFormatted: formatDateVN(workDateStr),
+        startTime: formatTime24(r.start_time),
+        start_time: r.start_time,
+        endTime: formatTime24(r.end_time),
+        end_time: r.end_time,
+        workingHours: Number(r.working_hours),
+        working_hours: r.working_hours,
+        status: r.status,
+        note: r.note || ''
+      };
+    });
+
+    const approvedOts = (approvedOtRows || []).map(o => {
+      const workDateStr = toLocalDateStr(o.work_date);
+      const d = new Date(workDateStr + 'T00:00:00');
+      const dayName = !isNaN(d.getTime()) ? dayNamesVi[d.getDay()] : 'Ngày làm việc';
+      return {
+        id: o.id,
+        empId: o.emp_id,
+        emp_id: o.emp_id,
+        empName: o.emp_name,
+        emp_name: o.emp_name,
+        empCode: o.emp_code,
+        emp_code: o.emp_code,
+        departmentName: o.department_name,
+        department_name: o.department_name,
+        workDate: workDateStr,
+        work_date: workDateStr,
+        workDateFormatted: formatDateVN(workDateStr),
+        dayOfWeek: dayName,
+        startTime: formatTime24(o.start_time),
+        start_time: o.start_time,
+        endTime: formatTime24(o.end_time),
+        end_time: o.end_time,
+        hours: Number(o.hours),
+        multiplier: Number(o.multiplier || 1.5),
+        reason: o.reason || o.note || '',
+        note: o.note || o.reason || '',
+        status: o.status
+      };
+    });
+
+    return {
+      assignments: data,
+      approvedOts,
+      meta: {
+        total: data.length,
+        totalOt: approvedOts.length,
+        approvedOts
+      }
+    };
   }
 
   /**

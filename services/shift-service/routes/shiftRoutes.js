@@ -12,7 +12,15 @@ const shiftController = require('../controllers/shiftController');
 const { requireAuth, requireInternalKey } = require('../../../shared/service-base');
 
 // 1. Lịch phân ca cá nhân của nhân viên
-router.get('/api/v1/shifts/my-schedule', requireAuth(), (req, res, next) => shiftController.getMySchedule(req, res, next));
+const mySchedulePaths = [
+  '/api/v1/shifts/my-schedule',
+  '/api/v1/shifts/my-schedules',
+  '/api/v1/shifts/schedules',
+  '/api/shifts/my-schedule',
+  '/api/shifts/my-schedules',
+  '/api/shifts/schedules'
+];
+router.get(mySchedulePaths, requireAuth(), (req, res, next) => shiftController.getMySchedule(req, res, next));
 
 // 2. Danh mục Ca làm việc (Shifts)
 const shiftsListPaths = ['/api/v1/shifts', '/api/shifts', '/api/shift'];

@@ -28,6 +28,24 @@ function safeRemoveStorage(key) {
   } catch (e) {}
 }
 
+/**
+ * Helper chuẩn hóa ngày địa phương sang YYYY-MM-DD
+ * Tránh triệt để lỗi lệch múi giờ UTC+7 làm lùi ngày khi dùng .toISOString()
+ */
+function toLocalDateString(d) {
+  if (!d) return '';
+  if (typeof d === 'string') {
+    return d.split('T')[0];
+  }
+  if (d instanceof Date && !isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return String(d);
+}
+
 // Kiểm tra token JWT có đúng cấu trúc và còn hạn không
 function isTokenValid(token) {
   if (!token || typeof token !== 'string') return false;
@@ -69,7 +87,7 @@ if (!isTokenValid(storedToken)) {
 
 // Dữ liệu mẫu demo cho riêng tài khoản demo Vũ Đức Hiếu (employee)
 const DEMO_EMP_ATT_LOGS = [
-  { id: 'att-today', work_date: new Date().toISOString().split('T')[0], check_in_time: `${new Date().toISOString().split('T')[0]}T07:55:12`, check_out_time: null, status: 'ON_TIME', late_minutes: 0, actual_working_hours: '4.2' },
+  { id: 'att-today', work_date: toLocalDateString(new Date()), check_in_time: `${toLocalDateString(new Date())}T07:55:12`, check_out_time: null, status: 'ON_TIME', late_minutes: 0, actual_working_hours: '4.2' },
   { id: 'att-1', work_date: '2026-11-14', check_in_time: '2026-11-14T07:58:00', check_out_time: '2026-11-14T17:35:00', status: 'ON_TIME', late_minutes: 0, actual_working_hours: '8.5' },
   { id: 'att-2', work_date: '2026-11-13', check_in_time: '2026-11-13T08:12:00', check_out_time: '2026-11-13T17:32:00', status: 'LATE', late_minutes: 12, actual_working_hours: '8.2' },
   { id: 'att-3', work_date: '2026-11-12', check_in_time: '2026-11-12T07:50:00', check_out_time: '2026-11-12T17:30:00', status: 'ON_TIME', late_minutes: 0, actual_working_hours: '8.5' },
@@ -3090,7 +3108,7 @@ async function checkTodayAttendanceStatus() {
   if (!checkinBtn) return;
 
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(new Date());
     let todayRecord = null;
 
     // 1. Kiểm tra từ API
@@ -3099,7 +3117,7 @@ async function checkTodayAttendanceStatus() {
       if (res && res.success && Array.isArray(res.data)) {
         todayRecord = res.data.find(r => {
           if (!r.work_date) return false;
-          const rDate = new Date(r.work_date).toISOString().slice(0, 10);
+          const rDate = toLocalDateString(r.work_date);
           return rDate === todayStr;
         });
       }
@@ -3892,7 +3910,7 @@ async function loadEmployeeDashboardData() {
   const shiftEnd = state.user?.shiftEnd || '17:30';
 
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = toLocalDateString(now);
   const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
   const todayStr = `${dayNames[now.getDay()]}, ${now.toLocaleDateString('vi-VN')}`;
 
@@ -4066,7 +4084,7 @@ async function loadEmployeeDashboardData() {
     if (kpiOtSub) kpiOtSub.innerText = otList.length > 0 ? `${otList.length} đơn đã duyệt` : 'Chưa có giờ tăng ca';
   }
 
-  // 5. Cột trái: Lịch ca tuần này (7 ngày tới)
+  // 5. Cột trái: Lịch ca tuần này (7 ngày tới: từ hôm nay đến +6 ngày)
   const weekScheduleBody = document.getElementById('dashEmpWeekScheduleBody');
   if (weekScheduleBody) {
     if (!isOnboarded) {
@@ -4079,15 +4097,51 @@ async function loadEmployeeDashboardData() {
         </div>
       `;
     } else {
+      let myShifts = [];
+      let myApprovedOts = [];
+      const fromDateStr = toLocalDateString(now);
+      const endD = new Date(now);
+      endD.setDate(now.getDate() + 6);
+      const toDateStr = toLocalDateString(endD);
+
+      try {
+        const schedRes = await apiCall(`/api/v1/shifts/my-schedules?fromDate=${fromDateStr}&toDate=${toDateStr}`);
+        if (schedRes && schedRes.success) {
+          myShifts = schedRes.data || [];
+          myApprovedOts = schedRes.approvedOts || schedRes.meta?.approvedOts || [];
+        }
+      } catch (err) {
+        console.warn('Lỗi lấy my-schedules qua API v1, thử lại với fallback:', err);
+      }
+
+      // Fallback lấy OT nếu chưa có trong response ca
+      if (!myApprovedOts.length) {
+        try {
+          const otRes = await apiCall(`/api/v1/ot-requests?status=APPROVED&fromDate=${fromDateStr}&toDate=${toDateStr}`);
+          if (otRes && (otRes.data || otRes.requests)) {
+            const list = otRes.data || otRes.requests || [];
+            const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+            myApprovedOts = list.filter(o => (o.emp_id === myEmpId || o.empId === myEmpId) && o.status === 'APPROVED');
+          }
+        } catch (_) {}
+      }
+      if (!myApprovedOts.length) {
+        const localReqs = (typeof getUserEntityList === 'function' ? getUserEntityList('requests') : []) || [];
+        myApprovedOts = localReqs.filter(r => (r.type && r.type.includes('OT')) && r.status === 'APPROVED');
+      }
+
       let weekHtml = '';
       for (let d = 0; d < 7; d++) {
         const day = new Date(now);
         day.setDate(now.getDate() + d);
-        const dayLabel = `${dayNames[day.getDay()]}, ${day.toLocaleDateString('vi-VN')}`;
-        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-        const isToday = d === 0;
+        const dayStr = toLocalDateString(day);
+        const dayLabel = `${dayNames[day.getDay()]}, ${String(day.getDate()).padStart(2, '0')}/${String(day.getMonth() + 1).padStart(2, '0')}/${day.getFullYear()}`;
+        const isToday = (d === 0);
 
-        let shiftLabel = '';
+        const dayShifts = myShifts.filter(s => toLocalDateString(s.work_date || s.workDate) === dayStr && s.status === 'SCHEDULED');
+        const dayOts = myApprovedOts.filter(o => toLocalDateString(o.work_date || o.workDate) === dayStr && o.status === 'APPROVED');
+
+        let shiftContent = '';
         let bgColor = '#ffffff';
         let borderColor = '#e2e8f0';
         let textColor = '#334155';
@@ -4098,19 +4152,41 @@ async function loadEmployeeDashboardData() {
           textColor = '#166534';
         }
 
-        if (isWeekend) {
-          shiftLabel = '<span style="color: #94a3b8; font-weight: 500;">Nghỉ cuối tuần</span>';
-          bgColor = '#f8fafc';
-        } else {
-          shiftLabel = `<span style="font-weight: 600; color: #1e293b;">${shiftName}</span> <span style="color: #64748b; font-size: 12px;">(${shiftStart} - ${shiftEnd})</span>`;
+        if (dayShifts.length > 0) {
+          const s = dayShifts[0];
+          const sName = getCleanShiftName(s) || s.shift_name || s.shiftName || 'Ca làm việc';
+          const sStart = (s.start_time || s.startTime || '08:00:00').slice(0, 5);
+          const sEnd = (s.end_time || s.endTime || '17:30:00').slice(0, 5);
+          shiftContent += `<div><span style="font-weight: 600; color: #1e293b;">${sName}</span> <span style="color: #64748b; font-size: 12px;">(${sStart} - ${sEnd})</span></div>`;
+        }
+
+        if (dayOts.length > 0) {
+          dayOts.forEach(ot => {
+            const otStart = (ot.start_time || ot.startTime || '18:00').slice(0, 5);
+            const otEnd = (ot.end_time || ot.endTime || '21:00').slice(0, 5);
+            const otReason = ot.reason || ot.note || '';
+            const otReasonText = otReason ? ` • ${otReason}` : '';
+            shiftContent += `
+              <div style="margin-top: ${dayShifts.length ? '4px' : '0'}; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: #faf5ff; border: 1px solid #d8b4fe; border-radius: 4px; font-size: 11.5px; color: #7e22ce; font-weight: 600;">
+                <span>⏰ Tăng ca (OT) • ${otStart} - ${otEnd}${otReasonText}</span>
+              </div>
+            `;
+          });
+        }
+
+        if (dayShifts.length === 0 && dayOts.length === 0) {
+          shiftContent = `<span style="color: #94a3b8; font-weight: 500;">Ngày nghỉ / Không có ca</span>`;
+          if (!isToday) bgColor = '#f8fafc';
         }
 
         weekHtml += `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; font-size: 12.5px;">
-            <div style="font-weight: ${isToday ? '700' : '500'}; color: ${textColor};">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; font-size: 12.5px; gap: 8px;">
+            <div style="font-weight: ${isToday ? '700' : '500'}; color: ${textColor}; white-space: nowrap;">
               ${isToday ? 'Hôm nay: ' : ''}${dayLabel}
             </div>
-            <div>${shiftLabel}</div>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+              ${shiftContent}
+            </div>
           </div>
         `;
       }
@@ -4632,7 +4708,7 @@ async function handleDashboardCheckIn() {
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('vi-VN');
-  const today = now.toISOString().split('T')[0];
+  const today = toLocalDateString(now);
 
   try {
     // Lưu vào kho dữ liệu cá nhân của user
@@ -4691,7 +4767,7 @@ async function handleDashboardCheckOut() {
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('vi-VN');
-  const today = now.toISOString().split('T')[0];
+  const today = toLocalDateString(now);
 
   try {
     let userAtts = getUserEntityList('attendances');
@@ -5286,8 +5362,8 @@ async function loadShiftsData() {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth();
-  const firstDay = new Date(year, month, 1).toISOString().slice(0, 10);
-  const lastDay = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+  const firstDay = toLocalDateString(new Date(year, month, 1));
+  const lastDay = toLocalDateString(new Date(year, month + 1, 0));
 
   const fromDateInput = document.getElementById('filterShiftFromDate');
   const toDateInput = document.getElementById('filterShiftToDate');
@@ -5369,7 +5445,26 @@ let currentScheduleView = 'week'; // 'day' | 'week' | 'month'
 let scheduleDisplayMode = 'visual'; // 'visual' | 'table'
 let scheduleCurrentDate = new Date();
 let cachedAssignmentsList = [];
+let cachedApprovedOtsList = [];
 let cachedEmployeesScopeList = [];
+
+/**
+ * Helper chuẩn hóa ngày địa phương sang YYYY-MM-DD
+ * Tránh triệt để lỗi lệch múi giờ UTC+7 làm lùi ngày khi dùng .toISOString()
+ */
+function toLocalDateString(d) {
+  if (!d) return '';
+  if (typeof d === 'string') {
+    return d.split('T')[0];
+  }
+  if (d instanceof Date && !isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return String(d);
+}
 
 function isSystemAdminEmployee(e) {
   if (!e) return false;
@@ -5433,7 +5528,7 @@ function getCleanShiftName(s) {
 function getScheduleDateRange(date, view) {
   const d = new Date(date);
   if (view === 'day') {
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = toLocalDateString(d);
     return { fromDate: dateStr, toDate: dateStr, days: [new Date(d)] };
   } else if (view === 'week') {
     // Tuần ISO: Thứ 2 là ngày bắt đầu tuần (0: CN, 1: T2, ..., 6: T7)
@@ -5448,8 +5543,8 @@ function getScheduleDateRange(date, view) {
       cur.setDate(monday.getDate() + i);
       days.push(cur);
     }
-    const fromDate = monday.toISOString().slice(0, 10);
-    const toDate = days[6].toISOString().slice(0, 10);
+    const fromDate = toLocalDateString(monday);
+    const toDate = toLocalDateString(days[6]);
     return { fromDate, toDate, days };
   } else if (view === 'month') {
     const year = d.getFullYear();
@@ -5470,8 +5565,8 @@ function getScheduleDateRange(date, view) {
       if (days.length >= 35 && cur.getMonth() !== month && cur.getDay() === 1) break;
     }
 
-    const fromDate = days[0].toISOString().slice(0, 10);
-    const toDate = days[days.length - 1].toISOString().slice(0, 10);
+    const fromDate = toLocalDateString(days[0]);
+    const toDate = toLocalDateString(days[days.length - 1]);
     return { fromDate, toDate, days, targetMonth: month, targetYear: year };
   }
 }
@@ -5622,19 +5717,37 @@ async function loadShiftAssignments() {
   try {
     const res = await apiCall(url);
     let assignments = res?.data || [];
+    let approvedOts = res?.approvedOts || res?.meta?.approvedOts || [];
 
-    // RBAC: Nếu là nhân viên, chỉ hiển thị các ca được phân cho chính mình
+    // RBAC: Nếu là nhân viên, chỉ hiển thị các ca và đơn OT được phân cho chính mình
     if (isEmployee) {
       const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
       assignments = assignments.filter(a => (a.emp_id === myEmpId || a.empId === myEmpId));
+      approvedOts = approvedOts.filter(o => (o.emp_id === myEmpId || o.empId === myEmpId));
+    }
+
+    // Nếu approvedOts chưa có (ví dụ fallback hoặc mock), gọi API OT
+    if (!approvedOts.length) {
+      try {
+        const otUrl = `/api/v1/ot-requests?status=APPROVED&fromDate=${queryFrom}&toDate=${queryTo}`;
+        const otRes = await apiCall(otUrl);
+        const otList = otRes?.data || otRes?.requests || [];
+        if (isEmployee) {
+          const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+          approvedOts = otList.filter(o => (o.emp_id === myEmpId || o.empId === myEmpId) && o.status === 'APPROVED');
+        } else {
+          approvedOts = otList.filter(o => o.status === 'APPROVED');
+        }
+      } catch (_) {}
     }
 
     cachedAssignmentsList = assignments;
+    cachedApprovedOtsList = approvedOts;
 
     // Cập nhật KPI phân ca hôm nay
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(new Date());
     const todayCount = assignments.filter(a => {
-      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      const wDate = toLocalDateString(a.work_date || a.workDate);
       return wDate === todayStr && a.status === 'SCHEDULED';
     }).length;
     const kpiToday = document.getElementById('kpiShiftTodayAssignments');
@@ -5649,8 +5762,8 @@ async function loadShiftAssignments() {
       totalActiveEmployeesInScope = 1;
     }
 
-    // Render giao diện trực quan theo chế độ xem (Tuần / Ngày / Tháng)
-    renderShiftSchedule(assignments, range, totalActiveEmployeesInScope);
+    // Render giao diện trực quan theo chế độ xem (Tuần / Ngày / Tháng) kèm danh sách OT đã duyệt
+    renderShiftSchedule(assignments, range, totalActiveEmployeesInScope, approvedOts);
 
     // Render bảng phân ca (cho chế độ xem dạng bảng)
     renderShiftAssignmentsTable(assignments);
@@ -5665,30 +5778,30 @@ async function loadShiftAssignments() {
   }
 }
 
-function renderShiftSchedule(assignments, range, totalActiveEmployeesInScope = 1) {
+function renderShiftSchedule(assignments, range, totalActiveEmployeesInScope = 1, approvedOts = []) {
   const container = document.getElementById('shiftScheduleVisualContainer');
   if (!container) return;
 
   if (currentScheduleView === 'week') {
-    renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope);
+    renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope, approvedOts);
   } else if (currentScheduleView === 'day') {
-    renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope);
+    renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope, approvedOts);
   } else if (currentScheduleView === 'month') {
-    renderMonthSchedule(container, assignments, range);
+    renderMonthSchedule(container, assignments, range, approvedOts);
   }
 }
 
-function renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope = 1) {
+function renderWeekSchedule(container, assignments, range, totalActiveEmployeesInScope = 1, approvedOts = []) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalDateString(new Date());
   const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
   const activeShifts = cachedShiftsList.filter(s => s.status === 'ACTIVE');
 
   let html = `<div class="schedule-week-grid">`;
 
   range.days.forEach(dayDate => {
-    const curDateStr = dayDate.toISOString().slice(0, 10);
+    const curDateStr = toLocalDateString(dayDate);
     const isToday = (curDateStr === todayStr);
     const dayName = dayNames[dayDate.getDay()];
     const dateFormatted = `${String(dayDate.getDate()).padStart(2, '0')}/${String(dayDate.getMonth() + 1).padStart(2, '0')}`;
@@ -5704,11 +5817,16 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
 
     if (isEmployee) {
       const myShiftsToday = assignments.filter(a => {
-        const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        const wDate = toLocalDateString(a.work_date || a.workDate);
         return (wDate === curDateStr) && (a.status === 'SCHEDULED');
       });
 
-      if (!myShiftsToday.length) {
+      const myOtsToday = (approvedOts || []).filter(o => {
+        const oDate = toLocalDateString(o.work_date || o.workDate);
+        return (oDate === curDateStr) && (o.status === 'APPROVED');
+      });
+
+      if (!myShiftsToday.length && !myOtsToday.length) {
         html += `
           <div class="schedule-day-off-card">
             <div style="font-weight: 700; font-size: 13px; color: #475569;">Ngày nghỉ / Không có ca</div>
@@ -5716,6 +5834,7 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
           </div>
         `;
       } else {
+        // 1. Render ca làm việc chính thức nếu có
         myShiftsToday.forEach(a => {
           const s = cachedShiftsList.find(x => x.id === (a.shift_id || a.shiftId)) || {};
           const cleanName = getCleanShiftName(s) || a.shift_name || 'Ca làm việc';
@@ -5740,11 +5859,36 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
             </div>
           `;
         });
+
+        // 2. Render thẻ tăng ca (OT) đã duyệt nếu có
+        myOtsToday.forEach(ot => {
+          const otStart = (ot.start_time || ot.startTime || '18:00').slice(0, 5);
+          const otEnd = (ot.end_time || ot.endTime || '21:00').slice(0, 5);
+          const otTimeStr = `${otStart} - ${otEnd}`;
+          const otReason = ot.reason || ot.note || '';
+
+          html += `
+            <div class="schedule-shift-card schedule-ot-card" style="border-left: 3.5px solid #9333ea; background: #faf5ff; border: 1px solid #e9d5ff; border-left-width: 3.5px; margin-top: ${myShiftsToday.length ? '8px' : '0'};">
+              <div class="shift-card-header">
+                <div>
+                  <div class="shift-card-title" style="color: #6b21a8; font-size: 13px; font-weight: 700;">Tăng ca (OT)</div>
+                  <span class="shift-card-time" style="font-size: 12px; font-weight: 600; color: #7e22ce;">⏰ ${otTimeStr}</span>
+                </div>
+                <span class="shift-quota-badge badge-ot-approved" style="font-size: 11px;">Đã duyệt OT</span>
+              </div>
+              <div style="font-size: 11.5px; color: #475569; margin-top: 8px; padding: 6px 8px; background: #ffffff; border-radius: 6px; border: 1px solid #f3e8ff;">
+                <div>👤 <strong>${ot.emp_name || ot.empName || 'Nhân viên'}</strong></div>
+                <div style="font-size: 11px; color: #6b21a8; font-weight: 600; margin-top: 2px;">⚡ Số giờ: ${Number(ot.hours || 0).toFixed(1)}h • Hệ số: x${Number(ot.multiplier || 1.5).toFixed(1)}</div>
+                ${otReason ? `<div style="font-size: 10.5px; color: #64748b; margin-top: 4px; font-style: italic;">📝 Lý do: ${otReason}</div>` : ''}
+              </div>
+            </div>
+          `;
+        });
       }
     } else {
       activeShifts.forEach(s => {
         const assigned = assignments.filter(a => {
-          const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+          const wDate = toLocalDateString(a.work_date || a.workDate);
           return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
         });
 
@@ -5807,6 +5951,31 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
           </div>
         `;
       });
+
+      // Hiển thị tóm tắt đơn tăng ca đã duyệt trong ngày (cho Manager / Admin)
+      const otsTodayInScope = (approvedOts || []).filter(o => {
+        const oDate = toLocalDateString(o.work_date || o.workDate);
+        return (oDate === curDateStr) && (o.status === 'APPROVED');
+      });
+
+      if (otsTodayInScope.length > 0) {
+        html += `
+          <div class="schedule-ot-summary-card" style="margin-top: 8px; padding: 8px 10px; background: #faf5ff; border: 1px solid #d8b4fe; border-radius: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 11.5px; font-weight: 700; color: #7e22ce;">⚡ Tăng ca đã duyệt (${otsTodayInScope.length})</span>
+              <span style="font-size: 10px; background: #f3e8ff; color: #6b21a8; padding: 1px 6px; border-radius: 10px; font-weight: 600;">APPROVED</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              ${otsTodayInScope.map(ot => `
+                <div style="font-size: 11px; color: #475569; background: #ffffff; padding: 4px 6px; border-radius: 4px; border: 1px solid #f3e8ff;">
+                  <div>👤 <strong>${ot.emp_name || ot.empName || 'Nhân viên'}</strong>: ${(ot.start_time || ot.startTime || '18:00').slice(0, 5)} - ${(ot.end_time || ot.endTime || '21:00').slice(0, 5)} (${Number(ot.hours || 0).toFixed(1)}h)</div>
+                  ${(ot.reason || ot.note) ? `<div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 1px;">📝 ${ot.reason || ot.note}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
     }
 
     html += `
@@ -5819,18 +5988,28 @@ function renderWeekSchedule(container, assignments, range, totalActiveEmployeesI
   container.innerHTML = html;
 }
 
-function renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope = 1) {
+function renderDaySchedule(container, assignments, range, totalActiveEmployeesInScope = 1, approvedOts = []) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
   const targetDate = range.days[0];
-  const curDateStr = targetDate.toISOString().slice(0, 10);
+  const curDateStr = toLocalDateString(targetDate);
   const activeShifts = cachedShiftsList.filter(s => s.status === 'ACTIVE');
+
+  const myDayAssignments = assignments.filter(a => {
+    const wDate = toLocalDateString(a.work_date || a.workDate);
+    return (wDate === curDateStr) && (a.status === 'SCHEDULED');
+  });
+
+  const myDayOts = (approvedOts || []).filter(o => {
+    const oDate = toLocalDateString(o.work_date || o.workDate);
+    return (oDate === curDateStr) && (o.status === 'APPROVED');
+  });
 
   let html = `
     <div style="margin-bottom: 16px; padding: 12px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
       <div>
         <div style="font-size: 14px; font-weight: 700; color: #0f172a;">Lịch làm việc chi tiết trong ngày: ${formatLeaveDate(curDateStr)}</div>
-        <div style="font-size: 12px; color: #64748b;">Tổng cộng ${assignments.filter(a => a.status === 'SCHEDULED').length} nhân sự trực thuộc các ca trong ngày</div>
+        <div style="font-size: 12px; color: #64748b;">Tổng cộng ${assignments.filter(a => a.status === 'SCHEDULED').length} nhân sự trực thuộc các ca trong ngày${myDayOts.length ? ` • ${myDayOts.length} ca tăng ca đã duyệt` : ''}</div>
       </div>
       ${(!isEmployee) ? `
         <button type="button" class="btn-primary-blue" onclick="openAssignShiftModal(null, '${curDateStr}')" style="font-size: 12px; padding: 6px 12px;">
@@ -5842,12 +6021,7 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
   `;
 
   if (isEmployee) {
-    const myDayAssignments = assignments.filter(a => {
-      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
-      return (wDate === curDateStr) && (a.status === 'SCHEDULED');
-    });
-
-    if (!myDayAssignments.length) {
+    if (!myDayAssignments.length && !myDayOts.length) {
       html += `
         <div style="grid-column: 1 / -1; padding: 36px 16px; text-align: center; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 10px; color: #64748b;">
           <div style="font-size: 15px; font-weight: 700; color: #334155;">Hôm nay là ngày nghỉ / Không có ca làm việc</div>
@@ -5885,11 +6059,40 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
           </div>
         `;
       });
+
+      myDayOts.forEach(ot => {
+        const otStart = (ot.start_time || ot.startTime || '18:00').slice(0, 5);
+        const otEnd = (ot.end_time || ot.endTime || '21:00').slice(0, 5);
+        const otReason = ot.reason || ot.note || '';
+
+        html += `
+          <div class="schedule-day-shift-card schedule-day-ot-card" style="border-left: 4px solid #9333ea; background: #faf5ff;">
+            <div class="schedule-day-shift-header">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="badge-status badge-ot-approved" style="font-weight: 700;">OT</span>
+                  <strong style="font-size: 15px; color: #581c87;">Ca Tăng Ca (Overtime)</strong>
+                </div>
+                <div style="font-size: 12.5px; font-weight: 600; color: #7e22ce; margin-top: 4px;">
+                  ⏰ Khung giờ: ${otStart} - ${otEnd} • ${Number(ot.hours || 0).toFixed(1)}h (Hệ số x${Number(ot.multiplier || 1.5).toFixed(1)})
+                </div>
+              </div>
+              <div><span class="shift-quota-badge badge-ot-approved" style="font-size: 11px;">✓ Đã duyệt OT</span></div>
+            </div>
+
+            <div style="font-size: 12px; color: #475569; background: #ffffff; padding: 12px 14px; border-radius: 6px; border: 1px solid #f3e8ff;">
+              <div>👤 <strong>Họ tên:</strong> ${ot.emp_name || ot.empName || 'Nhân viên'} (${ot.emp_code || ot.empCode || ot.emp_id || ''})</div>
+              <div style="margin-top: 4px;">🏢 <strong>Phòng ban:</strong> ${ot.department_name || ot.departmentName || '-'}</div>
+              ${otReason ? `<div style="margin-top: 4px; font-style: italic; color: #6b21a8;">📝 <strong>Lý do tăng ca:</strong> ${otReason}</div>` : ''}
+            </div>
+          </div>
+        `;
+      });
     }
   } else {
     activeShifts.forEach(s => {
       const assigned = assignments.filter(a => {
-        const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        const wDate = toLocalDateString(a.work_date || a.workDate);
         return (a.shift_id === s.id || a.shiftId === s.id) && (wDate === curDateStr) && (a.status === 'SCHEDULED');
       });
 
@@ -5957,23 +6160,52 @@ function renderDaySchedule(container, assignments, range, totalActiveEmployeesIn
         </div>
       `;
     });
+
+    if (myDayOts.length > 0) {
+      html += `
+        <div class="schedule-day-shift-card" style="border-left: 4px solid #9333ea; background: #faf5ff;">
+          <div class="schedule-day-shift-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge-status badge-ot-approved" style="font-weight: 700;">OT</span>
+                <strong style="font-size: 14px; color: #581c87;">Nhân viên tăng ca đã duyệt (${myDayOts.length})</strong>
+              </div>
+              <div style="font-size: 12px; color: #7e22ce; margin-top: 4px;">Danh sách đơn làm thêm giờ đã được phê duyệt trong ngày</div>
+            </div>
+            <div><span class="shift-quota-badge badge-ot-approved" style="font-size: 11px;">APPROVED</span></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+            ${myDayOts.map(ot => `
+              <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid #e9d5ff; padding: 8px 12px; border-radius: 6px;">
+                <div>
+                  <div style="font-weight: 600; color: #0f172a; font-size: 12.5px;">${ot.emp_name || ot.empName || 'Nhân viên'} <span style="font-size: 11.5px; color: #64748b; font-weight: normal;">(${ot.emp_code || ot.empCode || ot.emp_id || ''})</span></div>
+                  <div style="font-size: 11px; color: #7e22ce; font-weight: 600;">⏰ ${(ot.start_time || ot.startTime || '18:00').slice(0, 5)} - ${(ot.end_time || ot.endTime || '21:00').slice(0, 5)} (${Number(ot.hours || 0).toFixed(1)}h)</div>
+                  ${(ot.reason || ot.note) ? `<div style="font-size: 10.5px; color: #64748b; font-style: italic; margin-top: 2px;">📝 ${ot.reason || ot.note}</div>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
   }
 
   html += `</div>`;
   container.innerHTML = html;
 }
 
-function renderMonthSchedule(container, assignments, range) {
+function renderMonthSchedule(container, assignments, range, approvedOts = []) {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalDateString(new Date());
   const targetMonth = range.targetMonth;
   const headerDays = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
 
   let html = `
     <div style="margin-bottom: 12px; font-size: 12px; color: #64748b; display: flex; justify-content: space-between; align-items: center;">
       <span>💡 Nhấp vào ô ngày bất kỳ để chuyển sang chế độ xem chi tiết ngày</span>
-      <span>Tổng số lượt phân ca trong tháng: <strong>${assignments.filter(a => a.status === 'SCHEDULED').length}</strong></span>
+      <span>Tổng số lượt phân ca trong tháng: <strong>${assignments.filter(a => a.status === 'SCHEDULED').length}</strong>${(approvedOts && approvedOts.length) ? ` • Tăng ca đã duyệt: <strong>${approvedOts.length}</strong>` : ''}</span>
     </div>
     <div class="schedule-month-grid">
   `;
@@ -5983,13 +6215,18 @@ function renderMonthSchedule(container, assignments, range) {
   });
 
   range.days.forEach(dayDate => {
-    const curDateStr = dayDate.toISOString().slice(0, 10);
+    const curDateStr = toLocalDateString(dayDate);
     const isToday = (curDateStr === todayStr);
     const isDiffMonth = (dayDate.getMonth() !== targetMonth);
 
     const dayAssignments = assignments.filter(a => {
-      const wDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+      const wDate = toLocalDateString(a.work_date || a.workDate);
       return (wDate === curDateStr) && (a.status === 'SCHEDULED');
+    });
+
+    const dayOts = (approvedOts || []).filter(o => {
+      const oDate = toLocalDateString(o.work_date || o.workDate);
+      return (oDate === curDateStr) && (o.status === 'APPROVED');
     });
 
     const shiftCounts = {};
@@ -6002,7 +6239,10 @@ function renderMonthSchedule(container, assignments, range) {
       <div class="schedule-month-cell ${isToday ? 'today' : ''} ${isDiffMonth ? 'different-month' : ''}" onclick="selectScheduleDateAndDayView('${curDateStr}')">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-weight: 700; font-size: 13px; color: ${isToday ? '#2563eb' : (isDiffMonth ? '#94a3b8' : '#1e293b')};">${dayDate.getDate()}</span>
-          ${dayAssignments.length ? `<span style="font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 1px 5px; border-radius: 10px;">${dayAssignments.length} NV</span>` : ''}
+          <div style="display: flex; gap: 3px;">
+            ${dayAssignments.length ? `<span style="font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 1px 5px; border-radius: 10px;">${dayAssignments.length} NV</span>` : ''}
+            ${dayOts.length ? `<span style="font-size: 10px; font-weight: 700; background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe; padding: 1px 4px; border-radius: 10px;">${dayOts.length} OT</span>` : ''}
+          </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 4px;">
           ${Object.entries(shiftCounts).slice(0, 3).map(([code, count]) => `
@@ -6011,7 +6251,12 @@ function renderMonthSchedule(container, assignments, range) {
             </div>
           `).join('')}
           ${Object.keys(shiftCounts).length > 3 ? `<div style="font-size: 9px; color: #64748b;">+${Object.keys(shiftCounts).length - 3} ca khác</div>` : ''}
-          ${(!dayAssignments.length && isEmployee && !isDiffMonth) ? `
+          ${dayOts.length ? `
+            <div style="font-size: 9.5px; background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; padding: 1px 4px; border-radius: 3px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ⚡ OT: <strong>${dayOts.length}</strong> ca đã duyệt
+            </div>
+          ` : ''}
+          ${(!dayAssignments.length && !dayOts.length && isEmployee && !isDiffMonth) ? `
             <div style="font-size: 9px; color: #94a3b8; font-style: italic; padding: 2px 0;">Ngày nghỉ / Không có ca</div>
           ` : ''}
         </div>
@@ -6024,7 +6269,12 @@ function renderMonthSchedule(container, assignments, range) {
 }
 
 function selectScheduleDateAndDayView(dateStr) {
-  scheduleCurrentDate = new Date(dateStr + 'T00:00:00');
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    scheduleCurrentDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  } else {
+    scheduleCurrentDate = new Date(dateStr);
+  }
   setScheduleView('day');
 }
 
@@ -6183,7 +6433,7 @@ async function handleOtDecision(requestId, decision) {
 
 // 5. Popup đăng ký tăng ca OT
 function openCreateOtModal() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalDateString(new Date());
   const html = `
     <form id="formModalCreateOt" onsubmit="handleCreateOtSubmit(event)">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
@@ -6612,7 +6862,7 @@ async function handleAssignShiftSubmit(e) {
     const datesExceeding = [];
     for (const wDate of targetWorkDates) {
       const assignedCount = (cachedAssignmentsList || []).filter(a => {
-        const aDate = a.work_date ? new Date(a.work_date).toISOString().slice(0, 10) : '';
+        const aDate = toLocalDateString(a.work_date || a.workDate);
         return (a.shift_id === shiftId || a.shiftId === shiftId) && aDate === wDate && a.status === 'SCHEDULED';
       }).length;
       if (assignedCount >= Number(maxStaff)) {

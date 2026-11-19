@@ -442,7 +442,8 @@ class ShiftRepository {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const [rows] = await pool.query(
-          `SELECT sa.*, s.code AS shift_code, s.name AS shift_name,
+          `SELECT sa.*, DATE_FORMAT(sa.work_date, '%Y-%m-%d') AS work_date,
+                  s.code AS shift_code, s.name AS shift_name,
                   COALESCE(sa.custom_start_time, s.start_time) AS start_time,
                   COALESCE(sa.custom_end_time, s.end_time) AS end_time,
                   s.grace_late_minutes, s.working_hours,
@@ -646,7 +647,7 @@ class ShiftRepository {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const [rows] = await pool.query(
-          `SELECT ot.*,
+          `SELECT ot.*, DATE_FORMAT(ot.work_date, '%Y-%m-%d') AS work_date,
                   COALESCE(e.full_name, 'Nhân viên') AS emp_name,
                   COALESCE(e.code, ot.emp_id) AS emp_code,
                   e.department_id,
@@ -709,7 +710,7 @@ class ShiftRepository {
     if (useDb) {
       try {
         const [rows] = await pool.query(
-          `SELECT ot.*,
+          `SELECT ot.*, DATE_FORMAT(ot.work_date, '%Y-%m-%d') AS work_date,
                   COALESCE(e.full_name, 'Nhân viên') AS emp_name,
                   COALESCE(e.code, ot.emp_id) AS emp_code,
                   COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name,

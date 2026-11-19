@@ -15,6 +15,7 @@ class ShiftController {
         success: true,
         message: 'Lấy lịch phân ca cá nhân thành công',
         data: result.schedule,
+        approvedOts: result.approvedOts || [],
         meta: result.meta
       });
     } catch (err) {
@@ -30,6 +31,7 @@ class ShiftController {
         success: true,
         message: 'Lấy danh sách phân ca thành công',
         data: result.assignments,
+        approvedOts: result.approvedOts || [],
         meta: result.meta
       });
     } catch (err) {

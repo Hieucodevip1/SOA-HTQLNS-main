@@ -342,6 +342,28 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     assert.strictEqual(adminData.data.status, 'APPROVED');
   });
 
+  // 11c. Đồng bộ lịch cá nhân /api/v1/shifts/my-schedules (HTTP 200, trả về cả ca phân và OT đã duyệt)
+  test('Lấy lịch phân ca cá nhân /api/v1/shifts/my-schedules đồng bộ cả ca phân và OT đã duyệt (HTTP 200)', async () => {
+    const res = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/my-schedules?fromDate=2026-11-20&toDate=2026-11-22`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.data), 'Lịch ca phải là mảng');
+    assert.ok(Array.isArray(data.approvedOts), 'Danh sách OT đã duyệt phải là mảng');
+
+    // Kiểm tra ca phân ngày 20/11
+    const shiftNov20 = data.data.find(s => (s.workDate || s.work_date) === '2026-11-20');
+    assert.ok(shiftNov20, 'Phải tìm thấy ca phân ngày 2026-11-20');
+    assert.strictEqual(shiftNov20.workDate, '2026-11-20');
+
+    // Kiểm tra OT ngày 21/11
+    const otNov21 = data.approvedOts.find(o => (o.workDate || o.work_date) === '2026-11-21');
+    assert.ok(otNov21, 'Phải tìm thấy OT đã duyệt ngày 2026-11-21');
+    assert.strictEqual(otNov21.status, 'APPROVED');
+  });
+
   // 12. Internal API: Lấy ca làm việc cho attendance-service (HTTP 200)
   test('Internal API /internal/shifts/schedule bảo mật x-internal-key (HTTP 403 & HTTP 200)', async () => {
     // Không có key -> 403
