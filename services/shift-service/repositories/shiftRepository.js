@@ -840,7 +840,9 @@ class ShiftRepository {
       try {
         const [rows] = await pool.query(
           `SELECT sa.id AS assignment_id, sa.work_date, sa.status AS assignment_status,
-                  s.id AS shift_id, s.code, s.name, s.start_time, s.end_time,
+                  s.id AS shift_id, s.code, s.name,
+                  COALESCE(sa.custom_start_time, s.start_time) AS start_time,
+                  COALESCE(sa.custom_end_time, s.end_time) AS end_time,
                   s.grace_late_minutes, s.grace_early_minutes, s.working_hours
            FROM shift_assignments sa
            JOIN shifts s ON sa.shift_id = s.id
@@ -850,14 +852,32 @@ class ShiftRepository {
         );
         if (rows.length) return rows[0];
 
-        const [defaultShift] = await pool.query(
-          `SELECT NULL AS assignment_id, ? AS work_date, 'DEFAULT' AS assignment_status,
-                  id AS shift_id, code, name, start_time, end_time,
-                  grace_late_minutes, grace_early_minutes, working_hours
-           FROM shifts WHERE code = 'CA-HC' AND status = 'ACTIVE' LIMIT 1`,
-          [date]
+        // Kiểm tra đơn đăng ký tăng ca (OT) đã phê duyệt cho ngày này
+        const [otRows] = await pool.query(
+          `SELECT id, work_date, start_time, end_time, total_hours, ot_type
+           FROM ot_requests
+           WHERE emp_id = ? AND work_date = ? AND status = 'APPROVED'
+           LIMIT 1`,
+          [empId, date]
         );
-        return defaultShift[0] || null;
+        if (otRows.length) {
+          const ot = otRows[0];
+          return {
+            assignment_id: ot.id,
+            work_date: date,
+            assignment_status: 'APPROVED_OT',
+            shift_id: 'SHIFT_OT',
+            code: 'CA-OT',
+            name: `Ca Tăng ca (OT - ${ot.total_hours}h)`,
+            start_time: ot.start_time,
+            end_time: ot.end_time,
+            grace_late_minutes: 15,
+            grace_early_minutes: 0,
+            working_hours: Number(ot.total_hours)
+          };
+        }
+
+        return null;
       } catch (err) {
         console.warn('[SHIFT-REPO] DB internal schedule error, fallback to memory:', err.message);
       }
@@ -873,31 +893,38 @@ class ShiftRepository {
         assignment_id: match.id,
         work_date: date,
         assignment_status: 'SCHEDULED',
-        shift_id: shift.id,
-        code: shift.code,
-        name: shift.name,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        grace_late_minutes: shift.grace_late_minutes,
-        grace_early_minutes: shift.grace_early_minutes,
-        working_hours: shift.working_hours
+        shift_id: shift?.id || match.shift_id,
+        code: shift?.code || 'CA-CUSTOM',
+        name: shift?.name || 'Ca làm việc',
+        start_time: match.custom_start_time || shift?.start_time || '08:00:00',
+        end_time: match.custom_end_time || shift?.end_time || '17:30:00',
+        grace_late_minutes: shift?.grace_late_minutes || 15,
+        grace_early_minutes: shift?.grace_early_minutes || 0,
+        working_hours: shift?.working_hours || 8.0
       };
     }
 
-    const defaultShift = Array.from(memoryShifts.values()).find(s => s.code === 'CA-HC') || Array.from(memoryShifts.values())[0];
-    return {
-      assignment_id: null,
-      work_date: date,
-      assignment_status: 'DEFAULT',
-      shift_id: defaultShift?.id || 'default-shift',
-      code: defaultShift?.code || 'CA-HC',
-      name: defaultShift?.name || 'Ca Hành Chính',
-      start_time: defaultShift?.start_time || '08:00:00',
-      end_time: defaultShift?.end_time || '17:30:00',
-      grace_late_minutes: defaultShift?.grace_late_minutes || 15,
-      grace_early_minutes: defaultShift?.grace_early_minutes || 0,
-      working_hours: defaultShift?.working_hours || 8.0
-    };
+    // Check memory OT
+    const otMatch = Array.from(memoryOtRequests.values()).find(
+      o => o.emp_id === empId && o.work_date === date && o.status === 'APPROVED'
+    );
+    if (otMatch) {
+      return {
+        assignment_id: otMatch.id,
+        work_date: date,
+        assignment_status: 'APPROVED_OT',
+        shift_id: 'SHIFT_OT',
+        code: 'CA-OT',
+        name: `Ca Tăng ca (OT - ${otMatch.total_hours}h)`,
+        start_time: otMatch.start_time,
+        end_time: otMatch.end_time,
+        grace_late_minutes: 15,
+        grace_early_minutes: 0,
+        working_hours: Number(otMatch.total_hours)
+      };
+    }
+
+    return null;
   }
 
   async getOtSummaryForPayroll(month, year) {

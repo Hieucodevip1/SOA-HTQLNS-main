@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const repository = require('../repositories/attendanceRepository');
 const events = require('../../../shared/events');
 const env = require('../../../shared/env');
+const db = require('../../../shared/db');
 
 const SHIFT_SERVICE_URL = process.env.SHIFT_SERVICE_URL || 'http://localhost:3005';
 
@@ -92,19 +93,75 @@ function getEmpIdFromUser(user) {
 }
 
 /**
- * Gọi shift-service lấy lịch ca
+ * Gọi shift-service lấy lịch ca hoặc đơn OT đã duyệt
  */
 async function fetchEmployeeShift(empId, workDate) {
+  // 1. Gọi shift-service lấy lịch ca qua HTTP
   try {
     const url = `${SHIFT_SERVICE_URL}/internal/shifts/schedule?empId=${encodeURIComponent(empId)}&date=${encodeURIComponent(workDate)}`;
     const resp = await fetch(url, {
-      headers: { 'x-internal-key': env.INTERNAL_API_KEY }
+      headers: { 'x-internal-key': env.INTERNAL_API_KEY },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined
     });
-    const json = await resp.json();
-    return json.success ? json.data : null;
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json.success && json.data) {
+        return json.data;
+      }
+      if (json.success && json.data === null) {
+        return null;
+      }
+    }
   } catch (err) {
-    return null;
+    // shift-service HTTP offline hoặc timeout -> fallback DB
   }
+
+  // 2. Tra cứu trực tiếp từ DB htqlns_shift nếu HTTP không phản hồi
+  try {
+    const shiftPool = db.getPool('htqlns_shift');
+    const [rows] = await shiftPool.query(
+      `SELECT sa.id AS assignment_id, sa.work_date, sa.status AS assignment_status,
+              s.id AS shift_id, s.code, s.name,
+              COALESCE(sa.custom_start_time, s.start_time) AS start_time,
+              COALESCE(sa.custom_end_time, s.end_time) AS end_time,
+              s.grace_late_minutes, s.grace_early_minutes, s.working_hours
+       FROM shift_assignments sa
+       JOIN shifts s ON sa.shift_id = s.id
+       WHERE sa.emp_id = ? AND sa.work_date = ? AND sa.status = 'SCHEDULED'
+       LIMIT 1`,
+      [empId, workDate]
+    );
+    if (rows && rows.length > 0) return rows[0];
+
+    // Kiểm tra đơn đăng ký tăng ca (OT) đã phê duyệt cho ngày này
+    const [otRows] = await shiftPool.query(
+      `SELECT id, work_date, start_time, end_time, total_hours, ot_type
+       FROM ot_requests
+       WHERE emp_id = ? AND work_date = ? AND status = 'APPROVED'
+       LIMIT 1`,
+      [empId, workDate]
+    );
+    if (otRows && otRows.length > 0) {
+      const ot = otRows[0];
+      return {
+        assignment_id: ot.id,
+        work_date: workDate,
+        assignment_status: 'APPROVED_OT',
+        shift_id: 'SHIFT_OT',
+        code: 'CA-OT',
+        name: `Ca Tăng ca (OT - ${ot.total_hours}h)`,
+        start_time: ot.start_time,
+        end_time: ot.end_time,
+        grace_late_minutes: 15,
+        grace_early_minutes: 0,
+        working_hours: Number(ot.total_hours)
+      };
+    }
+  } catch (dbErr) {
+    // Không thể truy vấn DB htqlns_shift
+  }
+
+  return null;
 }
 
 // ==============================================================================
@@ -156,7 +213,15 @@ class AttendanceService {
     const now = new Date();
     const workDate = now.toISOString().slice(0, 10);
 
-    // Kiểm tra đã check-in chưa
+    // 1. Kiểm tra ca làm việc hôm nay (hoặc đơn OT đã duyệt)
+    const shift = await fetchEmployeeShift(empId, workDate);
+    if (!shift) {
+      const err = new Error('Bạn chưa có lịch phân ca trong ngày hôm nay nên không thể thực hiện chấm công');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // 2. Kiểm tra đã check-in chưa
     const existing = await repository.findLogByEmpAndDate(empId, workDate);
     if (existing && existing.check_in_time) {
       const err = new Error('Bạn đã chấm công vào (Check-in) ngày hôm nay rồi');
@@ -165,7 +230,7 @@ class AttendanceService {
       throw err;
     }
 
-    // Kiểm tra Geofence hoặc WiFi
+    // 3. Kiểm tra Geofence hoặc WiFi
     const locations = await repository.getWorkLocations();
     let matchedLocation = null;
     let minDistance = null;
@@ -202,8 +267,6 @@ class AttendanceService {
       throw err;
     }
 
-    // Lấy ca làm việc
-    const shift = await fetchEmployeeShift(empId, workDate);
     let lateMinutes = 0;
     let status = 'ON_TIME';
 
@@ -266,12 +329,16 @@ class AttendanceService {
     }
 
     const checkInTime = new Date(record.check_in_time);
-    const workedHours = Math.max(0, Number(((now.getTime() - checkInTime.getTime()) / 3600000).toFixed(2)));
+    const diffMs = Math.max(0, now.getTime() - checkInTime.getTime());
+    // Tính số giờ làm việc thực tế dựa trên khoảng thời gian từ checkInTime đến checkOutTime (làm tròn 2 chữ số thập phân)
+    const workedHours = Number((diffMs / 3600000).toFixed(2));
 
     // Ca làm việc & về sớm
     const shift = await fetchEmployeeShift(empId, workDate);
     let earlyLeaveMinutes = 0;
     let status = record.status;
+    const standardWorkingHours = Number(shift?.working_hours || 8.0);
+    const isStandardMet = workedHours >= standardWorkingHours;
 
     if (shift && shift.end_time) {
       const shiftEnd = new Date(`${workDate}T${shift.end_time}`);
@@ -282,7 +349,7 @@ class AttendanceService {
       }
     }
 
-    return await repository.saveCheckOut({
+    const saved = await repository.saveCheckOut({
       id: record.id,
       checkOutTime: now,
       latitude,
@@ -292,6 +359,14 @@ class AttendanceService {
       workingHours: workedHours,
       status
     });
+
+    return {
+      ...saved,
+      working_hours: workedHours,
+      actual_working_hours: workedHours,
+      isStandardMet,
+      standardWorkingHours
+    };
   }
 
   /**

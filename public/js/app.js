@@ -3937,37 +3937,96 @@ async function loadEmployeeDashboardData() {
   const isOnboarded = Boolean(state.user?.isOnboarded && (state.user?.department || state.user?.departmentName));
   const deptName = state.user?.department || state.user?.departmentName || 'Chưa phân phòng ban (Chờ tiếp nhận)';
   const positionTitle = state.user?.position || (isOnboarded ? 'Nhân viên' : 'Nhân sự mới (Chờ tiếp nhận)');
-  const shiftName = state.user?.shiftName || (isOnboarded ? 'Ca Hành Chính' : 'Chưa phân ca');
-  const shiftStart = state.user?.shiftStart || '08:00';
-  const shiftEnd = state.user?.shiftEnd || '17:30';
 
   const now = new Date();
   const today = toLocalDateString(now);
   const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
   const todayStr = `${dayNames[now.getDay()]}, ${now.toLocaleDateString('vi-VN')}`;
 
-  // 1. Xử lý Banner Chờ Tiếp Nhận Ban/Phòng
+  // 1. Tải trước danh sách ca phân và đơn OT 7 ngày tới (từ hôm nay)
+  let myShifts = [];
+  let myApprovedOts = [];
+  if (isOnboarded) {
+    const fromDateStr = today;
+    const endD = new Date(now);
+    endD.setDate(now.getDate() + 6);
+    const toDateStr = toLocalDateString(endD);
+
+    try {
+      const schedRes = await apiCall(`/api/v1/shifts/my-schedules?fromDate=${fromDateStr}&toDate=${toDateStr}`);
+      if (schedRes && schedRes.success) {
+        myShifts = schedRes.data || [];
+        myApprovedOts = schedRes.approvedOts || schedRes.meta?.approvedOts || [];
+      }
+    } catch (err) {
+      console.warn('Lỗi lấy my-schedules qua API v1, thử lại với fallback:', err);
+    }
+
+    // Fallback lấy OT nếu chưa có trong response ca
+    if (!myApprovedOts.length) {
+      try {
+        const otRes = await apiCall(`/api/v1/ot-requests?status=APPROVED&fromDate=${fromDateStr}&toDate=${toDateStr}`);
+        if (otRes && (otRes.data || otRes.requests)) {
+          const list = otRes.data || otRes.requests || [];
+          const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+          myApprovedOts = list.filter(o => (o.emp_id === myEmpId || o.empId === myEmpId) && o.status === 'APPROVED');
+        }
+      } catch (_) {}
+    }
+    if (!myApprovedOts.length) {
+      const localReqs = (typeof getUserEntityList === 'function' ? getUserEntityList('requests') : []) || [];
+      myApprovedOts = localReqs.filter(r => (r.type && r.type.includes('OT')) && r.status === 'APPROVED');
+    }
+  }
+
+  // Xác định ca và đơn OT của ngày hôm nay
+  const todayShifts = myShifts.filter(s => toLocalDateString(s.work_date || s.workDate) === today && (s.status === 'SCHEDULED' || !s.status));
+  const todayOts = myApprovedOts.filter(o => toLocalDateString(o.work_date || o.workDate) === today && o.status === 'APPROVED');
+  const todayShift = todayShifts.length > 0 ? todayShifts[0] : null;
+  const todayOt = todayOts.length > 0 ? todayOts[0] : null;
+  const hasShiftToday = Boolean(todayShift || todayOt);
+
+  // Lưu vào state để các hàm điểm danh / kiểm tra sử dụng
+  state.todayHasShift = hasShiftToday;
+  state.todayShift = todayShift;
+  state.todayOt = todayOt;
+
+  // 2. Xử lý Banner Chờ Tiếp Nhận Ban/Phòng
   const onboardingBanner = document.getElementById('dashEmpOnboardingBanner');
   if (onboardingBanner) {
     onboardingBanner.style.display = isOnboarded ? 'none' : 'block';
   }
 
-  // 2. Cập nhật lời chào và thông tin ca trong Hero Card
+  // 3. Cập nhật lời chào và thông tin ca trong Hero Card
   const heroGreeting = document.getElementById('dashEmpHeroGreeting');
   const todayDateText = document.getElementById('dashEmpTodayDateText');
   const gpsStatus = document.getElementById('dashEmpGpsStatus');
   const liveClock = document.getElementById('dashEmpLiveClock');
   const todayBadge = document.getElementById('dashEmpTodayBadge');
+  const shiftWarningNotice = document.getElementById('dashEmpShiftWarningNotice');
 
   if (heroGreeting) heroGreeting.style.display = 'none';
   if (liveClock) liveClock.innerText = now.toLocaleTimeString('vi-VN');
 
   if (todayDateText) {
-    if (isOnboarded) {
-      todayDateText.innerText = `${todayStr} • ${shiftName} (${shiftStart} - ${shiftEnd})`;
-    } else {
+    if (!isOnboarded) {
       todayDateText.innerText = todayStr;
+    } else if (todayShift) {
+      const sName = getCleanShiftName(todayShift) || todayShift.shift_name || todayShift.shiftName || 'Ca làm việc';
+      const sStart = (todayShift.start_time || todayShift.startTime || '08:00:00').slice(0, 5);
+      const sEnd = (todayShift.end_time || todayShift.endTime || '17:30:00').slice(0, 5);
+      todayDateText.innerText = `${todayStr} • ${sName} (${sStart} - ${sEnd})`;
+    } else if (todayOt) {
+      const otStart = (todayOt.start_time || todayOt.startTime || '18:00').slice(0, 5);
+      const otEnd = (todayOt.end_time || todayOt.endTime || '21:00').slice(0, 5);
+      todayDateText.innerText = `${todayStr} • Ca Tăng ca (OT) (${otStart} - ${otEnd})`;
+    } else {
+      todayDateText.innerText = `${todayStr} • Chưa có lịch phân ca (Ngày nghỉ)`;
     }
+  }
+
+  if (shiftWarningNotice) {
+    shiftWarningNotice.style.display = (isOnboarded && !hasShiftToday) ? 'block' : 'none';
   }
 
   if (gpsStatus) {
@@ -3979,7 +4038,7 @@ async function loadEmployeeDashboardData() {
     }
   }
 
-  // 3. Khối Chấm công trong ngày (Thời gian thực & Cách ly theo tài khoản)
+  // 4. Khối Chấm công trong ngày (Thời gian thực & Cách ly theo tài khoản)
   let userAtts = getUserEntityList('attendances');
   const todayLog = userAtts.find(l => l.work_date && l.work_date.startsWith(today));
 
@@ -3992,7 +4051,39 @@ async function loadEmployeeDashboardData() {
   const checkInBtn = document.getElementById('dashEmpCheckInBtn');
   const checkOutBtn = document.getElementById('dashEmpCheckOutBtn');
 
-  if (todayLog && todayLog.check_in_time) {
+  if (isOnboarded && !hasShiftToday) {
+    // Trường hợp hôm nay chưa có lịch phân ca (Ngày nghỉ)
+    if (checkInVal) checkInVal.innerText = '--:--:--';
+    if (checkInNote) checkInNote.innerText = 'Không có ca';
+    if (checkOutVal) checkOutVal.innerText = '--:--:--';
+    if (checkOutNote) checkOutNote.innerText = 'Không có ca';
+    if (hoursVal) hoursVal.innerText = '0.00 h';
+    if (hoursNote) {
+      hoursNote.innerText = 'Chưa có lịch phân ca';
+      hoursNote.style.color = '#94a3b8';
+    }
+    if (todayBadge) {
+      todayBadge.innerText = 'Chưa có lịch phân ca (Ngày nghỉ)';
+      todayBadge.style.background = '#f1f5f9';
+      todayBadge.style.color = '#64748b';
+    }
+    if (checkInBtn) {
+      checkInBtn.style.display = 'flex';
+      checkInBtn.disabled = true;
+      checkInBtn.className = 'btn-hero-action';
+      checkInBtn.style.background = '#e2e8f0';
+      checkInBtn.style.color = '#94a3b8';
+      checkInBtn.style.cursor = 'not-allowed';
+      checkInBtn.style.boxShadow = 'none';
+      checkInBtn.title = 'Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.';
+      checkInBtn.innerHTML = '<span>CHƯA CÓ LỊCH CA</span>';
+    }
+    if (checkOutBtn) {
+      checkOutBtn.style.display = 'none';
+      checkOutBtn.disabled = true;
+      checkOutBtn.title = 'Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.';
+    }
+  } else if (todayLog && todayLog.check_in_time) {
     const inTime = new Date(todayLog.check_in_time).toLocaleTimeString('vi-VN');
     if (checkInVal) checkInVal.innerText = inTime;
     if (checkInNote) {
@@ -4004,21 +4095,46 @@ async function loadEmployeeDashboardData() {
       const outTime = new Date(todayLog.check_out_time).toLocaleTimeString('vi-VN');
       if (checkOutVal) checkOutVal.innerText = outTime;
       if (checkOutNote) { checkOutNote.innerText = 'Đã hoàn tất ca'; checkOutNote.style.color = '#059669'; }
-      if (hoursVal) hoursVal.innerText = `${todayLog.actual_working_hours || '8.5'} h`;
-      if (hoursNote) hoursNote.innerText = 'Đạt chuẩn 8.0 h';
-      if (todayBadge) {
-        todayBadge.innerText = 'Hoàn thành ca làm việc';
-        todayBadge.style.background = '#dbeafe';
-        todayBadge.style.color = '#1e40af';
+
+      const rawActual = todayLog.actual_working_hours !== undefined && todayLog.actual_working_hours !== null ? Number(todayLog.actual_working_hours) : null;
+      let actualHours = rawActual;
+      if (actualHours === null || isNaN(actualHours)) {
+        const inMs = new Date(todayLog.check_in_time).getTime();
+        const outMs = new Date(todayLog.check_out_time).getTime();
+        actualHours = Math.max(0, Number(((outMs - inMs) / 3600000).toFixed(2)));
       }
-      if (checkInBtn) { checkInBtn.style.display = 'flex'; checkInBtn.className = 'btn-hero-action btn-hero-done'; checkInBtn.disabled = true; checkInBtn.innerHTML = '<span>ĐÃ HOÀN TẤT HÔM NAY</span>'; }
+      if (hoursVal) hoursVal.innerText = `${actualHours.toFixed(2)} h`;
+
+      const standardHours = Number(todayShift?.working_hours || (todayOt?.total_hours || 8.0));
+      const isStandardMet = actualHours >= standardHours;
+      if (hoursNote) {
+        hoursNote.innerText = isStandardMet ? `Đạt chuẩn (${standardHours.toFixed(1)} h)` : `Chưa đủ giờ chuẩn (${actualHours.toFixed(2)}/${standardHours.toFixed(1)} h)`;
+        hoursNote.style.color = isStandardMet ? '#059669' : '#dc2626';
+      }
+      if (todayBadge) {
+        todayBadge.innerText = isStandardMet ? 'Hoàn thành ca làm việc' : 'Hoàn tất ca (Chưa đủ giờ)';
+        todayBadge.style.background = isStandardMet ? '#dbeafe' : '#fef2f2';
+        todayBadge.style.color = isStandardMet ? '#1e40af' : '#b91c1c';
+      }
+      if (checkInBtn) {
+        checkInBtn.style.display = 'flex';
+        checkInBtn.className = 'btn-hero-action btn-hero-done';
+        checkInBtn.disabled = true;
+        checkInBtn.style.background = '';
+        checkInBtn.style.color = '';
+        checkInBtn.style.cursor = 'default';
+        checkInBtn.innerHTML = '<span>ĐÃ HOÀN TẤT HÔM NAY</span>';
+      }
       if (checkOutBtn) { checkOutBtn.style.display = 'none'; }
     } else {
       if (checkOutVal) checkOutVal.innerText = '--:--:--';
       if (checkOutNote) checkOutNote.innerText = 'Đang trong ca làm việc...';
-      const elapsedHours = ((now - new Date(todayLog.check_in_time)) / 3600000).toFixed(1);
-      if (hoursVal) hoursVal.innerText = `${Math.max(0.1, parseFloat(elapsedHours))} h`;
-      if (hoursNote) hoursNote.innerText = 'Đang tích lũy...';
+      const elapsedHours = Math.max(0, Number(((now - new Date(todayLog.check_in_time)) / 3600000).toFixed(2)));
+      if (hoursVal) hoursVal.innerText = `${elapsedHours.toFixed(2)} h`;
+      if (hoursNote) {
+        hoursNote.innerText = 'Đang tích lũy...';
+        hoursNote.style.color = '#059669';
+      }
       if (todayBadge) {
         todayBadge.innerText = todayLog.status === 'LATE' ? `Đã vào ca (Đi muộn ${todayLog.late_minutes}p)` : 'Đã vào ca (Đúng giờ)';
         todayBadge.style.background = todayLog.status === 'LATE' ? '#fef3c7' : '#dcfce7';
@@ -4029,6 +4145,9 @@ async function loadEmployeeDashboardData() {
         checkOutBtn.style.display = 'flex';
         checkOutBtn.disabled = false;
         checkOutBtn.className = 'btn-hero-action btn-hero-checkout';
+        checkOutBtn.style.opacity = '';
+        checkOutBtn.style.cursor = 'pointer';
+        checkOutBtn.title = '';
         checkOutBtn.innerHTML = '<span>CHECK-OUT (KẾT THÚC CA)</span>';
       }
     }
@@ -4038,8 +4157,12 @@ async function loadEmployeeDashboardData() {
     if (checkInNote) checkInNote.innerText = 'Chưa check-in';
     if (checkOutVal) checkOutVal.innerText = '--:--:--';
     if (checkOutNote) checkOutNote.innerText = 'Chưa check-out';
-    if (hoursVal) hoursVal.innerText = '0.0 h';
-    if (hoursNote) hoursNote.innerText = isOnboarded ? 'Tiêu chuẩn: 8.0 h' : 'Chưa xếp ca';
+    if (hoursVal) hoursVal.innerText = '0.00 h';
+    const standardHours = Number(todayShift?.working_hours || (todayOt?.total_hours || 8.0));
+    if (hoursNote) {
+      hoursNote.innerText = isOnboarded ? `Tiêu chuẩn: ${standardHours.toFixed(1)} h` : 'Chưa xếp ca';
+      hoursNote.style.color = '#059669';
+    }
     if (todayBadge) {
       if (isOnboarded) {
         todayBadge.innerText = 'Sẵn sàng chấm công';
@@ -4057,12 +4180,13 @@ async function loadEmployeeDashboardData() {
         checkInBtn.disabled = false;
         checkInBtn.className = 'btn-hero-action btn-hero-checkin';
         checkInBtn.style.background = '';
+        checkInBtn.style.color = '';
         checkInBtn.style.cursor = 'pointer';
         checkInBtn.style.opacity = '1';
+        checkInBtn.style.boxShadow = '';
         checkInBtn.title = 'Bấm để chấm công vào ca';
         checkInBtn.innerHTML = '<span>CHECK-IN NGAY</span>';
       } else {
-        // TẠM KHÓA NÚT CHẤM CÔNG NẾU CHƯA ĐƯỢC PHÂN PHÒNG BAN
         checkInBtn.disabled = true;
         checkInBtn.className = 'btn-hero-action btn-hero-locked';
         checkInBtn.style.background = '#94a3b8';
@@ -4075,7 +4199,7 @@ async function loadEmployeeDashboardData() {
     if (checkOutBtn) { checkOutBtn.style.display = 'none'; }
   }
 
-  // 4. Cập nhật 4 KPI Cards (Chỉ số ngắn gọn, súc tích)
+  // 5. Cập nhật 4 KPI Cards (Chỉ số ngắn gọn, súc tích)
   const kpiWork = document.getElementById('dashEmpKpiWorkDays');
   const kpiWorkSub = document.getElementById('dashEmpKpiWorkDaysSub');
   const kpiLeave = document.getElementById('dashEmpKpiLeaveBalance');
@@ -4116,7 +4240,7 @@ async function loadEmployeeDashboardData() {
     if (kpiOtSub) kpiOtSub.innerText = otList.length > 0 ? `${otList.length} đơn đã duyệt` : 'Chưa có giờ tăng ca';
   }
 
-  // 5. Cột trái: Lịch ca tuần này (7 ngày tới: từ hôm nay đến +6 ngày)
+  // 6. Cột trái: Lịch ca tuần này (7 ngày tới: từ hôm nay đến +6 ngày)
   const weekScheduleBody = document.getElementById('dashEmpWeekScheduleBody');
   if (weekScheduleBody) {
     if (!isOnboarded) {
@@ -4129,39 +4253,6 @@ async function loadEmployeeDashboardData() {
         </div>
       `;
     } else {
-      let myShifts = [];
-      let myApprovedOts = [];
-      const fromDateStr = toLocalDateString(now);
-      const endD = new Date(now);
-      endD.setDate(now.getDate() + 6);
-      const toDateStr = toLocalDateString(endD);
-
-      try {
-        const schedRes = await apiCall(`/api/v1/shifts/my-schedules?fromDate=${fromDateStr}&toDate=${toDateStr}`);
-        if (schedRes && schedRes.success) {
-          myShifts = schedRes.data || [];
-          myApprovedOts = schedRes.approvedOts || schedRes.meta?.approvedOts || [];
-        }
-      } catch (err) {
-        console.warn('Lỗi lấy my-schedules qua API v1, thử lại với fallback:', err);
-      }
-
-      // Fallback lấy OT nếu chưa có trong response ca
-      if (!myApprovedOts.length) {
-        try {
-          const otRes = await apiCall(`/api/v1/ot-requests?status=APPROVED&fromDate=${fromDateStr}&toDate=${toDateStr}`);
-          if (otRes && (otRes.data || otRes.requests)) {
-            const list = otRes.data || otRes.requests || [];
-            const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
-            myApprovedOts = list.filter(o => (o.emp_id === myEmpId || o.empId === myEmpId) && o.status === 'APPROVED');
-          }
-        } catch (_) {}
-      }
-      if (!myApprovedOts.length) {
-        const localReqs = (typeof getUserEntityList === 'function' ? getUserEntityList('requests') : []) || [];
-        myApprovedOts = localReqs.filter(r => (r.type && r.type.includes('OT')) && r.status === 'APPROVED');
-      }
-
       let weekHtml = '';
       for (let d = 0; d < 7; d++) {
         const day = new Date(now);
@@ -4997,12 +5088,26 @@ function scrollToCreateLeaveForm() {
   }, 120);
 }
 
+function checkUserHasShiftToday() {
+  if (state.todayHasShift !== undefined && state.todayHasShift !== null) {
+    return Boolean(state.todayHasShift);
+  }
+  return true;
+}
+
 // Check-in trong ngày (Lưu riêng biệt cho tài khoản hiện tại)
 async function handleDashboardCheckIn() {
   if (!state.user?.isOnboarded) {
     showToast('⚠️ Bạn chưa được phân bổ vào phòng ban và ca làm việc hợp lệ. Vui lòng liên hệ HR để được gán chi nhánh và ca trực trước khi chấm công!', 'warning');
     return;
   }
+
+  // Chặn Check-in nếu hôm nay chưa được phân ca làm việc (và không có OT đã duyệt)
+  if (!checkUserHasShiftToday()) {
+    showToast('Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.', 'warning');
+    return;
+  }
+
   const btn = document.getElementById('dashEmpCheckInBtn');
   if (btn) {
     btn.disabled = true;
@@ -5014,17 +5119,35 @@ async function handleDashboardCheckIn() {
   const today = toLocalDateString(now);
 
   try {
-    // Lưu vào kho dữ liệu cá nhân của user
+    // 1. Gửi lên backend API trước để kiểm tra hợp lệ
+    let backendData = null;
+    try {
+      const res = await apiCall('/api/v1/attendances/check-in', 'POST', {
+        method: 'WIFI_GPS',
+        bssid: 'A4:5E:60:12:34:01',
+        ssid: 'QNU-Office',
+        latitude: 13.7587,
+        longitude: 109.2190
+      });
+      if (res && res.data) backendData = res.data;
+    } catch (apiErr) {
+      if (apiErr.status === 400 || apiErr.status === 403 || (apiErr.message && !apiErr.message.includes('offline') && !apiErr.message.includes('fetch'))) {
+        throw apiErr;
+      }
+      console.warn('API Check-in backend offline, sử dụng cơ chế fallback client storage:', apiErr.message);
+    }
+
+    // 2. Lưu vào kho dữ liệu cá nhân của user
     let userAtts = getUserEntityList('attendances');
     const existingIdx = userAtts.findIndex(l => l.work_date && l.work_date.startsWith(today));
     const newLog = {
-      id: 'att-' + Date.now(),
+      id: backendData?.id || ('att-' + Date.now()),
       work_date: today,
-      check_in_time: now.toISOString(),
+      check_in_time: backendData?.check_in_time || now.toISOString(),
       check_out_time: null,
-      status: 'ON_TIME',
-      late_minutes: 0,
-      actual_working_hours: '0.0',
+      status: backendData?.status || 'ON_TIME',
+      late_minutes: backendData?.late_minutes || 0,
+      actual_working_hours: 0.0,
       type: 'Wi-Fi Office'
     };
 
@@ -5034,20 +5157,6 @@ async function handleDashboardCheckIn() {
       userAtts.unshift(newLog);
     }
     saveUserEntityList('attendances', userAtts);
-
-    // Gửi lên backend API nếu backend sẵn sàng
-    apiCall('/api/v1/attendances/check-in', {
-      method: 'POST',
-      body: JSON.stringify({
-        method: 'WIFI_GPS',
-        bssid: 'A4:5E:60:12:34:01',
-        ssid: 'QNU-Office',
-        latitude: 13.7587,
-        longitude: 109.2190
-      })
-    }).catch(err => {
-      console.warn('API Check-in backend offline, sử dụng cơ chế cách ly client storage:', err.message);
-    });
 
     showToast(`Check-in thành công lúc ${timeStr}! Chúc bạn làm việc hiệu quả.`, 'success');
     loadEmployeeDashboardData();
@@ -5062,6 +5171,11 @@ async function handleDashboardCheckIn() {
 
 // Check-out kết thúc ca (Lưu riêng biệt cho tài khoản hiện tại)
 async function handleDashboardCheckOut() {
+  if (!checkUserHasShiftToday()) {
+    showToast('Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.', 'warning');
+    return;
+  }
+
   const btn = document.getElementById('dashEmpCheckOutBtn');
   if (btn) {
     btn.disabled = true;
@@ -5073,29 +5187,35 @@ async function handleDashboardCheckOut() {
   const today = toLocalDateString(now);
 
   try {
-    let userAtts = getUserEntityList('attendances');
-    const todayLog = userAtts.find(l => l.work_date && l.work_date.startsWith(today));
-    if (todayLog) {
-      todayLog.check_out_time = now.toISOString();
-      const inDate = new Date(todayLog.check_in_time);
-      const diffHours = ((now - inDate) / 3600000).toFixed(1);
-      todayLog.actual_working_hours = diffHours > 0 ? diffHours : '8.5';
-      saveUserEntityList('attendances', userAtts);
-    }
-
-    // Gửi lên backend nếu sẵn sàng
-    apiCall('/api/v1/attendances/check-out', {
-      method: 'POST',
-      body: JSON.stringify({
+    let backendData = null;
+    try {
+      const res = await apiCall('/api/v1/attendances/check-out', 'POST', {
         method: 'WIFI_GPS',
         bssid: 'A4:5E:60:12:34:01',
         ssid: 'QNU-Office',
         latitude: 13.7587,
         longitude: 109.2190
-      })
-    }).catch(err => {
-      console.warn('API Check-out backend offline, sử dụng cơ chế cách ly client storage:', err.message);
-    });
+      });
+      if (res && res.data) backendData = res.data;
+    } catch (apiErr) {
+      if (apiErr.status === 400 || apiErr.status === 403) {
+        throw apiErr;
+      }
+      console.warn('API Check-out backend offline, sử dụng cơ chế fallback client storage:', apiErr.message);
+    }
+
+    let userAtts = getUserEntityList('attendances');
+    const todayLog = userAtts.find(l => l.work_date && l.work_date.startsWith(today));
+    if (todayLog) {
+      todayLog.check_out_time = backendData?.check_out_time || now.toISOString();
+      const inDate = new Date(todayLog.check_in_time);
+      const diffMs = Math.max(0, now.getTime() - inDate.getTime());
+      const diffHours = Number((diffMs / 3600000).toFixed(2));
+      todayLog.actual_working_hours = backendData?.actual_working_hours !== undefined
+        ? Number(backendData.actual_working_hours)
+        : diffHours;
+      saveUserEntityList('attendances', userAtts);
+    }
 
     showToast(`Check-out thành công lúc ${timeStr}! Hẹn gặp lại bạn vào ngày mai.`, 'success');
     loadEmployeeDashboardData();

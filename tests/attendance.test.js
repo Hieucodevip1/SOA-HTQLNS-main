@@ -22,9 +22,10 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     role: 'ADMIN'
   });
 
+  const testEmpId = 'e_test_' + Date.now();
   const employeeToken = jwt.signToken({
     userId: 'u_emp_test_' + Date.now(),
-    empId: 'e_test_' + Date.now(),
+    empId: testEmpId,
     username: 'test_emp',
     role: 'EMPLOYEE'
   });
@@ -69,6 +70,19 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
+
+    // Seed lịch phân ca làm việc hôm nay cho testEmpId để kiểm thử check-in
+    try {
+      const db = require('../shared/db');
+      const shiftPool = db.getPool('htqlns_shift');
+      const today = new Date().toISOString().slice(0, 10);
+      await shiftPool.query(
+        `INSERT INTO shift_assignments (id, emp_id, shift_id, work_date, status)
+         VALUES (?, ?, 's0000001-0000-0000-0000-000000000001', ?, 'SCHEDULED')
+         ON DUPLICATE KEY UPDATE status = 'SCHEDULED'`,
+        ['sa_att_test_' + Date.now(), testEmpId, today]
+      );
+    } catch (_) {}
   });
 
   after(async () => {
@@ -76,6 +90,8 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
       const db = require('../shared/db');
       const pool = db.getPool('htqlns_attendance');
       await pool.query("DELETE FROM attendance_adjustments WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%Quên chấm công%' OR reason LIKE '%Quên checkout%' OR reason LIKE '%test%'").catch(() => {});
+      const shiftPool = db.getPool('htqlns_shift');
+      await shiftPool.query("DELETE FROM shift_assignments WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e_no_shift_%'").catch(() => {});
       await db.closeAllPools().catch(() => {});
     } catch {}
     if (attProcess) attProcess.kill();
@@ -144,7 +160,32 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     assert.strictEqual(data.data.code, testLocationCode);
   });
 
-  // 5. Check-in ngoài bán kính GPS (HTTP 403 OUT_OF_RANGE)
+  // 5. Chặn Check-in khi chưa được phân ca làm việc (HTTP 400)
+  test('Từ chối Check-in khi nhân viên chưa có lịch phân ca trong ngày hôm nay (HTTP 400)', async () => {
+    const noShiftToken = jwt.signToken({
+      userId: 'u_no_shift_' + Date.now(),
+      empId: 'e_no_shift_' + Date.now(),
+      username: 'no_shift_emp',
+      role: 'EMPLOYEE'
+    });
+    const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/check-in`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${noShiftToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        method: 'WIFI',
+        wifiSsid: 'HTQLNS_OFFICE_5G'
+      })
+    });
+    assert.strictEqual(res.status, 400);
+    const data = await res.json();
+    assert.strictEqual(data.success, false);
+    assert.ok(data.error.includes('chưa có lịch phân ca trong ngày hôm nay'));
+  });
+
+  // 6. Check-in ngoài bán kính GPS (HTTP 403 OUT_OF_RANGE)
   test('Từ chối Check-in khi tọa độ GPS ngoài bán kính Geofence (HTTP 403 OUT_OF_RANGE)', async () => {
     const res = await fetch(`http://localhost:${ATT_PORT}/api/attendance/check-in`, {
       method: 'POST',

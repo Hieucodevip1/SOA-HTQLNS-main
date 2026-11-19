@@ -446,6 +446,9 @@ class AttendanceRepository {
    */
   async saveCheckOut(data) {
     const useDb = await this.isDbAvailable();
+    const workingHoursNum = (data.workingHours !== undefined && data.workingHours !== null)
+      ? Number(Number(data.workingHours).toFixed(2))
+      : 0.00;
     if (useDb) {
       try {
         await pool.query(
@@ -459,7 +462,7 @@ class AttendanceRepository {
             data.longitude || null,
             data.method || 'GPS',
             data.earlyLeaveMinutes || 0,
-            data.workingHours || 0,
+            workingHoursNum,
             data.status,
             data.id
           ]
@@ -478,7 +481,7 @@ class AttendanceRepository {
       record.check_out_lng = data.longitude || null;
       record.check_out_method = data.method || 'GPS';
       record.early_leave_minutes = data.earlyLeaveMinutes || 0;
-      record.actual_working_hours = data.workingHours || 0;
+      record.actual_working_hours = workingHoursNum;
       record.status = data.status;
       return record;
     }
