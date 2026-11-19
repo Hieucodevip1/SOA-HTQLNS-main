@@ -433,6 +433,67 @@ describe('Kiểm thử Phân hệ Auth Service & Organization Service', () => {
       assert.ok((data.error || data.message || '').includes('chưa được phân công phòng ban'));
     });
 
+    test('Quản lý mời nhân viên có email không tồn tại trong hệ thống trả về HTTP 404', async () => {
+      assert.ok(createdDeptId, 'Phải có createdDeptId');
+
+      const res = await fetch(`http://localhost:${ORG_PORT}/api/v1/organizations/departments/invite`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          email: 'nonexistent_user_' + Date.now() + '@htqlns.com',
+          departmentId: createdDeptId,
+          position: 'Kỹ Sư Phần Mềm'
+        })
+      });
+      assert.strictEqual(res.status, 404);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.ok((data.error || data.message || '').includes('Không tìm thấy tài khoản nhân viên với email này'));
+    });
+
+    test('Quản lý mời/tiếp nhận nhân viên tồn tại vào phòng ban thành công (HTTP 200)', async () => {
+      assert.ok(createdDeptId, 'Phải có createdDeptId');
+      // Tạo một nhân viên chờ tiếp nhận trước
+      const testEmail = `employee_to_invite_${Date.now()}@htqlns.com`;
+      const empCode = 'EMP_INV_' + Date.now().toString().slice(-4);
+      const createEmpRes = await fetch(`http://localhost:${ORG_PORT}/api/organization/employees`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          code: empCode,
+          full_name: 'Nguyễn Văn Được Mời',
+          email: testEmail,
+          status: 'PENDING_ASSIGNMENT'
+        })
+      });
+      assert.strictEqual(createEmpRes.status, 201);
+      const empData = await createEmpRes.json();
+      const invitedEmpId = empData.data.id;
+
+      // Quản lý hoặc Admin gọi endpoint tiếp nhận
+      const inviteRes = await fetch(`http://localhost:${ORG_PORT}/api/v1/organizations/departments/invite`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          email: testEmail,
+          departmentId: createdDeptId,
+          position: 'Kỹ Sư Phần Mềm'
+        })
+      });
+      assert.strictEqual(inviteRes.status, 200);
+      const inviteData = await inviteRes.json();
+      assert.strictEqual(inviteData.success, true);
+      assert.strictEqual(inviteData.data.departmentId, createdDeptId);
+      assert.strictEqual(inviteData.data.status, 'ACTIVE');
+      assert.strictEqual(inviteData.data.position, 'Kỹ Sư Phần Mềm');
+
+      // Dọn dẹp nhân viên sau kiểm thử
+      await fetch(`http://localhost:${ORG_PORT}/api/organization/employees/${invitedEmpId}`, {
+        method: 'DELETE',
+        headers: adminHeaders
+      });
+    });
+
     test('Xóa phòng ban thử nghiệm /api/organization/departments/:id', async () => {
       assert.ok(createdDeptId, 'Phải có createdDeptId');
       const res = await fetch(`http://localhost:${ORG_PORT}/api/organization/departments/${createdDeptId}`, {

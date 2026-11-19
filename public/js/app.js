@@ -4571,6 +4571,7 @@ async function loadManagerTeamInfo() {
 
     // Không tự gán mặc định Ban Giám Đốc khi departmentId đang trống (null)
     if (myDept) {
+      state.currentManagerDept = myDept;
       card.style.background = '#ffffff';
       card.style.border = '1px solid #e2e8f0';
       if (deptTitle) {
@@ -4589,9 +4590,13 @@ async function loadManagerTeamInfo() {
       }
       if (inviteBtn) {
         inviteBtn.style.display = 'inline-flex';
+        inviteBtn.disabled = false;
+        inviteBtn.style.pointerEvents = 'auto';
+        inviteBtn.style.cursor = 'pointer';
       }
     } else {
-      // Manager mới chưa được phân công phòng ban phụ trách: Hiển thị trạng thái rõ ràng và ẩn nút mời
+      // Manager mới chưa được phân công phòng ban phụ trách: Hiển thị trạng thái rõ ràng
+      state.currentManagerDept = null;
       card.style.background = '#fffbeb';
       card.style.border = '1.5px solid #fde68a';
       if (deptTitle) {
@@ -4606,10 +4611,14 @@ async function loadManagerTeamInfo() {
         subtitle.style.color = '#92400e';
       }
       if (inviteBtn) {
-        inviteBtn.style.display = 'none';
+        inviteBtn.style.display = 'inline-flex';
+        inviteBtn.disabled = false;
+        inviteBtn.style.pointerEvents = 'auto';
+        inviteBtn.style.cursor = 'pointer';
       }
     }
   } catch (err) {
+    state.currentManagerDept = null;
     card.style.background = '#fffbeb';
     card.style.border = '1.5px solid #fde68a';
     if (deptTitle) {
@@ -4617,7 +4626,12 @@ async function loadManagerTeamInfo() {
       deptTitle.style.color = '#b45309';
     }
     if (inviteBadge) inviteBadge.style.display = 'none';
-    if (inviteBtn) inviteBtn.style.display = 'none';
+    if (inviteBtn) {
+      inviteBtn.style.display = 'inline-flex';
+      inviteBtn.disabled = false;
+      inviteBtn.style.pointerEvents = 'auto';
+      inviteBtn.style.cursor = 'pointer';
+    }
   }
 }
 
@@ -4637,75 +4651,211 @@ function copyManagerInviteCode() {
 }
 
 // 7. Phía Quản lý: Mở Modal Mời nhân viên qua email
-function openManagerInviteModal() {
-  const deptTitle = document.getElementById('mgrDeptNameTitle')?.innerText || '';
-  if (deptTitle.includes('chưa được phân công phòng ban')) {
-    showToast('Tài khoản Quản lý chưa được phân công phòng ban phụ trách — Vui lòng liên hệ HR/Admin để gán bộ phận quản lý.', 'warning');
+async function openManagerInviteModal() {
+  const userEmpId = state.user?.empId || state.user?.id;
+  const userDeptId = state.user?.departmentId || state.user?.department_id;
+  const userDeptName = state.user?.department || state.user?.departmentName;
+
+  // Lấy thông tin phòng ban phụ trách
+  let myDept = state.currentManagerDept;
+  if (!myDept) {
+    const depts = state.departments || [];
+    if (userEmpId) {
+      myDept = depts.find(d => d.manager_id && (d.manager_id === userEmpId || d.manager_id === state.user?.id));
+    }
+    if (!myDept && userDeptId) {
+      myDept = depts.find(d => d.id === userDeptId);
+    }
+    if (!myDept && userDeptName && userDeptName !== '-' && !userDeptName.includes('Chưa phân') && !userDeptName.includes('Ban Giám Đốc')) {
+      myDept = depts.find(d => d.name === userDeptName);
+    }
+  }
+
+  // Nếu tài khoản Quản lý hiện tại chưa được Admin/HR gán phòng ban phụ trách (!currentUser.departmentId)
+  if (!myDept && !userDeptId) {
+    const warnMsg = 'Tài khoản Quản lý của bạn chưa được phân công phòng ban phụ trách nên chưa thể mời nhân viên';
+    showToast(warnMsg, 'warning');
+    openModal(
+      'Mời nhân viên tham gia phòng ban',
+      `
+      <div style="display: flex; flex-direction: column; gap: 14px; text-align: center; padding: 14px 8px;">
+        <div style="font-size: 42px;">⚠️</div>
+        <div style="font-size: 15px; font-weight: 700; color: #b45309; line-height: 1.4;">
+          ${warnMsg}
+        </div>
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 0;">
+          Vui lòng liên hệ Quản trị viên (ADMIN) hoặc Bộ phận Nhân sự (HR_ADMIN) để được phân công phòng ban phụ trách trước khi mời nhân sự vào đội nhóm.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 10px;">
+          <button type="button" class="btn-figma-dark" style="padding: 9px 20px; font-size: 13px; border-radius: 8px;" onclick="closeModal()">
+            Đã hiểu &amp; Đóng
+          </button>
+        </div>
+      </div>
+      `
+    );
     return;
   }
-  const currentCode = document.getElementById('mgrInviteCodeVal')?.innerText || 'TEAM-TECH';
+
+  const deptName = myDept?.name || userDeptName || 'Phòng ban phụ trách';
+  const deptCode = myDept?.code || 'TECH';
+  const inviteCode = myDept?.invite_code || `TEAM-${deptCode.replace(/^PB-/, '')}`;
+
+  // Lọc danh sách nhân sự chưa thuộc phòng ban nào để chọn nhanh
+  const unassignedEmployees = (state.employees || []).filter(e => 
+    (!e.department_id && !e.department_name && e.status !== 'INACTIVE' && e.status !== 'RESIGNED') ||
+    e.status === 'PENDING' || e.status === 'PENDING_ASSIGNMENT'
+  );
+
+  const regUsers = getRegisteredUsersList();
+  regUsers.forEach(u => {
+    if (!unassignedEmployees.some(e => e.email && u.email && e.email.toLowerCase() === u.email.toLowerCase())) {
+      const a = getUserAssignment(u.username, u.id);
+      if (!a || a.status !== 'ACTIVE') {
+        unassignedEmployees.push({
+          id: u.id,
+          full_name: u.fullName || u.username,
+          email: u.email
+        });
+      }
+    }
+  });
+
+  const unassignedOptions = unassignedEmployees.map(e => 
+    `<option value="${escapeHtml(e.email || '')}">${escapeHtml(e.full_name || e.fullName || 'Nhân viên')} (${escapeHtml(e.email || 'Chưa có email')})</option>`
+  ).join('');
+
   openModal(
     'Mời nhân viên tham gia phòng ban',
     `
     <div style="display: flex; flex-direction: column; gap: 14px;">
-      <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 0;">
-        Nhập địa chỉ email của nhân viên. Hệ thống sẽ tạo thư mời với mã phòng ban <strong style="color: #2563eb;">${currentCode}</strong>, ca làm việc chuẩn và vị trí chấm công GPS.
-      </p>
-
-      <div>
-        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Email nhân viên:</label>
-        <input type="email" id="modalInviteEmail" class="figma-pill-input" placeholder="nhanvien@htqlns.com" required>
+      <!-- Khung thông tin phòng ban & mã mời -->
+      <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 12px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <div style="font-size: 11.5px; color: #1e40af; font-weight: 600; text-transform: uppercase;">Phòng ban phụ trách</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: #1e3a8a;" id="modalDeptNameText">${escapeHtml(deptName)}</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 12px; color: #1e40af; font-weight: 600;">Mã mời:</span>
+            <span class="badge-status badge-approved" id="modalDeptInviteCodeBadge" style="font-size: 12px; font-weight: 700; background: #ffffff; color: #2563eb; padding: 4px 10px; border-radius: 6px; border: 1px solid #bfdbfe;">
+              ${escapeHtml(inviteCode)}
+            </span>
+            <button type="button" class="btn-figma-dark" style="padding: 4px 8px; font-size: 11.5px; border-radius: 6px;" onclick="copyManagerInviteCodeVal('${escapeHtml(inviteCode)}')">
+              📋 Sao chép
+            </button>
+          </div>
+        </div>
       </div>
 
+      <!-- Email nhân viên -->
       <div>
-        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Ca làm việc phân bổ:</label>
-        <select id="modalInviteShift" class="figma-pill-input" style="cursor: pointer; appearance: auto;">
-          <option value="shift-standard">Ca Hành Chính (08:00 - 17:30 • 8.0 giờ chuẩn)</option>
-          <option value="shift-morning">Ca Sáng (06:00 - 14:00)</option>
-          <option value="shift-afternoon">Ca Chiều (14:00 - 22:00)</option>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
+          Email nhân viên <span style="color: #ef4444;">*</span>:
+        </label>
+        <input type="email" id="modalInviteEmail" class="figma-pill-input" placeholder="nhanvien@htqlns.com" required>
+        ${unassignedEmployees.length > 0 ? `
+        <div style="margin-top: 6px;">
+          <select id="modalSelectUnassignedEmp" class="figma-pill-input" style="font-size: 12px; cursor: pointer; appearance: auto; background: #f8fafc;" onchange="if(this.value) document.getElementById('modalInviteEmail').value = this.value">
+            <option value="">-- Hoặc chọn nhanh từ danh sách nhân viên chờ tiếp nhận (${unassignedEmployees.length}) --</option>
+            ${unassignedOptions}
+          </select>
+        </div>` : ''}
+      </div>
+
+      <!-- Vị trí việc làm -->
+      <div>
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
+          Vị trí việc làm trong phòng ban:
+        </label>
+        <select id="modalInvitePosition" class="figma-pill-input" style="cursor: pointer; appearance: auto;">
+          <option value="Kỹ Sư Phần Mềm">Kỹ Sư Phần Mềm</option>
+          <option value="Chuyên Viên Kiểm Thử (QA/QC)">Chuyên Viên Kiểm Thử (QA/QC)</option>
+          <option value="Chuyên Viên Phân Tích Nghiệp Vụ (BA)">Chuyên Viên Phân Tích Nghiệp Vụ (BA)</option>
+          <option value="Kỹ Sư Hạ Tầng & DevOps">Kỹ Sư Hạ Tầng & DevOps</option>
+          <option value="Chuyên Viên Thiết Kế UI/UX">Chuyên Viên Thiết Kế UI/UX</option>
+          <option value="Chuyên Viên Nhân Sự">Chuyên Viên Nhân Sự</option>
+          <option value="Chuyên Viên Kế Toán">Chuyên Viên Kế Toán</option>
+          <option value="Chuyên Viên Kinh Doanh">Chuyên Viên Kinh Doanh</option>
+          <option value="Thành Viên Bộ Phận">Thành Viên Bộ Phận</option>
         </select>
       </div>
 
+      <!-- Ghi chú / Lời nhắn -->
       <div>
-        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Tọa độ GPS văn phòng làm việc:</label>
-        <input type="text" id="modalInviteOffice" class="figma-pill-input" value="13.7587, 109.2190 (Văn phòng Quy Nhơn - 170 An Dương Vương)" readonly style="background: #f8fafc; color: #64748b;">
+        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Ghi chú / Lời nhắn:</label>
+        <input type="text" id="modalInviteNote" class="figma-pill-input" placeholder="Chào mừng bạn gia nhập phòng ban!">
       </div>
 
-      <div>
-        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">Lời nhắn / Ghi chú:</label>
-        <input type="text" id="modalInviteNote" class="figma-pill-input" placeholder="Chào mừng bạn đến với nhóm làm việc!">
-      </div>
-
-      <button class="btn-primary-blue" style="margin-top: 8px; padding: 10px; font-size: 13.5px;" onclick="submitManagerInvite()">
-        ✉️ Gửi lời mời nhân viên
+      <button type="button" class="btn-primary-blue" id="btnSubmitManagerInvite" style="margin-top: 6px; padding: 11px; font-size: 13.5px;" onclick="submitManagerInvite()">
+        ✉️ Mời &amp; Tiếp nhận nhân viên
       </button>
     </div>
     `
   );
 }
 
-// 8. Phía Quản lý: Gửi API mời nhân viên
+function copyManagerInviteCodeVal(code) {
+  const codeVal = code || document.getElementById('mgrInviteCodeVal')?.innerText || 'TEAM-TECH';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(codeVal).then(() => {
+      showToast(`Đã sao chép mã mời "${codeVal}" vào clipboard!`, 'success');
+    }).catch(() => {
+      prompt('Mã mời của phòng ban là (Ctrl+C để sao chép):', codeVal);
+    });
+  } else {
+    prompt('Mã mời của phòng ban là (Ctrl+C để sao chép):', codeVal);
+  }
+}
+
+// 8. Phía Quản lý: Gửi API mời / tiếp nhận nhân viên vào phòng ban
 async function submitManagerInvite() {
   const emailInput = document.getElementById('modalInviteEmail');
   const email = (emailInput?.value || '').trim();
-  const shiftId = document.getElementById('modalInviteShift')?.value || 'shift-standard';
-  const note = document.getElementById('modalInviteNote')?.value || '';
+  const position = document.getElementById('modalInvitePosition')?.value || 'Thành Viên Bộ Phận';
+  const myDept = state.currentManagerDept;
+  const departmentId = myDept?.id || state.user?.departmentId || state.user?.department_id;
 
   if (!email) {
     return showToast('Vui lòng nhập email nhân viên', 'warning');
   }
 
+  if (!departmentId) {
+    return showToast('Tài khoản Quản lý của bạn chưa được phân công phòng ban phụ trách nên chưa thể mời nhân viên', 'warning');
+  }
+
+  const submitBtn = document.getElementById('btnSubmitManagerInvite');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Đang tiếp nhận...';
+  }
+
   try {
-    const res = await apiCall('/api/organization/invitations', {
+    const res = await apiCall('/api/v1/organizations/departments/invite', {
       method: 'POST',
-      body: JSON.stringify({ email, shiftId, note })
+      body: JSON.stringify({ email, departmentId, position })
     });
 
     closeModal();
-    showToast(res?.message || `Đã gửi lời mời thành công tới ${email}!`, 'success');
+    showToast(res?.message || `Đã tiếp nhận nhân viên ${email} vào phòng ban thành công!`, 'success');
+
+    // Sau khi mời thành công: tự động tải lại số liệu nhân sự trên Dashboard của Quản lý
+    await Promise.all([
+      loadDepartmentsData(),
+      loadEmployeesData(),
+      loadDashboardData()
+    ]);
+    if (typeof loadManagerTeamInfo === 'function') {
+      await loadManagerTeamInfo();
+    }
   } catch (err) {
-    console.error('Lỗi gửi lời mời:', err);
-    showToast(err.message || 'Lỗi gửi lời mời nhân viên', 'error');
+    console.error('Lỗi mời nhân viên:', err);
+    showToast(err.message || 'Lỗi tiếp nhận nhân viên vào phòng ban', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = '✉️ Mời & Tiếp nhận nhân viên';
+    }
   }
 }
 

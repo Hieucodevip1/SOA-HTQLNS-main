@@ -1721,6 +1721,240 @@ app.delete('/api/employees/:id', deleteEmployeeHandler);
 // 3B. CƠ CHẾ MỜI / THAM GIA PHÒNG BAN (INVITATIONS & JOIN DEPARTMENT)
 // ==============================================================================
 
+// 0. Quản lý / Admin tiếp nhận / mời nhân viên vào phòng ban (POST /api/v1/organizations/departments/invite)
+app.post(
+  [
+    '/api/v1/organizations/departments/invite',
+    '/api/v1/organization/departments/invite',
+    '/api/organization/departments/invite',
+    '/api/departments/invite'
+  ],
+  async (req, res) => {
+    try {
+      const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+      const callerEmpId = req.headers['x-user-id'] || req.user?.empId || req.user?.id;
+
+      if (!['ADMIN', 'HR_ADMIN', 'HR', 'MANAGER'].includes(callerRole)) {
+        return forbidden(res, 'Chỉ Quản lý hoặc HR/Admin mới có quyền tiếp nhận nhân sự vào phòng ban');
+      }
+
+      const { email, departmentId, department_id, position, positionTitle, positionId } = req.body || {};
+      if (!email || !email.trim()) {
+        return badRequest(res, 'Vui lòng cung cấp email của nhân viên cần mời');
+      }
+
+      const targetEmail = email.trim().toLowerCase();
+      let targetDeptId = departmentId || department_id || null;
+      let targetDept = null;
+      const useDb = await isDbAvailable();
+
+      // Nếu không truyền departmentId và caller là Quản lý: tìm phòng ban phụ trách
+      if (!targetDeptId && callerRole === 'MANAGER') {
+        if (useDb) {
+          try {
+            const rows = await db.query('SELECT * FROM departments WHERE manager_id = ? LIMIT 1', [callerEmpId], DB_NAME);
+            if (rows.length > 0) targetDept = rows[0];
+          } catch {}
+        } else {
+          targetDept = Array.from(memoryDepartments.values()).find((d) => d.manager_id === callerEmpId) || null;
+        }
+        if (targetDept) targetDeptId = targetDept.id;
+      }
+
+      if (!targetDeptId) {
+        return badRequest(res, 'Tài khoản Quản lý của bạn chưa được phân công phòng ban phụ trách nên chưa thể mời nhân viên');
+      }
+
+      if (!targetDept) {
+        if (useDb) {
+          try {
+            const rows = await db.query('SELECT * FROM departments WHERE id = ? LIMIT 1', [targetDeptId], DB_NAME);
+            if (rows.length > 0) targetDept = rows[0];
+          } catch {}
+        } else {
+          targetDept = memoryDepartments.get(targetDeptId) || null;
+        }
+      }
+
+      if (!targetDept) {
+        return notFound(res, 'Không tìm thấy phòng ban với mã này');
+      }
+
+      // Kiểm tra quyền của Quản lý: chỉ được mời vào phòng ban do mình phụ trách
+      if (callerRole === 'MANAGER') {
+        const isManagerOfDept = (targetDept.manager_id && (targetDept.manager_id === callerEmpId || targetDept.manager_id === req.user?.id)) ||
+                                (req.user?.departmentId && req.user.departmentId === targetDept.id);
+        if (!isManagerOfDept) {
+          return forbidden(res, 'Quản lý chỉ có quyền tiếp nhận nhân viên vào phòng ban do mình phụ trách');
+        }
+      }
+
+      // Tìm nhân viên theo email trong hệ thống (kiểm tra cả employees và users)
+      let employee = null;
+
+      if (useDb) {
+        try {
+          const empRows = await db.query('SELECT * FROM employees WHERE LOWER(email) = ? LIMIT 1', [targetEmail], DB_NAME);
+          if (empRows.length > 0) {
+            employee = empRows[0];
+          } else {
+            // Kiểm tra xem đã có user đăng ký trong bảng users chưa
+            const userRows = await db.query('SELECT * FROM htqlns_auth.users WHERE LOWER(email) = ? LIMIT 1', [targetEmail]);
+            if (userRows.length > 0) {
+              const u = userRows[0];
+              const newEmpId = u.emp_id || crypto.randomUUID();
+              const fName = u.full_name || u.username || targetEmail.split('@')[0];
+              const code = 'EMP_' + Math.floor(10000 + Math.random() * 90000);
+              await db.query(
+                `INSERT INTO employees (id, code, full_name, email, department_id, manager_id, status, contract_type)
+                 VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 'OFFICIAL')`,
+                [newEmpId, code, fName, targetEmail, targetDeptId, targetDept.manager_id || callerEmpId],
+                DB_NAME
+              );
+              try {
+                await db.query('UPDATE htqlns_auth.users SET emp_id = ? WHERE id = ?', [newEmpId, u.id]);
+              } catch {}
+              const createdRows = await db.query('SELECT * FROM employees WHERE id = ? LIMIT 1', [newEmpId], DB_NAME);
+              employee = createdRows[0];
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[ORG-INVITE] Lỗi tra cứu DB:', dbErr.message);
+        }
+      } else {
+        employee = Array.from(memoryEmployees.values()).find((e) => e.email && e.email.toLowerCase() === targetEmail);
+      }
+
+      // Nếu không tìm thấy tài khoản nhân viên với email này: Trả về lỗi 404 rõ ràng
+      if (!employee) {
+        return notFound(res, 'Không tìm thấy tài khoản nhân viên với email này');
+      }
+
+      // Cập nhật departmentId, managerId, status: 'ACTIVE' và chức danh (nếu có)
+      const finalManagerId = targetDept.manager_id || callerEmpId;
+      const posInput = positionTitle || position || null;
+      let finalPosId = positionId || null;
+      let finalPosTitle = posInput;
+
+      if (posInput && !finalPosId) {
+        if (useDb) {
+          try {
+            const pRows = await db.query('SELECT id, title FROM positions WHERE LOWER(title) LIKE ? LIMIT 1', [`%${posInput.toLowerCase()}%`], DB_NAME);
+            if (pRows.length > 0) {
+              finalPosId = pRows[0].id;
+              finalPosTitle = pRows[0].title;
+            }
+          } catch {}
+        } else {
+          for (const [pId, p] of memoryPositions.entries()) {
+            if (p.title && p.title.toLowerCase().includes(posInput.toLowerCase())) {
+              finalPosId = pId;
+              finalPosTitle = p.title;
+              break;
+            }
+          }
+        }
+      }
+
+      if (useDb) {
+        let updateSql = `UPDATE employees SET department_id = ?, manager_id = ?, status = 'ACTIVE'`;
+        const params = [targetDeptId, finalManagerId];
+        if (finalPosId) {
+          updateSql += `, position_id = ?`;
+          params.push(finalPosId);
+        }
+        updateSql += ` WHERE id = ?`;
+        params.push(employee.id);
+        await db.query(updateSql, params, DB_NAME);
+      } else {
+        const memEmp = memoryEmployees.get(employee.id);
+        if (memEmp) {
+          memEmp.department_id = targetDeptId;
+          memEmp.department_name = targetDept.name;
+          memEmp.manager_id = finalManagerId;
+          memEmp.manager_name = req.user?.fullName || req.user?.username || 'Quản lý bộ phận';
+          memEmp.status = 'ACTIVE';
+          if (finalPosId) memEmp.position_id = finalPosId;
+          if (finalPosTitle) memEmp.position_title = finalPosTitle;
+        }
+      }
+
+      // Đồng bộ thông tin nhân sự sang auth-service
+      try {
+        await serviceClient.call('auth-service', '/internal/auth/sync-employee', {
+          method: 'POST',
+          body: {
+            id: employee.id,
+            email: targetEmail,
+            departmentId: targetDeptId,
+            departmentName: targetDept.name,
+            position: finalPosTitle || employee.position_title,
+            status: 'ACTIVE'
+          }
+        });
+      } catch (authErr) {}
+
+      // Gửi thông báo qua notification-service
+      const callerName = req.user?.fullName || req.user?.username || 'Quản lý bộ phận';
+      try {
+        await serviceClient.call('notification-service', '/internal/notifications', {
+          method: 'POST',
+          headers: {
+            'x-user-role': 'ADMIN',
+            'x-user-id': callerEmpId
+          },
+          body: {
+            empId: employee.id,
+            targetRole: 'EMPLOYEE',
+            type: 'SYSTEM',
+            title: 'Bạn đã được thêm vào phòng ban',
+            content: `Bạn đã được ${callerName} tiếp nhận vào ${targetDept.name}${finalPosTitle ? ` với vị trí ${finalPosTitle}` : ''}.`,
+            referenceId: targetDeptId,
+            metadata: { targetPage: 'profile' }
+          }
+        });
+      } catch (notifErr) {}
+
+      // Phát sự kiện lên Event Bus
+      events.publish('employee.updated', {
+        id: employee.id,
+        departmentId: targetDeptId,
+        managerId: finalManagerId,
+        status: 'ACTIVE'
+      }, { source: 'organization-service' });
+
+      events.publish('employee.invited', {
+        empId: employee.id,
+        email: targetEmail,
+        departmentId: targetDeptId,
+        departmentName: targetDept.name,
+        managerId: finalManagerId,
+        managerName: callerName,
+        position: finalPosTitle || employee.position_title
+      }, { source: 'organization-service' });
+
+      return success(
+        res,
+        {
+          id: employee.id,
+          fullName: employee.full_name,
+          email: targetEmail,
+          departmentId: targetDeptId,
+          departmentName: targetDept.name,
+          managerId: finalManagerId,
+          position: finalPosTitle || employee.position_title,
+          status: 'ACTIVE'
+        },
+        200,
+        `Đã tiếp nhận nhân viên ${employee.full_name || targetEmail} vào phòng ban ${targetDept.name} thành công`
+      );
+    } catch (err) {
+      console.error('[ORG-INVITE-ERROR]:', err);
+      return error(res, 'Lỗi tiếp nhận nhân viên vào phòng ban: ' + err.message);
+    }
+  }
+);
+
 // 1. Quản lý / Admin gửi lời mời nhân viên qua email (POST /api/organization/invitations)
 app.post(['/api/organization/invitations', '/api/invitations'], async (req, res) => {
   try {

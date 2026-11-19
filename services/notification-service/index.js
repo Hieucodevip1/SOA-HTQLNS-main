@@ -354,6 +354,24 @@ const eventHandlers = {
     }
   },
 
+  // Tiếp nhận / mời nhân viên vào phòng ban
+  'employee.invited': async (event) => {
+    const data = event.data || event;
+    const empId = data.empId || data.emp_id || data.id;
+    const deptName = data.deptName || data.departmentName || 'phòng ban';
+    const managerName = data.managerName || 'Quản lý';
+    if (empId) {
+      await createNotification({
+        empId,
+        type: 'SYSTEM',
+        title: 'Bạn đã được tiếp nhận vào phòng ban',
+        content: `Bạn đã được ${managerName} tiếp nhận vào ${deptName}${data.position ? ` với vị trí ${data.position}` : ''}.`,
+        referenceId: data.departmentId || null,
+        metadata: { targetPage: 'profile' }
+      });
+    }
+  },
+
   // 1. Nhân viên nộp đơn xin nghỉ phép -> Báo cho Quản lý & HR/Admin
   'LEAVE_REQUEST_CREATED': async (event) => {
     const data = event.data || event;

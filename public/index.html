@@ -1668,10 +1668,10 @@ input:checked + .slider:before {
                   </div>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                  <button type="button" class="btn-primary-blue" id="btnMgrInviteEmail" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px;" onclick="openManagerInviteModal()">
+                  <button type="button" class="btn-primary-blue" id="btnMgrInviteEmail" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px; cursor: pointer; pointer-events: auto; position: relative; z-index: 10;" onclick="openManagerInviteModal()">
                     ✉️ Mời nhân viên qua email
                   </button>
-                  <button type="button" class="btn-figma-dark" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px;" onclick="openCreateTeamModal()">
+                  <button type="button" class="btn-figma-dark" id="btnMgrCreateTeam" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px; cursor: pointer; pointer-events: auto; position: relative; z-index: 10;" onclick="openCreateTeamModal()">
                     ➕ Tạo Phòng ban / Nhóm mới
                   </button>
                 </div>
@@ -1939,8 +1939,7 @@ input:checked + .slider:before {
 
               <!-- Cảnh báo chưa phân ca làm việc hôm nay -->
               <div id="dashEmpShiftWarningNotice" style="display: none; margin: 12px 0 0 0; padding: 10px 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309; text-align: center; font-weight: 500;">
-                ⚠️ Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.
-              </div>
+                 Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.
 
               <!-- Lối tắt nhanh (Quick Actions) -->
               <div class="emp-quick-actions-bar">
