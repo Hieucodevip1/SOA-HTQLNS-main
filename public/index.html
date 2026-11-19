@@ -2614,11 +2614,11 @@ input:checked + .slider:before {
              VIEW: BẢNG LƯƠNG & PHIẾU LƯƠNG (SCR_PAY_01, SCR_ADM_04, SCR_ADM_07)
              ==================================================================== -->
         <section id="view-payroll" class="figma-view-section" style="display: none;">
-          <div class="breadcrumb-trail">Trang chủ / Bảng lương &amp; Phiếu lương</div>
+          <div class="breadcrumb-trail" id="payrollBreadcrumbTrail">Trang chủ / Bảng lương &amp; Phiếu lương</div>
           <div class="page-main-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
             <div>
-              <h1 class="page-heading-title">Quản lý Bảng lương &amp; Phiếu lương</h1>
-              <div class="page-heading-desc">Tính toán tự động theo ngày công, phép năm, giờ tăng ca OT và khấu trừ BHXH, thuế TNCN theo luật Việt Nam.</div>
+              <h1 class="page-heading-title" id="payrollMainHeading">Quản lý Bảng lương &amp; Phiếu lương</h1>
+              <div class="page-heading-desc" id="payrollMainDesc">Tính toán tự động theo ngày công, phép năm, giờ tăng ca OT và khấu trừ BHXH, thuế TNCN theo luật Việt Nam.</div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               <button class="btn-primary-blue" id="btnPayrollCalculate" onclick="openCalculatePayrollModal()" style="display: inline-flex; align-items: center; gap: 6px;">
@@ -2635,7 +2635,7 @@ input:checked + .slider:before {
           </div>
 
           <!-- THỐNG KÊ NHANH KPI LƯƠNG -->
-          <div class="metrics-row-4" style="margin-bottom: 24px;">
+          <div class="metrics-row-4" id="payrollMetricsRow" style="margin-bottom: 24px;">
             <div class="figma-metric-card" onclick="switchPayrollTab('slips')" style="cursor: pointer;">
               <div class="metric-header">
                 <span>Tổng chi phí lương (Gross)</span>

@@ -1078,20 +1078,37 @@ function applyRoleBasedUI() {
   const btnPayrollCfg = document.getElementById('btnPayrollConfig');
   const tabPayrollCfg = document.getElementById('tabBtnPayrollConfigs');
   const tabPayrollPer = document.getElementById('tabBtnPayrollPeriods');
+  const tabPayrollSlips = document.getElementById('tabBtnPayrollSlips');
+  const payrollMetricsRow = document.getElementById('payrollMetricsRow');
+  const payrollBreadcrumb = document.getElementById('payrollBreadcrumbTrail');
+  const payrollMainHeading = document.getElementById('payrollMainHeading');
+  const payrollMainDesc = document.getElementById('payrollMainDesc');
   const payrollTableTitle = document.getElementById('payrollTableTitle');
   const payrollTableSub = document.getElementById('payrollTableSub');
 
-  const isAdminOrHr = (role === 'ADMIN' || role === 'HR');
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
   if (btnPayrollCalc) btnPayrollCalc.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (btnPayrollPub) btnPayrollPub.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (btnPayrollCfg) btnPayrollCfg.style.display = isAdminOrHr ? 'inline-flex' : 'none';
   if (tabPayrollCfg) tabPayrollCfg.style.display = isAdminOrHr ? 'inline-block' : 'none';
-  if (tabPayrollPer) tabPayrollPer.style.display = (!isEmployee) ? 'inline-block' : 'none';
+  if (tabPayrollPer) tabPayrollPer.style.display = isAdminOrHr ? 'inline-block' : 'none';
+  if (payrollMetricsRow) payrollMetricsRow.style.display = isAdminOrHr ? 'grid' : 'none';
 
-  if (isEmployee) {
+  if (!isAdminOrHr) {
+    if (payrollBreadcrumb) payrollBreadcrumb.innerText = 'Trang chủ / Phiếu lương cá nhân';
+    if (payrollMainHeading) payrollMainHeading.innerText = 'Phiếu lương cá nhân';
+    if (payrollMainDesc) payrollMainDesc.innerText = 'Theo dõi chi tiết các khoản lương cơ bản, ngày công thực tế, phụ cấp, tăng ca OT và các khoản trích nộp theo lương của bạn.';
+    if (tabPayrollSlips) tabPayrollSlips.innerText = '📄 Phiếu lương cá nhân';
     if (payrollTableTitle) payrollTableTitle.innerText = 'Phiếu lương cá nhân của bạn';
-    if (payrollTableSub) payrollTableSub.innerText = 'Bảng chi tiết các khoản thu nhập, phụ cấp và các khoản trích nộp theo lương';
+    if (payrollTableSub) payrollTableSub.innerText = 'Bảng chi tiết các khoản thu nhập, phụ cấp và các khoản trích nộp theo lương được phát hành cho bạn.';
+    if (typeof currentPayrollSubTab !== 'undefined' && (currentPayrollSubTab === 'configs' || currentPayrollSubTab === 'periods')) {
+      switchPayrollTab('slips');
+    }
   } else {
+    if (payrollBreadcrumb) payrollBreadcrumb.innerText = 'Trang chủ / Bảng lương & Phiếu lương';
+    if (payrollMainHeading) payrollMainHeading.innerText = 'Quản lý Bảng lương & Phiếu lương';
+    if (payrollMainDesc) payrollMainDesc.innerText = 'Tính toán tự động theo ngày công, phép năm, giờ tăng ca OT và khấu trừ BHXH, thuế TNCN theo luật Việt Nam.';
+    if (tabPayrollSlips) tabPayrollSlips.innerText = '📄 Danh sách Phiếu lương (Payslips)';
     if (payrollTableTitle) payrollTableTitle.innerText = 'Bảng tổng hợp phiếu lương toàn công ty';
     if (payrollTableSub) payrollTableSub.innerText = 'Bảng lương chi tiết được tính tự động từ dữ liệu Chấm công, Phép năm và Giờ tăng ca OT';
   }
@@ -7762,6 +7779,14 @@ let cachedPayrollConfigs = [];
 let cachedPayrollPeriods = [];
 
 function switchPayrollTab(tabName) {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
+
+  if (!isAdminOrHr && (tabName === 'configs' || tabName === 'periods')) {
+    showToast('Bạn không có quyền truy cập chức năng này', 'warning');
+    tabName = 'slips';
+  }
+
   currentPayrollSubTab = tabName;
   const tabBtnSlips = document.getElementById('tabBtnPayrollSlips');
   const tabBtnConfigs = document.getElementById('tabBtnPayrollConfigs');
@@ -7792,7 +7817,7 @@ function switchPayrollTab(tabName) {
     }
     if (contentSlips) contentSlips.style.display = 'block';
     loadPayslips();
-  } else if (tabName === 'configs') {
+  } else if (tabName === 'configs' && isAdminOrHr) {
     if (tabBtnConfigs) {
       tabBtnConfigs.style.background = '#ffffff';
       tabBtnConfigs.style.color = 'var(--color-primary)';
@@ -7801,7 +7826,7 @@ function switchPayrollTab(tabName) {
     }
     if (contentConfigs) contentConfigs.style.display = 'block';
     loadPayrollConfigs();
-  } else if (tabName === 'periods') {
+  } else if (tabName === 'periods' && isAdminOrHr) {
     if (tabBtnPeriods) {
       tabBtnPeriods.style.background = '#ffffff';
       tabBtnPeriods.style.color = 'var(--color-primary)';
@@ -7819,11 +7844,19 @@ function formatVND(amount) {
 }
 
 async function loadPayrollData() {
-  await Promise.allSettled([
-    loadPayslips(),
-    loadPayrollConfigs(),
-    loadPayrollPeriods()
-  ]);
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
+
+  if (isAdminOrHr) {
+    await Promise.allSettled([
+      loadPayslips(),
+      loadPayrollConfigs(),
+      loadPayrollPeriods()
+    ]);
+  } else {
+    // Với EMPLOYEE và MANAGER: Chỉ tải phiếu lương cá nhân, tuyệt đối không truy vấn cấu hình hay danh sách kỳ lương tổng công ty
+    await loadPayslips();
+  }
 }
 
 // 1. Danh sách Phiếu lương (SCR_PAY_01)
@@ -7833,27 +7866,47 @@ async function loadPayslips() {
 
   const month = document.getElementById('filterPayrollMonth')?.value || '11';
   const year = document.getElementById('filterPayrollYear')?.value || '2026';
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
+  const currentEmpId = state.user?.id || state.user?.userId || state.user?.empId;
 
   try {
-    const res = await apiCall(`/api/v1/payslips?month=${month}&year=${year}`);
+    let url = '';
+    if (isAdminOrHr) {
+      url = `/api/v1/payslips?month=${month}&year=${year}`;
+    } else {
+      url = `/api/v1/payrolls/my?month=${month}&year=${year}&employeeId=${encodeURIComponent(currentEmpId || '')}`;
+    }
+
+    const res = await apiCall(url);
     cachedPayslipsList = res?.data || [];
 
-    // Cập nhật KPIs
-    const totalGross = cachedPayslipsList.reduce((sum, p) => sum + Number(p.gross_salary || 0), 0);
-    const totalNet = cachedPayslipsList.reduce((sum, p) => sum + Number(p.net_salary || 0), 0);
+    // Chỉ tính toán và cập nhật KPIs quỹ lương toàn công ty đối với ADMIN và HR_ADMIN
+    if (isAdminOrHr) {
+      const totalGross = cachedPayslipsList.reduce((sum, p) => sum + Number(p.gross_salary || 0), 0);
+      const totalNet = cachedPayslipsList.reduce((sum, p) => sum + Number(p.net_salary || 0), 0);
 
-    const kpiGross = document.getElementById('kpiPayrollTotalGross');
-    const kpiNet = document.getElementById('kpiPayrollTotalNet');
-    const kpiStaff = document.getElementById('kpiPayrollStaffCount');
-    const kpiPeriodNote = document.getElementById('kpiPayrollPeriodNote');
+      const kpiGross = document.getElementById('kpiPayrollTotalGross');
+      const kpiNet = document.getElementById('kpiPayrollTotalNet');
+      const kpiStaff = document.getElementById('kpiPayrollStaffCount');
+      const kpiPeriodNote = document.getElementById('kpiPayrollPeriodNote');
 
-    if (kpiGross) kpiGross.innerText = formatVND(totalGross);
-    if (kpiNet) kpiNet.innerText = formatVND(totalNet);
-    if (kpiStaff) kpiStaff.innerText = cachedPayslipsList.length;
-    if (kpiPeriodNote) kpiPeriodNote.innerText = `Kỳ tính lương tháng ${month}/${year} →`;
+      if (kpiGross) kpiGross.innerText = formatVND(totalGross);
+      if (kpiNet) kpiNet.innerText = formatVND(totalNet);
+      if (kpiStaff) kpiStaff.innerText = cachedPayslipsList.length;
+      if (kpiPeriodNote) kpiPeriodNote.innerText = `Kỳ tính lương tháng ${month}/${year} →`;
+    }
 
     if (!cachedPayslipsList.length) {
-      tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có dữ liệu bảng lương kỳ tháng ${month}/${year}. Hãy bấm "Tính lương tự động".</td></tr>`;
+      if (isAdminOrHr) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 28px;">Chưa có dữ liệu bảng lương kỳ tháng ${month}/${year}. Hãy bấm "Tính lương tự động".</td></tr>`;
+      } else {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #64748b; padding: 36px;">
+          <div style="font-size: 28px; margin-bottom: 8px;">📑</div>
+          <div style="font-size: 14px; font-weight: 600; color: #334155;">Chưa có phiếu lương cá nhân nào được phát hành cho tài khoản của bạn</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Phiếu lương sẽ hiển thị tại đây sau khi Ban Quản trị / HR chốt và phát hành kỳ lương tháng ${month}/${year}.</div>
+        </td></tr>`;
+      }
       return;
     }
 
@@ -7890,6 +7943,10 @@ async function loadPayslips() {
 
 // 2. Danh mục cấu hình lương (SCR_ADM_04)
 async function loadPayrollConfigs() {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
+  if (!isAdminOrHr) return;
+
   const tbody = document.getElementById('tableBodyPayrollConfigs');
   if (!tbody) return;
 
@@ -7902,7 +7959,6 @@ async function loadPayrollConfigs() {
       return;
     }
 
-    const isAdminOrHr = ['ADMIN', 'HR'].includes(state.user?.role);
     tbody.innerHTML = cachedPayrollConfigs.map(c => `
       <tr>
         <td><strong>${c.emp_code || c.emp_id}</strong></td>
@@ -7929,6 +7985,10 @@ async function loadPayrollConfigs() {
 
 // 3. Danh sách kỳ lương (SCR_ADM_07)
 async function loadPayrollPeriods() {
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR' || role === 'HR_ADMIN');
+  if (!isAdminOrHr) return;
+
   const tbody = document.getElementById('tableBodyPayrollPeriods');
   if (!tbody) return;
 

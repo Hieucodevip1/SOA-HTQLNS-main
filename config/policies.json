@@ -701,7 +701,7 @@
       ]
     },
     {
-      "prefix": "/api/payroll",
+      "prefix": "/api/payroll/my",
       "service": "payroll-service",
       "rules": [
         {
@@ -711,6 +711,40 @@
           "auth": true,
           "roles": [
             "*"
+          ]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/payroll/periods",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "HR_ADMIN"
+          ]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/payroll",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "HR_ADMIN"
           ]
         },
         {
@@ -723,7 +757,8 @@
           "auth": true,
           "roles": [
             "ADMIN",
-            "HR"
+            "HR",
+            "HR_ADMIN"
           ]
         }
       ]
@@ -1126,6 +1161,38 @@
       ]
     },
     {
+      "prefix": "/api/v1/payrolls/my",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/v1/payrolls/periods",
+      "service": "payroll-service",
+      "rules": [
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "HR_ADMIN"
+          ]
+        }
+      ]
+    },
+    {
       "prefix": "/api/v1/payrolls",
       "service": "payroll-service",
       "rules": [
@@ -1137,7 +1204,7 @@
           "roles": [
             "ADMIN",
             "HR",
-            "MANAGER"
+            "HR_ADMIN"
           ]
         },
         {
@@ -1150,7 +1217,8 @@
           "auth": true,
           "roles": [
             "ADMIN",
-            "HR"
+            "HR",
+            "HR_ADMIN"
           ]
         }
       ]

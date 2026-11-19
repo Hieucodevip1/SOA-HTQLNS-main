@@ -238,10 +238,10 @@ class PayrollService {
 
   async getPayslips({ month, year, empId, periodId }, userContext) {
     const role = (userContext.role || 'EMPLOYEE').toUpperCase();
-    const currentEmpId = userContext.empId;
+    const currentEmpId = userContext.targetEmpId || userContext.empId;
 
-    // 1. Phân quyền Nhân viên (EMPLOYEE)
-    if (role === 'EMPLOYEE') {
+    // 1. Phân quyền Nhân viên (EMPLOYEE) và Quản lý (MANAGER) khi xem phiếu lương cá nhân
+    if (role === 'EMPLOYEE' || role === 'MANAGER' || userContext.forcePersonal) {
       // Kiểm tra tài khoản đã liên kết phòng ban/quản lý chưa
       const isAssigned = this.checkEmployeeAssigned(userContext);
       if (!isAssigned) {
@@ -258,26 +258,7 @@ class PayrollService {
       return { data: slips, meta: { total: slips.length } };
     }
 
-    // 2. Phân quyền Quản lý (MANAGER)
-    if (role === 'MANAGER') {
-      // Lấy danh sách nhân viên thuộc quyền quản lý
-      const subordinateIds = await this.getSubordinateEmployeeIds(currentEmpId);
-
-      // Nếu quản lý mới chưa có nhân viên nào -> Trả về mảng rỗng []
-      if (!subordinateIds || subordinateIds.length === 0) {
-        return { data: [], meta: { total: 0, isManager: true, subordinateCount: 0 } };
-      }
-
-      const slips = await payrollRepository.getPayslips({
-        month,
-        year,
-        periodId,
-        allowedEmpIds: subordinateIds
-      });
-      return { data: slips, meta: { total: slips.length, isManager: true } };
-    }
-
-    // 3. Phân quyền Quản trị viên (ADMIN) / Nhân sự (HR)
+    // 2. Phân quyền Quản trị viên (ADMIN) / Nhân sự (HR, HR_ADMIN)
     const slips = await payrollRepository.getPayslips({
       month,
       year,
@@ -298,21 +279,11 @@ class PayrollService {
     const role = (userContext.role || 'EMPLOYEE').toUpperCase();
     const currentEmpId = userContext.empId;
 
-    // Nhân viên chỉ được xem phiếu lương của chính mình
-    if (role === 'EMPLOYEE' && slip.emp_id !== currentEmpId) {
+    // Nhân viên và Quản lý chỉ được xem phiếu lương của chính mình
+    if ((role === 'EMPLOYEE' || role === 'MANAGER') && slip.emp_id !== currentEmpId) {
       const err = new Error('Bạn không có quyền truy cập phiếu lương của nhân viên khác');
       err.statusCode = 403;
       throw err;
-    }
-
-    // Quản lý chỉ được xem phiếu lương của nhân viên thuộc quyền
-    if (role === 'MANAGER') {
-      const subordinateIds = await this.getSubordinateEmployeeIds(currentEmpId);
-      if (!subordinateIds.includes(slip.emp_id) && slip.emp_id !== currentEmpId) {
-        const err = new Error('Bạn không có quyền truy cập phiếu lương của nhân viên ngoài quyền quản lý');
-        err.statusCode = 403;
-        throw err;
-      }
     }
 
     return slip;

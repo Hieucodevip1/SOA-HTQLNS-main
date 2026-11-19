@@ -12,70 +12,78 @@ const { requireAuth, requireInternalKey } = require('../../../shared/service-bas
 
 router.get(
   ['/api/v1/payroll-configs', '/api/payroll/configs', '/api/payroll'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.getPayrollConfigs.bind(payrollController)
 );
 
 router.get(
   ['/api/v1/payroll-configs/:empId', '/api/payroll/configs/:empId'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.getPayrollConfigByEmpId.bind(payrollController)
 );
 
 router.post(
   ['/api/v1/payroll-configs', '/api/payroll/configs'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.createPayrollConfig.bind(payrollController)
 );
 
 router.put(
   ['/api/v1/payroll-configs/:empId', '/api/payroll/configs/:empId'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.updatePayrollConfig.bind(payrollController)
 );
 
 // ==================== KỲ LƯƠNG & TÍNH TOÁN (SCR_ADM_07) ====================
 
 router.get(
-  ['/api/v1/payrolls/periods', '/api/payrolls', '/api/payroll/periods'],
-  requireAuth(['ADMIN', 'HR', 'MANAGER']),
+  ['/api/v1/payrolls/periods', '/api/payroll/periods'],
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.getPayrollPeriods.bind(payrollController)
 );
 
 router.post(
   ['/api/v1/payrolls/calculate', '/api/payroll/calculate'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.calculatePayroll.bind(payrollController)
 );
 
 router.post(
   ['/api/v1/payrolls/publish', '/api/payroll/publish'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.publishPayrollPeriod.bind(payrollController)
 );
 
 router.patch(
   ['/api/v1/payrolls/:id/publish', '/api/payroll/:id/publish', '/api/v1/payrolls/:id/status'],
-  requireAuth(['ADMIN', 'HR']),
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
   payrollController.publishPayrollPeriod.bind(payrollController)
 );
 
-// ==================== PHIẾU LƯƠNG PAYSLIP (SCR_PAY_01) ====================
+// ==================== PHIẾU LƯƠNG CÁ NHÂN (SCR_PAY_01) ====================
 
 router.get(
-  ['/api/v1/payslips/my'],
+  ['/api/v1/payrolls/my', '/api/payrolls/my', '/api/v1/payslips/my', '/api/payslips/my'],
+  requireAuth(),
+  payrollController.getMyPayslips.bind(payrollController)
+);
+
+// ==================== DANH SÁCH BẢNG LƯƠNG TOÀN CÔNG TY & PHIẾU LƯƠNG ====================
+
+router.get(
+  ['/api/v1/payrolls', '/api/payrolls'],
+  requireAuth(['ADMIN', 'HR', 'HR_ADMIN']),
+  payrollController.getCompanyPayrolls.bind(payrollController)
+);
+
+router.get(
+  ['/api/v1/payslips', '/api/payslips'],
   requireAuth(),
   payrollController.getPayslips.bind(payrollController)
 );
 
 router.get(
-  ['/api/v1/payslips', '/api/payslips', '/api/v1/payrolls'],
-  requireAuth(),
-  payrollController.getPayslips.bind(payrollController)
-);
-
-router.get(
-  ['/api/v1/payslips/:id', '/api/payslips/:id'],
+  ['/api/v1/payslips/:id', '/api/payslips/:id', '/api/v1/payrolls/:id'],
   requireAuth(),
   payrollController.getPayslipById.bind(payrollController)
 );

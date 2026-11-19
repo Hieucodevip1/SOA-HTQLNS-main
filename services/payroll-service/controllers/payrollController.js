@@ -133,6 +133,16 @@ class PayrollController {
 
   async getPayrollPeriods(req, res, next) {
     try {
+      const userContext = extractUserContext(req);
+      const role = (userContext.role || '').toUpperCase();
+      if (role === 'EMPLOYEE' || role === 'MANAGER' || (!['ADMIN', 'HR', 'HR_ADMIN'].includes(role))) {
+        return res.status(403).json({
+          success: false,
+          message: 'Từ chối truy cập: Bạn không có quyền xem danh sách kỳ lương tổng hợp toàn công ty',
+          error: 'FORBIDDEN'
+        });
+      }
+
       const periods = await payrollService.getPayrollPeriods();
       res.json({
         success: true,
@@ -196,14 +206,21 @@ class PayrollController {
     }
   }
 
-  // ==================== PHIẾU LƯƠNG PAYSLIP (SCR_PAY_01) ====================
+  // ==================== BẢNG LƯƠNG TOÀN CÔNG TY ====================
 
-  async getPayslips(req, res, next) {
+  async getCompanyPayrolls(req, res, next) {
     try {
       const userContext = extractUserContext(req);
-      const { month, year, empId, periodId } = req.query;
+      const role = (userContext.role || '').toUpperCase();
+      if (role === 'EMPLOYEE' || role === 'MANAGER' || (!['ADMIN', 'HR', 'HR_ADMIN'].includes(role))) {
+        return res.status(403).json({
+          success: false,
+          message: 'Từ chối truy cập: Bạn không có quyền xem danh sách bảng lương toàn công ty',
+          error: 'FORBIDDEN'
+        });
+      }
 
-      // Ép kiểu an toàn, không để undefined hoặc NaN
+      const { month, year, empId, periodId } = req.query;
       const safeMonth = month !== undefined && month !== '' && !isNaN(Number(month)) ? Number(month) : null;
       const safeYear = year !== undefined && year !== '' && !isNaN(Number(year)) ? Number(year) : null;
 
@@ -217,8 +234,111 @@ class PayrollController {
       res.json({
         success: true,
         message: result.data.length > 0
-          ? `Lấy danh sách phiếu lương thành công (${result.data.length} phiếu)`
+          ? `Lấy danh sách bảng lương toàn công ty thành công (${result.data.length} phiếu)`
           : `Chưa có dữ liệu bảng lương kỳ tháng ${safeMonth || ''}/${safeYear || ''}`,
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (err) {
+      console.error('[PayrollController] getCompanyPayrolls error:', err);
+      res.status(500).json({
+        success: false,
+        message: err.message || 'Lỗi lấy danh sách bảng lương toàn công ty',
+        error: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // ==================== PHIẾU LƯƠNG CÁ NHÂN (SCR_PAY_01) ====================
+
+  async getMyPayslips(req, res, next) {
+    try {
+      const userContext = extractUserContext(req);
+      const role = (userContext.role || 'EMPLOYEE').toUpperCase();
+      const { month, year, empId, employeeId, periodId } = req.query;
+
+      const requestedId = employeeId || empId;
+      const currentEmpId = userContext.empId;
+
+      // Nếu cố tình truyền id của người khác mà không phải Admin/HR -> 403 Forbidden
+      if (requestedId && requestedId !== currentEmpId && !['ADMIN', 'HR', 'HR_ADMIN'].includes(role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Từ chối truy cập: Bạn không có quyền xem dữ liệu lương của người khác',
+          error: 'FORBIDDEN'
+        });
+      }
+
+      const safeMonth = month !== undefined && month !== '' && !isNaN(Number(month)) ? Number(month) : null;
+      const safeYear = year !== undefined && year !== '' && !isNaN(Number(year)) ? Number(year) : null;
+
+      const targetEmpId = (['ADMIN', 'HR', 'HR_ADMIN'].includes(role) && requestedId) ? requestedId : currentEmpId;
+
+      const result = await payrollService.getPayslips({
+        month: safeMonth,
+        year: safeYear,
+        empId: targetEmpId,
+        periodId
+      }, { ...userContext, forcePersonal: true, targetEmpId });
+
+      res.json({
+        success: true,
+        message: result.data.length > 0
+          ? `Lấy danh sách phiếu lương cá nhân thành công (${result.data.length} phiếu)`
+          : 'Chưa có phiếu lương cá nhân nào được phát hành cho tài khoản của bạn',
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (err) {
+      console.error('[PayrollController] getMyPayslips exception:', err);
+      res.json({
+        success: true,
+        message: 'Chưa có phiếu lương cá nhân nào được phát hành cho tài khoản của bạn',
+        data: [],
+        meta: { total: 0 }
+      });
+    }
+  }
+
+  // ==================== DANH SÁCH PHIẾU LƯƠNG ====================
+
+  async getPayslips(req, res, next) {
+    try {
+      const userContext = extractUserContext(req);
+      const role = (userContext.role || 'EMPLOYEE').toUpperCase();
+      const { month, year, empId, employeeId, periodId } = req.query;
+
+      const queryEmpId = empId || employeeId;
+
+      // Kiểm tra bảo mật: Nếu là EMPLOYEE hoặc MANAGER gọi trực tiếp API lấy dữ liệu lương của người khác
+      if ((role === 'EMPLOYEE' || role === 'MANAGER') && queryEmpId && queryEmpId !== userContext.empId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Từ chối truy cập: Bạn không có quyền xem dữ liệu lương của người khác',
+          error: 'FORBIDDEN'
+        });
+      }
+
+      // Ép kiểu an toàn, không để undefined hoặc NaN
+      const safeMonth = month !== undefined && month !== '' && !isNaN(Number(month)) ? Number(month) : null;
+      const safeYear = year !== undefined && year !== '' && !isNaN(Number(year)) ? Number(year) : null;
+
+      const effectiveEmpId = (role === 'EMPLOYEE' || role === 'MANAGER') ? userContext.empId : queryEmpId;
+
+      const result = await payrollService.getPayslips({
+        month: safeMonth,
+        year: safeYear,
+        empId: effectiveEmpId,
+        periodId
+      }, userContext);
+
+      res.json({
+        success: true,
+        message: result.data.length > 0
+          ? `Lấy danh sách phiếu lương thành công (${result.data.length} phiếu)`
+          : ((role === 'EMPLOYEE' || role === 'MANAGER')
+              ? 'Chưa có phiếu lương cá nhân nào được phát hành cho tài khoản của bạn'
+              : `Chưa có dữ liệu bảng lương kỳ tháng ${safeMonth || ''}/${safeYear || ''}`),
         data: result.data,
         meta: result.meta
       });

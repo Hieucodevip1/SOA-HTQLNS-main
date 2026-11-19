@@ -30,6 +30,20 @@ describe('Kiểm thử Phân hệ Payroll Service (:3106)', () => {
     role: 'EMPLOYEE'
   });
 
+  const managerToken = jwt.signToken({
+    userId: 'u_mgr_payroll_test',
+    empId: 'e0000001-0000-0000-0000-000000000003',
+    username: 'manager',
+    role: 'MANAGER'
+  });
+
+  const hrAdminToken = jwt.signToken({
+    userId: 'u_hr_payroll_test',
+    empId: 'e0000001-0000-0000-0000-000000000002',
+    username: 'hr_admin',
+    role: 'HR_ADMIN'
+  });
+
   let createdPeriodId = null;
   let employeePayslipId = null;
   let adminPayslipId = null;
@@ -245,5 +259,111 @@ describe('Kiểm thử Phân hệ Payroll Service (:3106)', () => {
     assert.ok(data.data);
     assert.ok(Number(data.data.employee_count) >= 1);
     assert.ok(Number(data.data.total_net_salary) > 0);
+  });
+
+  // 12. Quản lý (MANAGER) bị từ chối xem danh sách kỳ lương tổng hợp (HTTP 403)
+  test('Từ chối khi Quản lý truy vấn danh sách kỳ lương /api/v1/payrolls/periods (HTTP 403)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/periods`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
+  // 13. Nhân viên (EMPLOYEE) bị từ chối xem danh sách kỳ lương tổng hợp (HTTP 403)
+  test('Từ chối khi Nhân viên truy vấn danh sách kỳ lương /api/v1/payrolls/periods (HTTP 403)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/periods`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
+  // 14. HR_ADMIN tra cứu danh sách kỳ lương thành công (HTTP 200)
+  test('HR_ADMIN tra cứu danh sách kỳ lương /api/v1/payrolls/periods thành công (HTTP 200)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/periods`, {
+      headers: { Authorization: `Bearer ${hrAdminToken}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.data));
+  });
+
+  // 15. Quản lý & Nhân viên bị từ chối xem bảng lương toàn công ty /api/v1/payrolls (HTTP 403)
+  test('Từ chối khi Quản lý & Nhân viên gọi API bảng lương toàn công ty /api/v1/payrolls (HTTP 403)', async () => {
+    const resMgr = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(resMgr.status, 403);
+
+    const resEmp = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(resEmp.status, 403);
+  });
+
+  // 16. Nhân viên xem phiếu lương cá nhân qua /api/v1/payrolls/my (HTTP 200)
+  test('Nhân viên xem phiếu lương cá nhân qua /api/v1/payrolls/my (HTTP 200)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/my?month=11&year=2026`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.data));
+    data.data.forEach((slip) => {
+      assert.strictEqual(slip.emp_id, 'e0000001-0000-0000-0000-000000000004');
+    });
+  });
+
+  // 17. Quản lý xem phiếu lương cá nhân của chính mình qua /api/v1/payrolls/my (HTTP 200)
+  test('Quản lý xem phiếu lương cá nhân của chính mình qua /api/v1/payrolls/my (HTTP 200)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/my?month=11&year=2026`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.data));
+    data.data.forEach((slip) => {
+      assert.strictEqual(slip.emp_id, 'e0000001-0000-0000-0000-000000000003');
+    });
+  });
+
+  // 18. Quản lý cố tình xem dữ liệu lương người khác qua ?empId=... bị từ chối (HTTP 403)
+  test('Từ chối khi Quản lý cố tình xem dữ liệu lương người khác qua /api/v1/payslips?empId=... (HTTP 403)', async () => {
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payslips?empId=e0000001-0000-0000-0000-000000000004`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
+  // 19. Quản lý cố tình xem chi tiết phiếu lương của người khác theo ID bị từ chối (HTTP 403)
+  test('Từ chối khi Quản lý cố tình xem chi tiết phiếu lương nhân viên khác theo ID (HTTP 403)', async () => {
+    assert.ok(employeePayslipId, 'employeePayslipId phải tồn tại');
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payslips/${employeePayslipId}`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
+  // 20. Tài khoản chưa có phiếu lương gọi /api/v1/payrolls/my trả về mảng rỗng và thông báo rõ ràng (HTTP 200)
+  test('Tài khoản chưa có phiếu lương gọi /api/v1/payrolls/my trả về thông báo trạng thái trống (HTTP 200)', async () => {
+    const newEmpToken = jwt.signToken({
+      userId: 'u_new_emp_payroll',
+      empId: 'e0000009-9999-9999-9999-999999999999',
+      username: 'new_employee',
+      role: 'EMPLOYEE'
+    });
+    const res = await fetch(`http://localhost:${PAYROLL_PORT}/api/v1/payrolls/my?month=11&year=2026`, {
+      headers: {
+        Authorization: `Bearer ${newEmpToken}`,
+        'x-test-unassigned': 'true'
+      }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.data.length, 0);
+    assert.strictEqual(data.message, 'Chưa có phiếu lương cá nhân nào được phát hành cho tài khoản của bạn');
   });
 });
