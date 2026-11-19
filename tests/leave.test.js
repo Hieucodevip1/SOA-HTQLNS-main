@@ -44,8 +44,7 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
         ...process.env,
         LEAVE_SERVICE_PORT: String(LEAVE_PORT),
         NODE_ENV: 'test'
-      },
-      stdio: 'pipe'
+      }
     });
 
     // Chờ service sẵn sàng
@@ -62,11 +61,23 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     try {
       const pool = db.getPool(process.env.LEAVE_DB_NAME || 'htqlns_leave');
       await pool.query('UPDATE leave_balances SET used_days = 2.0, pending_days = 0.0 WHERE emp_id = ?', ['e0000001-0000-0000-0000-000000000004']);
-      await pool.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024'");
-    } catch {}
+      await pool.query(`
+        INSERT INTO leave_requests (id, emp_id, leave_type_id, start_date, end_date, total_days, reason, attachment_url, status, approver_id)
+        VALUES ('NP-2026-024', 'e0000001-0000-0000-0000-000000000004', 'lt000001-0000-0000-0000-000000000001', '2026-11-02', '2026-11-02', 1.0, 'Tôi xin nghỉ phép để giải quyết công việc gia đình.', 'Bien-ban-ban-giao.pdf', 'PENDING', 'e0000001-0000-0000-0000-000000000003')
+        ON DUPLICATE KEY UPDATE status = 'PENDING', reason = VALUES(reason), attachment_url = VALUES(attachment_url)
+      `);
+    } catch (err) {
+      console.warn('Error seeding NP-2026-024:', err.message);
+    }
   });
 
   after(async () => {
+    try {
+      const pool = db.getPool(process.env.LEAVE_DB_NAME || 'htqlns_leave');
+      await pool.query("DELETE FROM leave_requests WHERE (emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%thủ tục hành chính%' OR reason LIKE '%việc riêng%' OR reason LIKE '%test%') AND id != 'NP-2026-024'");
+      await pool.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024'");
+      await pool.query("UPDATE leave_balances SET used_days = 0.0, pending_days = 0.0 WHERE emp_id LIKE 'e0000001-%'");
+    } catch {}
     if (leaveProcess) leaveProcess.kill();
     try {
       await db.closeAllPools();
@@ -326,5 +337,94 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     assert.strictEqual(overrideData.success, true);
     assert.strictEqual(overrideData.data.status, 'APPROVED');
     assert.strictEqual(overrideData.data.override, true);
+  });
+
+  // 15. Nhân viên tự xóa đơn nghỉ phép PENDING của chính mình thành công (HTTP 200)
+  test('Nhân viên tự xóa đơn nghỉ phép PENDING của chính mình thành công (HTTP 200)', async () => {
+    const createRes = await fetch(`http://localhost:${LEAVE_PORT}/api/leave`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${employeeToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        leaveTypeId: 'lt000001-0000-0000-0000-000000000001',
+        startDate: '2026-12-10',
+        endDate: '2026-12-10',
+        totalDays: 1.0,
+        reason: 'Đơn test tự động xóa của nhân viên'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    const tempLeaveId = createData.data?.id || createData.id;
+    assert.ok(tempLeaveId);
+
+    const delRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${tempLeaveId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
+  });
+
+  // 16. Nhân viên cố tình xóa đơn của người khác bị chặn (HTTP 403)
+  test('Nhân viên cố tình xóa đơn của người khác bị chặn (HTTP 403)', async () => {
+    const createRes = await fetch(`http://localhost:${LEAVE_PORT}/api/leave`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        leaveTypeId: 'lt000001-0000-0000-0000-000000000001',
+        startDate: '2026-12-11',
+        endDate: '2026-12-11',
+        totalDays: 1.0,
+        reason: 'Đơn của Manager test quyền xóa'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const mgrLeaveData = await createRes.json();
+    const mgrLeaveId = mgrLeaveData.data?.id || mgrLeaveData.id;
+
+    const delRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${mgrLeaveId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 403);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+
+    const cleanupRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${mgrLeaveId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(cleanupRes.status, 200);
+  });
+
+  // 17. Nhân viên không được xóa đơn đã phê duyệt (HTTP 400)
+  test('Nhân viên không được xóa đơn đã phê duyệt (HTTP 400)', async () => {
+    assert.ok(createdLeaveId);
+    const delRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${createdLeaveId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 400);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+  });
+
+  // 18. Admin có quyền xóa đơn đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)
+  test('Admin có quyền xóa đơn đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)', async () => {
+    assert.ok(createdLeaveId);
+    const delRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leave-requests/${createdLeaveId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
   });
 });

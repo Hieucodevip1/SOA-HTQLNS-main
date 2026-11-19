@@ -57,8 +57,7 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
         ...process.env,
         ATTENDANCE_SERVICE_PORT: String(ATT_PORT),
         NODE_ENV: 'test'
-      },
-      stdio: 'pipe'
+      }
     });
 
     // Chờ service sẵn sàng
@@ -72,7 +71,13 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     }
   });
 
-  after(() => {
+  after(async () => {
+    try {
+      const db = require('../shared/db');
+      const pool = db.getPool('htqlns_attendance');
+      await pool.query("DELETE FROM attendance_adjustments WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%Quên chấm công%' OR reason LIKE '%Quên checkout%' OR reason LIKE '%test%'").catch(() => {});
+      await db.closeAllPools().catch(() => {});
+    } catch {}
     if (attProcess) attProcess.kill();
   });
 
@@ -356,6 +361,95 @@ describe('Kiểm thử Phân hệ Attendance Service (:3103)', () => {
     const adminData = await adminOverrideRes.json();
     assert.strictEqual(adminData.success, true);
     assert.strictEqual(adminData.data.status, 'APPROVED');
+  });
+
+  // 11c. Nhân viên tự xóa đơn giải trình PENDING của chính mình (HTTP 200)
+  test('Nhân viên tự xóa đơn giải trình PENDING của chính mình thành công (HTTP 200)', async () => {
+    const createRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${employeeToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-28',
+        adjustmentType: 'FORGOT_CHECK_IN',
+        requestedCheckIn: '2026-11-28 08:00:00',
+        requestedCheckOut: '2026-11-28 17:30:00',
+        reason: 'Đơn test tự động xóa của nhân viên'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    const tempAdjId = createData.data?.id || createData.id;
+    assert.ok(tempAdjId);
+
+    const delRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations/${tempAdjId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
+  });
+
+  // 11d. Nhân viên cố tình xóa đơn giải trình của người khác bị chặn (HTTP 403)
+  test('Nhân viên cố tình xóa đơn giải trình của người khác bị chặn (HTTP 403)', async () => {
+    const createRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-29',
+        adjustmentType: 'FORGOT_CHECK_OUT',
+        requestedCheckIn: '2026-11-29 08:30:00',
+        requestedCheckOut: '2026-11-29 17:30:00',
+        reason: 'Đơn của Manager test quyền xóa giải trình'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const mgrAdjData = await createRes.json();
+    const mgrAdjId = mgrAdjData.data?.id || mgrAdjData.id;
+
+    const delRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations/${mgrAdjId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 403);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+
+    const cleanupRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations/${mgrAdjId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(cleanupRes.status, 200);
+  });
+
+  // 11e. Nhân viên không được xóa đơn giải trình đã phê duyệt (HTTP 400)
+  test('Nhân viên không được xóa đơn giải trình đã phê duyệt (HTTP 400)', async () => {
+    assert.ok(adjustmentId);
+    const delRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations/${adjustmentId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 400);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+  });
+
+  // 11f. Admin có quyền xóa đơn giải trình đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)
+  test('Admin có quyền xóa đơn giải trình đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)', async () => {
+    assert.ok(adjustmentId);
+    const delRes = await fetch(`http://localhost:${ATT_PORT}/api/v1/attendances/explanations/${adjustmentId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
   });
 
   // 12. Internal monthly summary API (bảo mật bằng x-internal-key)

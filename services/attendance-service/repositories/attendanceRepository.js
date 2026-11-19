@@ -794,6 +794,22 @@ class AttendanceRepository {
   }
 
   /**
+   * Xóa đơn giải trình chấm công
+   */
+  async deleteAdjustment(id) {
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        await pool.query('DELETE FROM attendance_adjustments WHERE id = ?', [id]);
+      } catch (err) {
+        console.warn('[ATT-REPO] Lỗi delete adjustment DB, fallback memory:', err.message);
+      }
+    }
+    memoryAdjustments.delete(id);
+    return true;
+  }
+
+  /**
    * Lấy danh sách đơn giải trình chấm công theo phân quyền vai trò
    */
   async getAdjustments({ callerRole, currentEmpId, isAdminOrHr, isManager, scope, status, empId }) {
@@ -822,7 +838,10 @@ class AttendanceRepository {
           }
         } else {
           // ADMIN / HR
-          if (empId) {
+          if (scope === 'ME' || scope === 'personal') {
+            conditions.push('adj.emp_id = ?');
+            params.push(currentEmpId);
+          } else if (empId) {
             conditions.push('adj.emp_id = ?');
             params.push(empId);
           }
@@ -838,6 +857,7 @@ class AttendanceRepository {
           `SELECT adj.*,
                   COALESCE(e.full_name, 'Nhân viên') AS emp_name,
                   COALESCE(e.code, adj.emp_id) AS emp_code,
+                  e.department_id,
                   COALESCE(d.name, 'Phòng ban') AS department_name,
                   COALESCE(m.full_name, 'Quản lý') AS approver_name
            FROM attendance_adjustments adj

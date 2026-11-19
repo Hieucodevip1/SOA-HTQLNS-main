@@ -367,6 +367,8 @@ class ShiftService {
       }
     } else if (empId) {
       allowedEmpIds = [empId];
+    } else if (scope.isFullAccess && (req.query.scope === 'ME' || req.query.scope === 'personal')) {
+      allowedEmpIds = [scope.empId];
     }
 
     const rows = await shiftRepository.getOtRequests({
@@ -386,6 +388,8 @@ class ShiftService {
       emp_code: r.emp_code,
       empName: r.emp_name,
       emp_name: r.emp_name,
+      departmentId: r.department_id,
+      department_id: r.department_id,
       departmentName: r.department_name,
       department_name: r.department_name,
       workDate: r.work_date,
@@ -476,11 +480,25 @@ class ShiftService {
     }
 
     const currentEmpId = scope.empId;
-    const empId = req.body.empId && ['ADMIN', 'HR'].includes(req.user?.role)
-      ? req.body.empId
+    const body = req.body || {};
+    const empId = (body.empId || body.employeeId) && ['ADMIN', 'HR'].includes(req.user?.role)
+      ? (body.empId || body.employeeId)
       : currentEmpId;
 
-    const { workDate, startTime, endTime, totalHours, otType = 'WEEKDAY', reason } = req.body;
+    const workDate = body.workDate || body.work_date;
+    const startTime = body.startTime || body.start_time;
+    const endTime = body.endTime || body.end_time;
+    let totalHours = body.totalHours ?? body.total_hours;
+    const otType = body.otType || body.ot_type || 'WEEKDAY';
+    const reason = body.reason;
+
+    if (!totalHours && startTime && endTime) {
+      const [sh, sm] = startTime.split(':').map(Number);
+      const [eh, em] = endTime.split(':').map(Number);
+      let diffMins = (eh * 60 + em) - (sh * 60 + sm);
+      if (diffMins < 0) diffMins += 24 * 60;
+      totalHours = Math.max(0.5, Number((diffMins / 60).toFixed(1)));
+    }
 
     if (!empId || !workDate || !startTime || !endTime || !totalHours || !reason) {
       const err = new Error('Thiếu thông tin bắt buộc: workDate, startTime, endTime, totalHours, reason');
@@ -575,6 +593,36 @@ class ShiftService {
     }).catch(() => {});
 
     return result.data;
+  }
+
+  async deleteOtRequest(id, user) {
+    const ot = await shiftRepository.getOtRequestById(id);
+    if (!ot) {
+      const err = new Error('Không tìm thấy đơn đăng ký tăng ca');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentEmpId = user?.empId || user?.emp_id || user?.employeeId || user?.employee_id || user?.id || user?.userId || null;
+    const callerRole = (user?.role || '').toUpperCase();
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+
+    if (!isAdminOrHr) {
+      if (ot.emp_id !== currentEmpId) {
+        const err = new Error('Bạn không có quyền hủy đơn tăng ca của người khác');
+        err.statusCode = 403;
+        throw err;
+      }
+      if (ot.status !== 'PENDING') {
+        const err = new Error('Chỉ được hủy đơn đang ở trạng thái chờ duyệt');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    await shiftRepository.deleteOtRequest(id);
+    events.publish('OT_REQUEST_DELETED', { requestId: id, empId: ot.emp_id }).catch(() => {});
+    return { success: true, message: 'Đã hủy đơn đăng ký tăng ca thành công', data: { id } };
   }
 
   /**

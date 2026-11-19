@@ -511,9 +511,16 @@ class AttendanceService {
   /**
    * Tạo đơn giải trình
    */
-  async createAdjustment({ user, body }) {
-    const empId = getEmpIdFromUser(user);
-    const { workDate, adjustmentType = 'FORGOT_CHECK_IN', requestedCheckIn, requestedCheckOut, reason, evidenceUrl } = body;
+  async createAdjustment({ user, body = {} }) {
+    const empId = (body.empId || body.employeeId) && ['ADMIN', 'HR'].includes(user?.role)
+      ? (body.empId || body.employeeId)
+      : getEmpIdFromUser(user);
+    const workDate = body.workDate || body.work_date;
+    const adjustmentType = body.adjustmentType || body.adjustment_type || 'FORGOT_CHECK_IN';
+    const requestedCheckIn = body.requestedCheckIn || body.requested_check_in;
+    const requestedCheckOut = body.requestedCheckOut || body.requested_check_out;
+    const reason = body.reason;
+    const evidenceUrl = body.evidenceUrl || body.evidence_url;
 
     if (!empId || !workDate || !reason) {
       const err = new Error('Thiếu thông tin bắt buộc: workDate, reason');
@@ -522,7 +529,7 @@ class AttendanceService {
     }
 
     const existingLog = await repository.findLogByEmpAndDate(empId, workDate);
-    const attendanceId = existingLog ? existingLog.id : null;
+    const attendanceId = existingLog ? existingLog.id : (body.attendanceId || body.attendance_id || null);
 
     const id = crypto.randomUUID();
     return await repository.createAdjustment({
@@ -598,6 +605,39 @@ class AttendanceService {
     }
 
     return updated;
+  }
+
+  /**
+   * Hủy / Xóa đơn giải trình chấm công
+   */
+  async deleteAdjustment({ user, id }) {
+    const adj = await repository.findAdjustmentById(id);
+    if (!adj) {
+      const err = new Error('Không tìm thấy đơn giải trình chấm công');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentEmpId = getEmpIdFromUser(user);
+    const callerRole = (user?.role || '').toUpperCase();
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+
+    if (!isAdminOrHr) {
+      if (adj.emp_id !== currentEmpId) {
+        const err = new Error('Bạn không có quyền hủy đơn giải trình của người khác');
+        err.statusCode = 403;
+        throw err;
+      }
+      if (adj.status !== 'PENDING') {
+        const err = new Error('Chỉ được hủy đơn đang ở trạng thái chờ duyệt');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    await repository.deleteAdjustment(id);
+    events.publish('ADJUSTMENT_REQUEST_DELETED', { requestId: id, empId: adj.emp_id }).catch(() => {});
+    return { success: true, message: 'Đã hủy đơn giải trình thành công', data: { id } };
   }
 
   /**

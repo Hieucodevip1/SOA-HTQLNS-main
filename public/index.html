@@ -2198,8 +2198,8 @@ input:checked + .slider:before {
               </div>
               <div style="display: flex; gap: 10px; align-items: center;">
                 <select id="requestsFilterStatus" class="figma-filter-pill" onchange="filterRequestsTable()">
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="PENDING" selected>Đang chờ duyệt (Cần xử lý)</option>
+                  <option value="ALL" selected>Tất cả trạng thái</option>
+                  <option value="PENDING">Đang chờ duyệt</option>
                   <option value="APPROVED">Đã phê duyệt</option>
                   <option value="REJECTED">Đã từ chối</option>
                 </select>
@@ -2219,7 +2219,7 @@ input:checked + .slider:before {
                   <th>Lý do</th>
                   <th>Ngày gửi</th>
                   <th>Trạng thái</th>
-                  <th style="text-align: center;">Hành động / Phê duyệt</th>
+                  <th id="thRequestsActionHeader" style="text-align: center;">Hành động / Phê duyệt</th>
                 </tr>
               </thead>
               <tbody id="requestsTableFullBody">

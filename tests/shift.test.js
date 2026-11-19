@@ -46,8 +46,7 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
         ...process.env,
         SHIFT_SERVICE_PORT: String(SHIFT_PORT),
         NODE_ENV: 'test'
-      },
-      stdio: 'pipe'
+      }
     });
 
     // Chờ service sẵn sàng
@@ -71,9 +70,7 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
       } else {
         await pool.query('DELETE FROM shifts WHERE code LIKE "CA_TEST_%"').catch(() => {});
       }
-      if (createdOtRequestId) {
-        await pool.query('DELETE FROM overtime_requests WHERE id = ?', [createdOtRequestId]).catch(() => {});
-      }
+      await pool.query("DELETE FROM ot_requests WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%bảo trì%' OR reason LIKE '%release%' OR reason LIKE '%test%'").catch(() => {});
       await db.closeAllPools().catch(() => {});
     } catch {}
     if (shiftProcess) shiftProcess.kill();
@@ -379,5 +376,96 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     const empOt = data.data.find((o) => o.emp_id === 'e0000001-0000-0000-0000-000000000004');
     assert.ok(empOt, 'Phải tìm thấy tổng giờ OT của nhân viên đã duyệt');
     assert.ok(Number(empOt.total_ot_hours) >= 3.0);
+  });
+
+  // 14. Nhân viên tự xóa đơn đăng ký tăng ca OT PENDING của mình (HTTP 200)
+  test('Nhân viên tự xóa đơn đăng ký tăng ca OT PENDING của mình thành công (HTTP 200)', async () => {
+    const createRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${employeeToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-28',
+        startTime: '18:00:00',
+        endTime: '20:00:00',
+        totalHours: 2.0,
+        otType: 'WEEKDAY',
+        reason: 'Đơn test tự động xóa của nhân viên'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    const tempOtId = createData.data?.id || createData.id;
+    assert.ok(tempOtId);
+
+    const delRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime/${tempOtId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
+  });
+
+  // 15. Nhân viên cố tình xóa đơn OT của người khác bị chặn (HTTP 403)
+  test('Nhân viên cố tình xóa đơn OT của người khác bị chặn (HTTP 403)', async () => {
+    const createRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workDate: '2026-11-29',
+        startTime: '18:00:00',
+        endTime: '20:00:00',
+        totalHours: 2.0,
+        otType: 'WEEKDAY',
+        reason: 'Đơn của Manager test quyền xóa OT'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const mgrOtData = await createRes.json();
+    const mgrOtId = mgrOtData.data?.id || mgrOtData.id;
+
+    const delRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime/${mgrOtId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 403);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+
+    const cleanupRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime/${mgrOtId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(cleanupRes.status, 200);
+  });
+
+  // 16. Nhân viên không được xóa đơn OT đã phê duyệt (HTTP 400)
+  test('Nhân viên không được xóa đơn OT đã phê duyệt (HTTP 400)', async () => {
+    assert.ok(createdOtRequestId);
+    const delRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime/${createdOtRequestId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.strictEqual(delRes.status, 400);
+    const errData = await delRes.json();
+    assert.strictEqual(errData.success, false);
+  });
+
+  // 17. Admin có quyền xóa đơn OT đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)
+  test('Admin có quyền xóa đơn OT đã phê duyệt hoặc bất kỳ đơn nào (HTTP 200)', async () => {
+    assert.ok(createdOtRequestId);
+    const delRes = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shifts/overtime/${createdOtRequestId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delData = await delRes.json();
+    assert.strictEqual(delData.success, true);
   });
 });

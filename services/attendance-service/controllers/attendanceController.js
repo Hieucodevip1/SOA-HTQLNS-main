@@ -304,6 +304,24 @@ class AttendanceController {
   }
 
   /**
+   * DELETE /api/v1/attendance-adjustments/:id
+   */
+  async deleteAdjustment(req, res, next) {
+    try {
+      const result = await attendanceService.deleteAdjustment({
+        user: req.user,
+        id: req.params.id
+      });
+      return success(res, result, 200, 'Đã hủy đơn giải trình chấm công thành công');
+    } catch (err) {
+      if (err.statusCode === 400) return badRequest(res, err.message);
+      if (err.statusCode === 403) return forbidden(res, err.message);
+      if (err.statusCode === 404) return notFound(res, err.message);
+      next(err);
+    }
+  }
+
+  /**
    * GET /internal/attendances/monthly-summary
    */
   async getMonthlySummary(req, res, next) {

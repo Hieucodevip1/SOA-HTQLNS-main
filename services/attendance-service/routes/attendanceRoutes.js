@@ -50,24 +50,58 @@ router.get(
 );
 
 // 5. Đơn giải trình chấm công (SCR_ATT_03, SCR_ATT_04)
+const adjustmentListPaths = [
+  '/api/v1/attendances/explanations',
+  '/api/v1/attendance/explanations',
+  '/api/v1/attendance-explanations',
+  '/api/attendance/explanations',
+  '/api/v1/attendance-adjustments',
+  '/api/attendance/adjustments'
+];
+
+const adjustmentItemPaths = [
+  '/api/v1/attendances/explanations/:id',
+  '/api/v1/attendance/explanations/:id',
+  '/api/v1/attendance-explanations/:id',
+  '/api/attendance/explanations/:id',
+  '/api/v1/attendance-adjustments/:id',
+  '/api/attendance/adjustments/:id'
+];
+
 router.get(
-  ['/api/v1/attendance-adjustments', '/api/attendance/adjustments'],
+  adjustmentListPaths,
   requireAuth(),
   (req, res, next) => controller.getAdjustments(req, res, next)
 );
 
 router.post(
-  ['/api/v1/attendance-adjustments', '/api/attendance/explanations', '/api/attendance/adjustments'],
+  adjustmentListPaths,
   requireAuth(),
   (req, res, next) => controller.createAdjustment(req, res, next)
 );
 
+router.delete(
+  adjustmentItemPaths,
+  requireAuth(),
+  (req, res, next) => controller.deleteAdjustment(req, res, next)
+);
+
+const adjustmentDecisionPaths = [
+  '/api/v1/attendances/explanations/:id/decision',
+  '/api/attendance/explanations/:id/decision',
+  '/api/v1/attendance-adjustments/:id/decision',
+  '/api/attendance/adjustments/:id/decision',
+  '/api/attendance/adjustments/:id/status'
+];
+
 router.patch(
-  [
-    '/api/v1/attendance-adjustments/:id/decision',
-    '/api/attendance/adjustments/:id/decision',
-    '/api/attendance/adjustments/:id/status'
-  ],
+  adjustmentDecisionPaths,
+  requireAuth(['ADMIN', 'HR', 'MANAGER']),
+  (req, res, next) => controller.decideAdjustment(req, res, next)
+);
+
+router.put(
+  adjustmentDecisionPaths,
   requireAuth(['ADMIN', 'HR', 'MANAGER']),
   (req, res, next) => controller.decideAdjustment(req, res, next)
 );

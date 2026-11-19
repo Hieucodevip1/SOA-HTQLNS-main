@@ -2,9 +2,23 @@
   "version": 1,
   "description": "Chính sách API Gateway cho Hệ thống Quản lý Chấm công - Tính lương & Nhân sự (HTQLNS)",
   "cors": {
-    "origins": ["*"],
-    "allowedHeaders": ["Authorization", "Content-Type", "x-request-id", "x-internal-key"],
-    "allowedMethods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    "origins": [
+      "*"
+    ],
+    "allowedHeaders": [
+      "Authorization",
+      "Content-Type",
+      "x-request-id",
+      "x-internal-key"
+    ],
+    "allowedMethods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "PATCH",
+      "OPTIONS"
+    ]
   },
   "limits": {
     "bodyBytes": 10485760,
@@ -19,7 +33,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false,
           "rateLimit": {
             "windowMs": 60000,
@@ -33,7 +49,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false,
           "rateLimit": {
             "windowMs": 60000,
@@ -47,7 +65,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false,
           "rateLimit": {
             "windowMs": 60000,
@@ -61,7 +81,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false
         }
       ]
@@ -71,7 +93,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false,
           "rateLimit": {
             "windowMs": 60000,
@@ -85,7 +109,9 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": false
         }
       ]
@@ -95,9 +121,14 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["GET", "PUT"],
+          "methods": [
+            "GET",
+            "PUT"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -106,9 +137,14 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["GET", "PUT"],
+          "methods": [
+            "GET",
+            "PUT"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -117,9 +153,13 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -128,9 +168,14 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["*"],
+          "methods": [
+            "*"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
         }
       ]
     },
@@ -139,9 +184,13 @@
       "service": "auth-service",
       "rules": [
         {
-          "methods": ["*"],
+          "methods": [
+            "*"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -150,14 +199,26 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -166,14 +227,26 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -182,14 +255,27 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "PATCH", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -198,9 +284,13 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["*"],
+          "methods": [
+            "*"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -209,9 +299,16 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET", "POST", "PUT", "PATCH"],
+          "methods": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -220,9 +317,15 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["*"],
+          "methods": [
+            "*"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -231,14 +334,26 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -247,14 +362,26 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -263,14 +390,27 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "PATCH", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -279,14 +419,27 @@
       "service": "organization-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "PATCH", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -295,9 +448,13 @@
       "service": "attendance-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -306,9 +463,13 @@
       "service": "attendance-service",
       "rules": [
         {
-          "methods": ["POST"],
+          "methods": [
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -317,14 +478,24 @@
       "service": "attendance-service",
       "rules": [
         {
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["PUT", "DELETE"],
+          "methods": [
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -333,14 +504,26 @@
       "service": "attendance-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -349,14 +532,25 @@
       "service": "leave-service",
       "rules": [
         {
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["PUT", "PATCH", "DELETE"],
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -365,14 +559,25 @@
       "service": "leave-service",
       "rules": [
         {
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["PUT", "PATCH", "DELETE"],
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -381,14 +586,26 @@
       "service": "shift-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -397,14 +614,26 @@
       "service": "shift-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -413,14 +642,25 @@
       "service": "shift-service",
       "rules": [
         {
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["PATCH", "PUT", "DELETE"],
+          "methods": [
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "*"
+          ]
         }
       ]
     },
@@ -429,14 +669,26 @@
       "service": "payroll-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PATCH", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
         }
       ]
     },
@@ -445,14 +697,26 @@
       "service": "payroll-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "PATCH", "PUT", "DELETE"],
+          "methods": [
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR"]
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
         }
       ]
     },
@@ -461,14 +725,26 @@
       "service": "notification-service",
       "rules": [
         {
-          "methods": ["GET", "PUT"],
+          "methods": [
+            "GET",
+            "PUT"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "DELETE"],
+          "methods": [
+            "POST",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -477,14 +753,26 @@
       "service": "notification-service",
       "rules": [
         {
-          "methods": ["GET", "PUT"],
+          "methods": [
+            "GET",
+            "PUT"
+          ],
           "auth": true,
-          "roles": ["*"]
+          "roles": [
+            "*"
+          ]
         },
         {
-          "methods": ["POST", "DELETE"],
+          "methods": [
+            "POST",
+            "DELETE"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -493,9 +781,15 @@
       "service": "analytics-service",
       "rules": [
         {
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "auth": true,
-          "roles": ["ADMIN", "HR", "MANAGER"]
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
         }
       ]
     },
@@ -503,124 +797,452 @@
       "prefix": "/api/v1/work-locations",
       "service": "attendance-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/attendances",
       "service": "attendance-service",
       "rules": [
-        { "methods": ["*"], "auth": true, "roles": ["*"] }
+        {
+          "methods": [
+            "*"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/attendance-adjustments",
       "service": "attendance-service",
       "rules": [
-        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/attendance/adjustments",
       "service": "attendance-service",
       "rules": [
-        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/leave-types",
       "service": "leave-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/leave-balances",
       "service": "leave-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/leave-requests",
       "service": "leave-service",
       "rules": [
-        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PUT", "PATCH", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/shifts",
       "service": "shift-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/shift-assignments",
       "service": "shift-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/ot-requests",
       "service": "shift-service",
       "rules": [
-        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/overtime-requests",
       "service": "shift-service",
       "rules": [
-        { "methods": ["GET", "POST"], "auth": true, "roles": ["*"] },
-        { "methods": ["PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/payroll-configs",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET", "POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET",
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/payrolls",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] },
-        { "methods": ["POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/payslips",
       "service": "payroll-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "PATCH", "PUT", "DELETE"], "auth": true, "roles": ["ADMIN", "HR"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/notifications",
       "service": "notification-service",
       "rules": [
-        { "methods": ["GET", "PATCH", "PUT"], "auth": true, "roles": ["*"] },
-        { "methods": ["POST", "DELETE"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET",
+            "PATCH",
+            "PUT"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "POST",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
+        }
       ]
     },
     {
       "prefix": "/api/v1/analytics",
       "service": "analytics-service",
       "rules": [
-        { "methods": ["GET"], "auth": true, "roles": ["ADMIN", "HR", "MANAGER"] }
+        {
+          "methods": [
+            "GET"
+          ],
+          "auth": true,
+          "roles": [
+            "ADMIN",
+            "HR",
+            "MANAGER"
+          ]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/v1/shifts/overtime",
+      "service": "shift-service",
+      "rules": [
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
+      ]
+    },
+    {
+      "prefix": "/api/v1/attendances/explanations",
+      "service": "attendance-service",
+      "rules": [
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
       ]
     }
   ]

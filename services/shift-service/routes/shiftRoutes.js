@@ -33,14 +33,35 @@ router.post(assignListPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), (req, res,
 router.delete(assignItemPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), (req, res, next) => shiftController.cancelShiftAssignment(req, res, next));
 
 // 4. Đơn đăng ký tăng ca (Overtime / OT Requests)
-const otListPaths = ['/api/v1/overtime-requests', '/api/v1/ot-requests', '/api/ot'];
-const otItemPaths = ['/api/v1/overtime-requests/:id', '/api/v1/ot-requests/:id', '/api/ot/:id'];
+const otListPaths = [
+  '/api/v1/shifts/overtime',
+  '/api/shifts/overtime',
+  '/api/shifts/ot',
+  '/api/v1/overtime-requests',
+  '/api/v1/ot-requests',
+  '/api/ot'
+];
+const otItemPaths = [
+  '/api/v1/shifts/overtime/:id',
+  '/api/shifts/overtime/:id',
+  '/api/shifts/ot/:id',
+  '/api/v1/overtime-requests/:id',
+  '/api/v1/ot-requests/:id',
+  '/api/ot/:id'
+];
 
 router.get(otListPaths, requireAuth(), (req, res, next) => shiftController.getOtRequests(req, res, next));
 router.get(otItemPaths, requireAuth(), (req, res, next) => shiftController.getOtRequestById(req, res, next));
 router.post(otListPaths, requireAuth(), (req, res, next) => shiftController.createOtRequest(req, res, next));
+router.delete(otItemPaths, requireAuth(), (req, res, next) => shiftController.deleteOtRequest(req, res, next));
 
 const otDecisionPaths = [
+  '/api/v1/shifts/overtime/:id/approve',
+  '/api/v1/shifts/overtime/:id/reject',
+  '/api/v1/shifts/overtime/:id/decision',
+  '/api/shifts/overtime/:id/approve',
+  '/api/shifts/overtime/:id/reject',
+  '/api/shifts/overtime/:id/decision',
   '/api/v1/overtime-requests/:id/approve',
   '/api/v1/overtime-requests/:id/reject',
   '/api/v1/overtime-requests/:id/decision',

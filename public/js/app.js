@@ -502,10 +502,23 @@ function showToast(message, type = 'success') {
 // ==============================================================================
 // 4. API CALLER QUA GATEWAY
 // ==============================================================================
-async function apiCall(path, options = {}) {
+async function apiCall(path, options = {}, maybeBody = undefined) {
+  let fetchOptions = {};
+  if (typeof options === 'string') {
+    fetchOptions.method = options.toUpperCase();
+    if (maybeBody !== undefined) {
+      fetchOptions.body = typeof maybeBody === 'string' ? maybeBody : JSON.stringify(maybeBody);
+    }
+  } else if (options && typeof options === 'object') {
+    fetchOptions = { ...options };
+    if (fetchOptions.body && typeof fetchOptions.body !== 'string' && !(typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData)) {
+      fetchOptions.body = JSON.stringify(fetchOptions.body);
+    }
+  }
+
   const headers = {
     'Content-Type': 'application/json',
-    ...(options.headers || {})
+    ...(fetchOptions.headers || {})
   };
 
   if (state.token) {
@@ -514,7 +527,7 @@ async function apiCall(path, options = {}) {
 
   try {
     const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers
     });
 
@@ -946,8 +959,11 @@ function applyRoleBasedUI() {
   const btnReqCreateNew = document.getElementById('btnRequestsCreateNew');
   const reqTopSection = document.getElementById('requestsTopSection');
   const cardCreateLeave = document.getElementById('cardCreateLeaveForm');
+  const reqTableTitle = document.getElementById('requestsTableTitle');
+  const reqTableSubtitle = document.getElementById('requestsTableSubtitle');
+  const thActionHeader = document.getElementById('thRequestsActionHeader');
 
-  if (role === 'ADMIN') {
+  if (role === 'ADMIN' || role === 'HR_ADMIN') {
     if (tabReqPersonal) tabReqPersonal.style.display = 'none';
     if (tabReqDept) {
       tabReqDept.style.display = 'inline-flex';
@@ -957,6 +973,9 @@ function applyRoleBasedUI() {
     if (btnReqCreateNew) btnReqCreateNew.style.display = 'none';
     if (reqTopSection) reqTopSection.style.display = 'none';
     if (cardCreateLeave) cardCreateLeave.style.display = 'none';
+    if (reqTableTitle) reqTableTitle.innerText = 'Quản lý & Duyệt đơn toàn công ty';
+    if (reqTableSubtitle) reqTableSubtitle.innerText = 'Giám sát, xử lý phê duyệt hoặc xóa các đơn từ trên toàn hệ thống.';
+    if (thActionHeader) thActionHeader.innerText = 'Phê duyệt / Thao tác';
     state.requestsCurrentTab = 'department';
   } else if (role === 'MANAGER') {
     if (tabReqDept) {
@@ -983,6 +1002,9 @@ function applyRoleBasedUI() {
       }
       if (btnReqCreateNew) btnReqCreateNew.style.display = 'none';
       if (reqTopSection) reqTopSection.style.display = 'none';
+      if (reqTableTitle) reqTableTitle.innerText = 'Danh sách đơn từ bộ phận';
+      if (reqTableSubtitle) reqTableSubtitle.innerText = 'Theo dõi và phê duyệt các đơn nghỉ phép, giải trình chấm công và tăng ca OT của nhân viên thuộc bộ phận.';
+      if (thActionHeader) thActionHeader.innerText = 'Phê duyệt / Thao tác';
     } else {
       if (tabReqPersonal) {
         tabReqPersonal.classList.add('active');
@@ -998,6 +1020,9 @@ function applyRoleBasedUI() {
       }
       if (btnReqCreateNew) btnReqCreateNew.style.display = 'inline-flex';
       if (reqTopSection) reqTopSection.style.display = 'grid';
+      if (reqTableTitle) reqTableTitle.innerText = 'Danh sách đơn từ của tôi';
+      if (reqTableSubtitle) reqTableSubtitle.innerText = 'Theo dõi trạng thái các đơn nghỉ phép, giải trình chấm công và tăng ca OT do bạn gửi.';
+      if (thActionHeader) thActionHeader.innerText = 'Thao tác';
     }
   } else {
     // EMPLOYEE
@@ -1010,6 +1035,9 @@ function applyRoleBasedUI() {
     if (btnReqCreateNew) btnReqCreateNew.style.display = 'inline-flex';
     if (reqTopSection) reqTopSection.style.display = 'grid';
     if (cardCreateLeave) cardCreateLeave.style.display = 'block';
+    if (reqTableTitle) reqTableTitle.innerText = 'Danh sách đơn từ của tôi';
+    if (reqTableSubtitle) reqTableSubtitle.innerText = 'Theo dõi trạng thái các đơn nghỉ phép, giải trình chấm công và tăng ca OT do bạn gửi.';
+    if (thActionHeader) thActionHeader.innerText = 'Thao tác';
     state.requestsCurrentTab = 'personal';
   }
 
@@ -1191,9 +1219,10 @@ async function loadRequestsData() {
   const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
   const isEmployee = role === 'EMPLOYEE' || state.user?.username === 'employee';
   const isAdmin = role === 'ADMIN';
+  const isHr = role === 'HR' || role === 'HR_ADMIN';
 
   // Đồng bộ tab theo vai trò
-  if (isAdmin) {
+  if (isAdmin || isHr) {
     state.requestsCurrentTab = 'department';
   } else if (isEmployee) {
     state.requestsCurrentTab = 'personal';
@@ -1216,7 +1245,7 @@ async function loadRequestsData() {
     const adjustments = adjRes?.data || [];
     const ots = otRes?.data || [];
 
-    const unified = [];
+    let unified = [];
 
     leaves.forEach(l => {
       unified.push({
@@ -1232,7 +1261,7 @@ async function loadRequestsData() {
         duration: `${l.total_days || 1} ngày`,
         reason: l.reason || 'Nghỉ phép',
         created_at: l.created_at,
-        status: l.status,
+        status: (l.status || 'PENDING').toUpperCase(),
         raw: l
       });
     });
@@ -1259,7 +1288,7 @@ async function loadRequestsData() {
         duration: a.actual_time ? `${String(a.actual_time).slice(0, 5)}` : '1 lượt',
         reason: a.reason || 'Giải trình chấm công',
         created_at: a.created_at,
-        status: a.status,
+        status: (a.status || 'PENDING').toUpperCase(),
         raw: a
       });
     });
@@ -1279,10 +1308,16 @@ async function loadRequestsData() {
         duration: `${o.total_hours || 0} giờ`,
         reason: o.reason || 'Tăng ca OT',
         created_at: o.created_at,
-        status: o.status,
+        status: (o.status || 'PENDING').toUpperCase(),
         raw: o
       });
     });
+
+    const myEmpId = state.user?.empId || state.user?.emp_id || state.user?.id;
+    // Bắt buộc cô lập dữ liệu cá nhân: khi xem đơn cá nhân hoặc là EMPLOYEE thì CHỈ hiển thị đơn của chính mình
+    if (isPersonalScope && myEmpId) {
+      unified = unified.filter(r => String(r.emp_id) === String(myEmpId));
+    }
 
     // Sắp xếp giảm dần theo thời gian tạo
     unified.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
@@ -1298,11 +1333,24 @@ async function loadRequestsData() {
       badgeDept.style.display = pendingCount > 0 ? 'inline-block' : 'none';
     }
 
-    renderRequestsTable(unified);
+    filterRequestsTable();
   } catch (err) {
     console.error('Lỗi nạp danh sách đơn từ:', err);
     showToast('Không thể nạp danh sách đơn từ: ' + err.message, 'error');
   }
+}
+
+function filterRequestsTable() {
+  const filterEl = document.getElementById('requestsFilterStatus');
+  const selectedStatus = (filterEl?.value || 'ALL').toUpperCase();
+  const allItems = state.unifiedRequests || [];
+
+  let filtered = allItems;
+  if (selectedStatus !== 'ALL') {
+    filtered = allItems.filter(r => (r.status || '').toUpperCase() === selectedStatus);
+  }
+
+  renderRequestsTable(filtered);
 }
 
 function renderRequestsTable(items) {
@@ -1322,9 +1370,10 @@ function renderRequestsTable(items) {
 
   tbody.innerHTML = items.map(r => {
     let statusBadge = '';
-    if (r.status === 'PENDING') {
+    const st = (r.status || 'PENDING').toUpperCase();
+    if (st === 'PENDING') {
       statusBadge = '<span class="badge-status" style="background: #fef3c7; color: #d97706; font-weight: 600;">• Đang chờ duyệt</span>';
-    } else if (r.status === 'APPROVED') {
+    } else if (st === 'APPROVED') {
       statusBadge = '<span class="badge-status badge-approved">✓ Đã phê duyệt</span>';
     } else {
       statusBadge = '<span class="badge-status badge-rejected">✕ Đã từ chối</span>';
@@ -1333,13 +1382,16 @@ function renderRequestsTable(items) {
     const isSelf = (r.emp_id && myEmpId && String(r.emp_id) === String(myEmpId));
     let actionsHtml = '';
 
-    if (r.status === 'PENDING') {
+    if (st === 'PENDING') {
       if (isSelf) {
         actionsHtml = `
           <div style="display: inline-flex; align-items: center; gap: 6px;">
             <span class="badge-self-blocked" style="font-size: 11px; color: #dc2626; font-weight: 600; background: #fee2e2; border: 1px solid #fecaca; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;" title="Quy định: Không được phép tự duyệt đơn của chính mình">
               ⛔ Chặn tự duyệt
             </span>
+            <button class="btn-cancel-req-sm" style="background: #fff; color: #dc2626; border: 1px solid #fca5a5; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="handleDeleteRequest('${r.id}', '${r.type}')" title="Hủy đơn đang chờ duyệt">
+              🗑 Hủy đơn
+            </button>
             <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')" title="Xem chi tiết đơn">Chi tiết ↗</button>
           </div>
         `;
@@ -1351,6 +1403,9 @@ function renderRequestsTable(items) {
             </button>
             <button class="btn-reject-sm" style="background: #ef4444; color: #ffffff; border: none; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 11px; cursor: pointer;" onclick="handleDirectReject('${r.id}', '${r.type}')">
               ✕ Từ chối
+            </button>
+            <button class="btn-delete-req-sm" style="background: #fff; color: #ef4444; border: 1px solid #fecaca; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 11px; cursor: pointer;" onclick="handleDeleteRequest('${r.id}', '${r.type}')" title="Xóa đơn khỏi hệ thống">
+              🗑 Xóa
             </button>
             <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
           </div>
@@ -1368,10 +1423,30 @@ function renderRequestsTable(items) {
           </div>
         `;
       } else {
-        actionsHtml = `<button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>`;
+        // Employee viewing their own pending request
+        actionsHtml = `
+          <div style="display: inline-flex; align-items: center; gap: 6px;">
+            <button class="btn-cancel-req-sm" style="background: #fff; color: #dc2626; border: 1px solid #fca5a5; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="handleDeleteRequest('${r.id}', '${r.type}')" title="Hủy đơn đang chờ duyệt">
+              🗑 Hủy đơn
+            </button>
+            <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+          </div>
+        `;
       }
     } else {
-      actionsHtml = `<button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>`;
+      // APPROVED or REJECTED
+      if (isAdmin || isHr) {
+        actionsHtml = `
+          <div style="display: inline-flex; align-items: center; gap: 6px;">
+            <button class="btn-delete-req-sm" style="background: #fff; color: #ef4444; border: 1px solid #fecaca; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 11px; cursor: pointer;" onclick="handleDeleteRequest('${r.id}', '${r.type}')" title="Xóa bản ghi đơn này khỏi hệ thống">
+              🗑 Xóa
+            </button>
+            <button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>
+          </div>
+        `;
+      } else {
+        actionsHtml = `<button class="btn-detail-sm" onclick="openRequestDetail('${r.id}')">Chi tiết ↗</button>`;
+      }
     }
 
     return `
@@ -1399,6 +1474,55 @@ function renderRequestsTable(items) {
       </tr>
     `;
   }).join('');
+}
+
+async function handleDeleteRequest(id, type) {
+  if (!id) return;
+  if (!type) {
+    const item = state.unifiedRequests?.find(r => r.id === id);
+    type = item?.type || (id.startsWith('NP-') ? 'LEAVE' : (id.startsWith('ADJ-') ? 'ADJUSTMENT' : (id.startsWith('OT-') ? 'OT' : 'LEAVE')));
+  }
+
+  const role = (state.user?.role || 'EMPLOYEE').toUpperCase();
+  const isAdminOrHr = (role === 'ADMIN' || role === 'HR_ADMIN' || role === 'HR');
+  const confirmMsg = isAdminOrHr
+    ? `Bạn có chắc chắn muốn xóa vĩnh viễn đơn "${id}" khỏi hệ thống?`
+    : `Bạn có chắc chắn muốn hủy đơn "${id}" này không?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    let endpoint = '';
+    if (type === 'LEAVE') {
+      endpoint = `/api/v1/leave-requests/${id}`;
+    } else if (type === 'ADJUSTMENT') {
+      endpoint = `/api/v1/attendances/explanations/${id}`;
+    } else if (type === 'OT') {
+      endpoint = `/api/v1/shifts/overtime/${id}`;
+    }
+
+    const res = await apiCall(endpoint, 'DELETE');
+    if (res && res.success !== false) {
+      showToast(res.message || `Đã xóa đơn ${id} thành công!`, 'success');
+      await loadRequestsData();
+      await loadDashboardPendingRequests();
+      if (typeof loadDashboardOverview === 'function') loadDashboardOverview();
+      if (typeof loadMyLeaveBalance === 'function') loadMyLeaveBalance();
+      if (typeof loadOtRequests === 'function') loadOtRequests();
+      if (typeof loadAttendanceLogs === 'function') loadAttendanceLogs();
+
+      const detailSec = document.getElementById('view-request-detail');
+      if (detailSec && detailSec.style.display !== 'none') {
+        const navReq = document.getElementById('nav-requests');
+        if (navReq) navReq.click();
+      }
+    } else {
+      throw new Error(res?.error || res?.message || 'Xóa đơn thất bại');
+    }
+  } catch (err) {
+    console.error('Lỗi khi xóa/hủy đơn:', err);
+    showToast(err.message || 'Lỗi khi xóa/hủy đơn', 'error');
+  }
 }
 
 async function handleCreateLeaveSubmit() {
@@ -1683,17 +1807,23 @@ async function openRequestDetail(requestId) {
     }
 
     if (adminGroup) {
-      if (isSelf) {
+      if (role === 'EMPLOYEE') {
+        adminGroup.innerHTML = `
+          <button class="btn-cancel-req" style="padding: 9px 18px; font-size: 13px; background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-weight: 600; cursor: pointer;" onclick="handleDeleteRequest('${finalReq.id}', '${finalReq.type}')">🗑 Hủy đơn này</button>
+        `;
+      } else if (isSelf) {
         adminGroup.innerHTML = `
           <div style="padding: 10px 16px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
             <span>⛔</span>
             <span>Quy định hệ thống: Bạn không được phép tự phê duyệt đơn do chính mình tạo ra. Đơn cần được cấp trên hoặc HR phê duyệt.</span>
           </div>
+          <button class="btn-cancel-req" style="padding: 9px 18px; font-size: 13px; background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 8px;" onclick="handleDeleteRequest('${finalReq.id}', '${finalReq.type}')">🗑 Hủy đơn này</button>
         `;
       } else if (isAdmin) {
         adminGroup.innerHTML = `
           <button class="btn-approve-sm" style="padding: 9px 18px; font-size: 13px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" onclick="handleDirectApprove('${finalReq.id}', '${finalReq.type}')">✓ Phê duyệt thay (Admin Override)</button>
           <button class="btn-reject-sm" style="padding: 9px 18px; font-size: 13px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 8px;" onclick="handleDirectReject('${finalReq.id}', '${finalReq.type}')">✕ Từ chối đơn này</button>
+          <button class="btn-delete-req" style="padding: 9px 18px; font-size: 13px; background: #fff; color: #ef4444; border: 1px solid #fecaca; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 8px;" onclick="handleDeleteRequest('${finalReq.id}', '${finalReq.type}')">🗑 Xóa đơn</button>
         `;
       } else if (isApprover) {
         adminGroup.innerHTML = `
@@ -1739,7 +1869,15 @@ async function openRequestDetail(requestId) {
     if (step2Desc) {
       step2Desc.innerText = `Đã được duyệt bởi ${finalReq.approver_name || 'Quản lý'}.`;
     }
-    if (adminGroup) adminGroup.innerHTML = '';
+    if (adminGroup) {
+      if (isAdmin || isHr) {
+        adminGroup.innerHTML = `
+          <button class="btn-delete-req" style="padding: 9px 18px; font-size: 13px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-weight: 600; cursor: pointer;" onclick="handleDeleteRequest('${finalReq.id}', '${finalReq.type}')">🗑 Xóa bản ghi đơn này (Admin)</button>
+        `;
+      } else {
+        adminGroup.innerHTML = '';
+      }
+    }
   } else if (finalReq.status === 'REJECTED') {
     if (badge) {
       badge.className = 'badge-status badge-rejected';
@@ -1775,7 +1913,15 @@ async function openRequestDetail(requestId) {
     if (step2Desc) {
       step2Desc.innerText = `Lý do từ chối: ${raw?.reject_reason || raw?.comment || raw?.note || 'Không phù hợp kế hoạch'}`;
     }
-    if (adminGroup) adminGroup.innerHTML = '';
+    if (adminGroup) {
+      if (isAdmin || isHr) {
+        adminGroup.innerHTML = `
+          <button class="btn-delete-req" style="padding: 9px 18px; font-size: 13px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-weight: 600; cursor: pointer;" onclick="handleDeleteRequest('${finalReq.id}', '${finalReq.type}')">🗑 Xóa bản ghi đơn này (Admin)</button>
+        `;
+      } else {
+        adminGroup.innerHTML = '';
+      }
+    }
   }
 }
 
@@ -1872,7 +2018,7 @@ async function loadDashboardPendingRequests() {
 
     // 1. Phía Nhân viên: Hiển thị đơn của chính mình trên Dashboard
     if (personalTbody) {
-      const myItems = unified.filter(r => !r.emp_id || !myEmpId || String(r.emp_id) === String(myEmpId));
+      const myItems = myEmpId ? unified.filter(r => String(r.emp_id) === String(myEmpId)) : unified;
       if (!myItems.length) {
         personalTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Bạn chưa gửi đơn từ nào.</td></tr>';
       } else {
@@ -3714,6 +3860,8 @@ async function handleSubmitAttendanceAdjustment(attendanceId, workDate) {
     if (res && res.success) {
       showToast('Đã gửi đơn giải trình thành công! Đang chờ Quản lý phê duyệt.', 'success');
       loadMyAttendanceData();
+      if (typeof loadRequestsData === 'function') loadRequestsData();
+      if (typeof loadDashboardPendingRequests === 'function') loadDashboardPendingRequests();
       if (document.getElementById('dashEmployeeOverviewSection')?.style.display !== 'none') {
         loadEmployeeDashboardData();
       }
@@ -6135,6 +6283,8 @@ async function handleCreateOtSubmit(e) {
     showToast('Gửi đơn đăng ký tăng ca thành công! Chờ quản lý phê duyệt.', 'success');
     closeModal();
     await loadOtRequests();
+    if (typeof loadRequestsData === 'function') await loadRequestsData();
+    if (typeof loadDashboardPendingRequests === 'function') await loadDashboardPendingRequests();
   } catch (err) {
     console.error('Lỗi tạo đơn OT:', err);
     showToast(err.message || 'Gửi đơn thất bại', 'error');

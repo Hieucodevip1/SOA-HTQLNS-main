@@ -189,6 +189,7 @@ app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), 
       `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
               COALESCE(e.full_name, 'Nhân viên') AS emp_name,
               COALESCE(e.code, lr.emp_id) AS emp_code,
+              e.department_id,
               COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
        FROM leave_requests lr
        JOIN leave_types lt ON lr.leave_type_id = lt.id
@@ -271,10 +272,68 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
       [id, empId, leaveTypeId, startDate, endDate, totalDays, session, reason.trim(), attachmentUrl]
     );
 
-    const [created] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+    const [created] = await pool.query(
+      `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
+              COALESCE(e.full_name, 'Nhân viên') AS emp_name,
+              COALESCE(e.code, lr.emp_id) AS emp_code,
+              e.department_id,
+              COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
+       LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
+       WHERE lr.id = ?`,
+      [id]
+    );
     events.publish('LEAVE_REQUEST_CREATED', { requestId: id, empId, startDate, endDate, totalDays }).catch(() => {});
 
     res.status(201).json({ success: true, message: 'Gửi đơn xin nghỉ phép thành công', data: created[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4B. Hủy / Xóa đơn xin nghỉ phép (SCR_REQ_03)
+const deleteLeavePaths = [
+  '/api/v1/leave-requests/:id',
+  '/api/leaves/:id',
+  '/api/leave/:id'
+];
+app.delete(deleteLeavePaths, requireAuth(), async (req, res, next) => {
+  try {
+    const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
+    const currentEmpId = getEmpIdFromUser(req.user);
+    const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
+
+    const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [req.params.id]);
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
+    }
+    const leave = rows[0];
+
+    // Nhân viên chỉ được hủy đơn của chính mình khi đơn còn PENDING
+    if (!isAdminOrHr) {
+      if (leave.emp_id !== currentEmpId) {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền hủy đơn của nhân viên khác' });
+      }
+      if (leave.status !== 'PENDING') {
+        return res.status(400).json({ success: false, error: 'Chỉ được hủy đơn đang ở trạng thái chờ duyệt' });
+      }
+    }
+
+    // Hoàn trả lại số ngày nghỉ pending vào quỹ phép nếu đơn còn ở trạng thái PENDING
+    if (leave.status === 'PENDING') {
+      const year = new Date(leave.start_date).getFullYear();
+      await pool.query(
+        'UPDATE leave_balances SET pending_days = GREATEST(0, pending_days - ?) WHERE emp_id = ? AND leave_type_id = ? AND year = ?',
+        [leave.total_days, leave.emp_id, leave.leave_type_id, year]
+      ).catch(() => {});
+    }
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [req.params.id]);
+    events.publish('LEAVE_REQUEST_DELETED', { requestId: req.params.id, empId: leave.emp_id }).catch(() => {});
+
+    res.json({ success: true, message: 'Đã hủy đơn xin nghỉ phép thành công', data: { id: req.params.id } });
   } catch (err) {
     next(err);
   }

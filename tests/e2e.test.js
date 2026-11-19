@@ -413,4 +413,21 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
       assert.ok(Array.isArray(data.data));
     });
   });
+
+  after(async () => {
+    try {
+      const poolLeave = db.getPool('htqlns_leave');
+      await poolLeave.query("DELETE FROM leave_requests WHERE (emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%thủ tục hành chính%' OR reason LIKE '%việc riêng%' OR reason LIKE '%test%') AND id != 'NP-2026-024'").catch(() => {});
+      await poolLeave.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024'").catch(() => {});
+      await poolLeave.query("UPDATE leave_balances SET used_days = 0.0, pending_days = 0.0 WHERE emp_id LIKE 'e0000001-%'").catch(() => {});
+
+      const poolShift = db.getPool('htqlns_shift');
+      await poolShift.query("DELETE FROM ot_requests WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%bảo trì%' OR reason LIKE '%release%' OR reason LIKE '%test%'").catch(() => {});
+
+      const poolAtt = db.getPool('htqlns_attendance');
+      await poolAtt.query("DELETE FROM attendance_adjustments WHERE emp_id LIKE 'e_test_%' OR emp_id LIKE 'e0000001-%' OR reason LIKE '%Quên chấm công%' OR reason LIKE '%Quên checkout%' OR reason LIKE '%test%'").catch(() => {});
+
+      await db.closeAllPools().catch(() => {});
+    } catch {}
+  });
 });

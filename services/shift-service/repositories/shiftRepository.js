@@ -626,8 +626,9 @@ class ShiftRepository {
           conditions.push('ot.emp_id = ?');
           params.push(empId);
         } else if (managerId) {
-          conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
-          params.push(managerId, managerId);
+          conditions.push('(e.manager_id = ? OR d.manager_id = ? OR e.department_id = (SELECT department_id FROM htqlns_organization.employees WHERE id = ?))');
+          conditions.push('ot.emp_id != ?');
+          params.push(managerId, managerId, managerId, managerId);
         }
 
         if (status) {
@@ -648,6 +649,7 @@ class ShiftRepository {
           `SELECT ot.*,
                   COALESCE(e.full_name, 'Nhân viên') AS emp_name,
                   COALESCE(e.code, ot.emp_id) AS emp_code,
+                  e.department_id,
                   COALESCE(d.name, 'Phòng Kỹ Thuật') AS department_name,
                   COALESCE(m.full_name, '') AS approver_name
            FROM ot_requests ot
@@ -812,6 +814,19 @@ class ShiftRepository {
     item.reject_reason = decision === 'REJECTED' ? rejectReason : null;
     memoryOtRequests.set(id, item);
     return { success: true, data: item };
+  }
+
+  async deleteOtRequest(id) {
+    const useDb = await this.isDbAvailable();
+    if (useDb) {
+      try {
+        await pool.query('DELETE FROM ot_requests WHERE id = ?', [id]);
+      } catch (err) {
+        console.warn('[SHIFT-REPO] DB delete OT error:', err.message);
+      }
+    }
+    memoryOtRequests.delete(id);
+    return true;
   }
 
   // ============================================================================
