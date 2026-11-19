@@ -3030,8 +3030,15 @@ input:checked + .slider:before {
 
           <div class="figma-white-card">
             <div class="filter-pill-bar">
-              <div class="pill-dropdown-group">
-                <input type="text" id="employeeSearchInput" class="figma-pill-input" placeholder="Tìm kiếm theo mã, họ tên, email..." style="width: 320px;" oninput="handleEmployeeFilter()">
+              <div class="pill-dropdown-group" style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="employeeSearchInput" class="figma-pill-input" placeholder="Tìm kiếm theo mã, họ tên, email..." style="width: 280px;" oninput="handleEmployeeFilter()">
+                <select id="employeeFilterStatus" class="figma-filter-pill" style="height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer;" onchange="handleEmployeeFilter()">
+                  <option value="ALL" selected>Tất cả trạng thái</option>
+                  <option value="PENDING">Chờ tiếp nhận (PENDING)</option>
+                  <option value="ACTIVE">Đang làm việc (ACTIVE)</option>
+                  <option value="INACTIVE">Tạm ngưng</option>
+                  <option value="RESIGNED">Đã nghỉ việc</option>
+                </select>
               </div>
               <button class="btn-primary-blue" onclick="openAddEmployeeModal()">+ Thêm nhân viên mới</button>
             </div>

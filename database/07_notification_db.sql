@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   title VARCHAR(255) NOT NULL,
   content TEXT NOT NULL,
   reference_id VARCHAR(36) NULL COMMENT 'ID đối tượng liên quan (đơn nghỉ, phiếu lương...)',
+  metadata TEXT NULL COMMENT 'Dữ liệu điều hướng mở rộng (targetPage, targetTab, filterStatus...)',
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   read_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

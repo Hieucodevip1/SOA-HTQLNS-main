@@ -1088,6 +1088,9 @@ function applyRoleBasedUI() {
 }
 
 function navigateToView(viewName) {
+  // Chuẩn hóa alias
+  if (viewName === 'leaves') viewName = 'requests';
+
   // Kiểm tra quyền hạn truy cập theo vai trò (RBAC Route Guard)
   const role = state.user?.role || 'EMPLOYEE';
   if (role === 'EMPLOYEE' && ['rbac', 'departments', 'settings', 'soa-monitor', 'attendance-history', 'employees'].includes(viewName)) {
@@ -1231,6 +1234,8 @@ function calculateLeaveDays() {
 }
 
 function switchRequestsTab(tabName) {
+  if (tabName === 'approval') tabName = 'department';
+  if (tabName === 'my-requests') tabName = 'personal';
   state.requestsCurrentTab = tabName;
   applyRoleBasedUI();
   loadRequestsData();
@@ -2478,7 +2483,13 @@ async function loadEmployeesData() {
     });
   }
 
-  renderEmployeesTable(state.employees);
+  const curFilter = document.getElementById('employeeFilterStatus')?.value || 'ALL';
+  const curKw = document.getElementById('employeeSearchInput')?.value?.trim() || '';
+  if (curFilter !== 'ALL' || curKw) {
+    handleEmployeeFilter();
+  } else {
+    renderEmployeesTable(state.employees);
+  }
 }
 
 function renderEmployeesTable(list) {
@@ -2565,13 +2576,31 @@ function renderEmployeesTable(list) {
 }
 
 function handleEmployeeFilter() {
-  const kw = document.getElementById('employeeSearchInput')?.value.toLowerCase() || '';
-  const filtered = (state.employees || []).filter(
-    (e) =>
-      e.full_name.toLowerCase().includes(kw) ||
-      (e.code && e.code.toLowerCase().includes(kw)) ||
-      (e.email && e.email.toLowerCase().includes(kw))
-  );
+  const kw = document.getElementById('employeeSearchInput')?.value.toLowerCase().trim() || '';
+  const statusFilter = document.getElementById('employeeFilterStatus')?.value || 'ALL';
+
+  const filtered = (state.employees || []).filter((e) => {
+    const fullName = (e.full_name || e.fullName || '').toLowerCase();
+    const code = (e.code || e.employee_code || '').toLowerCase();
+    const email = (e.email || '').toLowerCase();
+
+    const matchesKw = !kw || fullName.includes(kw) || code.includes(kw) || email.includes(kw);
+    if (!matchesKw) return false;
+
+    if (statusFilter === 'ALL') return true;
+    if (statusFilter === 'PENDING') {
+      return (
+        e.status === 'PENDING_ASSIGNMENT' ||
+        e.status === 'PENDING' ||
+        e.contract_type === 'PENDING' ||
+        (e.department_name && e.department_name.includes('Chờ tiếp nhận'))
+      );
+    }
+    if (statusFilter === 'ACTIVE') {
+      return e.status === 'ACTIVE' || (!e.status && e.contract_type !== 'PENDING');
+    }
+    return e.status === statusFilter;
+  });
   renderEmployeesTable(filtered);
 }
 
@@ -4784,40 +4813,145 @@ async function handleNotificationClick(notifId) {
 
   if (!target) return;
 
+  const metadata = target.metadata || {};
+  let targetPage = target.targetPage || metadata.targetPage || '';
+  let targetTab = target.targetTab || metadata.targetTab || '';
+  let filterStatus = target.filterStatus || metadata.filterStatus || '';
+
   const type = target.type || '';
   const text = `${target.title || ''} ${target.content || ''} ${target.message || ''}`.toLowerCase();
+  const userRole = (state.user?.role || 'EMPLOYEE').toUpperCase();
 
-  // Đơn từ (Nghỉ phép, Tăng ca OT, Giải trình chấm công)
-  if (
-    ['LEAVE_STATUS', 'OT_STATUS', 'ATTENDANCE_ALERT'].includes(type) ||
-    /đơn|nghỉ phép|tăng ca|ot|giải trình/i.test(text)
-  ) {
-    navigateToView('requests');
-    if (state.user?.role === 'MANAGER') {
-      const isSubordinateRequest = /cần phê duyệt|vừa gửi đơn|chờ duyệt/i.test(text);
-      setTimeout(() => {
-        if (typeof switchRequestTab === 'function') {
-          switchRequestTab(isSubordinateRequest ? 'department' : 'personal');
-        }
-      }, 100);
+  // Tự động suy luận nếu chưa có targetPage (fallback dựa trên type / từ khóa)
+  if (!targetPage) {
+    if (
+      type === 'EMPLOYEE_NEW' ||
+      type === 'EMPLOYEE_PENDING' ||
+      /nhân viên mới.*tiếp nhận|chờ tiếp nhận và phân phòng ban/i.test(text)
+    ) {
+      targetPage = 'employees';
+      filterStatus = filterStatus || 'PENDING';
+    } else if (
+      ['OT_REQUEST_CREATED', 'OT_REQUEST_APPROVED', 'OT_REQUEST_REJECTED', 'OT_STATUS'].includes(type) ||
+      (/tăng ca|đơn đăng ký tăng ca/i.test(text) && !/nghỉ phép|giải trình/i.test(text))
+    ) {
+      targetPage = 'shifts';
+      targetTab = targetTab || 'ot-requests';
+      if (/cần phê duyệt|vừa gửi|chờ duyệt/i.test(text)) {
+        filterStatus = filterStatus || 'PENDING';
+      }
+    } else if (
+      type === 'SHIFT_ASSIGNED' ||
+      (/phân ca|ca làm việc|lịch ca|lịch phân ca/i.test(text) && !/tăng ca|ot/i.test(text))
+    ) {
+      targetPage = 'shifts';
+      targetTab = targetTab || 'schedule';
+    } else if (
+      ['LEAVE_REQUEST_CREATED', 'LEAVE_REQUEST_APPROVED', 'LEAVE_REQUEST_REJECTED', 'ADJUSTMENT_REQUEST_CREATED', 'ADJUSTMENT_REQUEST_APPROVED', 'ADJUSTMENT_REQUEST_REJECTED', 'LEAVE_STATUS', 'ATTENDANCE_ALERT'].includes(type) ||
+      /đơn|nghỉ phép|giải trình/i.test(text)
+    ) {
+      targetPage = 'requests';
+      if (/cần phê duyệt|vừa gửi|chờ duyệt/i.test(text) && ['ADMIN', 'HR', 'HR_ADMIN', 'MANAGER'].includes(userRole)) {
+        targetTab = targetTab || 'approval';
+        filterStatus = filterStatus || 'PENDING';
+      } else {
+        targetTab = targetTab || 'my-requests';
+      }
+    } else if (
+      type === 'PAYROLL' ||
+      type === 'PAYSLIP_PUBLISHED' ||
+      /lương|phiếu lương|bảng lương/i.test(text)
+    ) {
+      targetPage = 'payroll';
+    } else if (
+      type === 'ATTENDANCE_LATE' ||
+      /chấm công|điểm danh|check-in|check-out/i.test(text)
+    ) {
+      targetPage = userRole === 'EMPLOYEE' ? 'my-attendance' : 'attendance-history';
+    } else {
+      targetPage = 'dashboard';
     }
-  } else if (
-    type === 'SHIFT_ASSIGNED' ||
-    /phân ca|ca làm việc|lịch ca/i.test(text)
-  ) {
-    navigateToView('shifts');
-  } else if (
-    type === 'PAYROLL' ||
-    /lương|phiếu lương|bảng lương/i.test(text)
-  ) {
-    navigateToView('payroll');
-  } else if (
-    /chấm công|điểm danh|check-in|check-out/i.test(text)
-  ) {
-    navigateToView('attendance');
-  } else {
-    navigateToView('dashboard');
   }
+
+  // 1. Phân hệ Nhân viên: Tiếp nhận tài khoản mới
+  if (targetPage === 'employees') {
+    const filterEl = document.getElementById('employeeFilterStatus');
+    if (filterEl) {
+      filterEl.value = filterStatus || 'PENDING';
+    }
+    navigateToView('employees');
+    setTimeout(() => {
+      handleEmployeeFilter();
+    }, 120);
+    return;
+  }
+
+  // 2. Phân hệ Phân ca & Tăng ca (OT)
+  if (targetPage === 'shifts') {
+    navigateToView('shifts');
+    const tabToSwitch = (targetTab === 'ot-requests' || targetTab === 'ot') ? 'ot' : 'assignments';
+    setTimeout(() => {
+      if (typeof switchShiftTab === 'function') {
+        switchShiftTab(tabToSwitch);
+      }
+      if (tabToSwitch === 'ot' && filterStatus) {
+        const otFilterEl = document.getElementById('filterOtStatus');
+        if (otFilterEl) {
+          otFilterEl.value = filterStatus;
+          if (typeof filterOtTable === 'function') filterOtTable();
+        }
+      }
+    }, 120);
+    return;
+  }
+
+  // 3. Phân hệ Đơn từ (Nghỉ phép & Giải trình chấm công)
+  if (targetPage === 'leaves' || targetPage === 'requests') {
+    navigateToView('requests');
+    let tabToSwitch = 'department';
+    if (targetTab === 'my-requests' || targetTab === 'personal') {
+      tabToSwitch = 'personal';
+    } else if (targetTab === 'approval' || targetTab === 'department') {
+      tabToSwitch = 'department';
+    } else if (userRole === 'EMPLOYEE') {
+      tabToSwitch = 'personal';
+    }
+
+    setTimeout(() => {
+      if (typeof switchRequestsTab === 'function') {
+        switchRequestsTab(tabToSwitch);
+      } else if (typeof switchRequestTab === 'function') {
+        switchRequestTab(tabToSwitch);
+      }
+      if (filterStatus) {
+        const reqFilterEl = document.getElementById('requestsFilterStatus');
+        if (reqFilterEl) {
+          reqFilterEl.value = filterStatus;
+          if (typeof filterRequestsTable === 'function') filterRequestsTable();
+        }
+      }
+    }, 120);
+    return;
+  }
+
+  // 4. Phân hệ Tiền lương
+  if (targetPage === 'payroll') {
+    navigateToView('payroll');
+    return;
+  }
+
+  // 5. Phân hệ Chấm công
+  if (targetPage === 'my-attendance' || targetPage === 'attendance') {
+    if (userRole === 'ADMIN') {
+      navigateToView('attendance-history');
+    } else {
+      navigateToView(targetPage === 'attendance' ? 'attendance-history' : 'my-attendance');
+    }
+    return;
+  }
+
+  // Mặc định
+  navigateToView(targetPage || 'dashboard');
 }
 
 // Đánh dấu đã đọc toàn bộ thông báo
@@ -5478,6 +5612,8 @@ let cachedShiftsList = [];
 let cachedOtRequests = [];
 
 function switchShiftTab(tabName) {
+  if (tabName === 'ot-requests') tabName = 'ot';
+  if (tabName === 'schedule') tabName = 'assignments';
   currentShiftSubTab = tabName;
   const tabBtnAssignments = document.getElementById('tabBtnAssignments');
   const tabBtnOt = document.getElementById('tabBtnOt');

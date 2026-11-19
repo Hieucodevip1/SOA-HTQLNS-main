@@ -103,9 +103,31 @@ async function createNotification({
   type = 'SYSTEM',
   title,
   content,
-  referenceId = null
+  referenceId = null,
+  metadata = null
 }) {
   const notifId = id || crypto.randomUUID();
+  let metadataObj = null;
+  let metadataStr = null;
+
+  if (metadata) {
+    if (typeof metadata === 'object') {
+      metadataObj = metadata;
+      try {
+        metadataStr = JSON.stringify(metadata);
+      } catch (_) {
+        metadataStr = null;
+      }
+    } else if (typeof metadata === 'string') {
+      metadataStr = metadata;
+      try {
+        metadataObj = JSON.parse(metadata);
+      } catch (_) {
+        metadataObj = null;
+      }
+    }
+  }
+
   const record = {
     id: notifId,
     emp_id: empId || null,
@@ -114,6 +136,10 @@ async function createNotification({
     title,
     content,
     reference_id: referenceId ? String(referenceId) : null,
+    metadata: metadataObj,
+    targetPage: metadataObj?.targetPage || null,
+    targetTab: metadataObj?.targetTab || null,
+    filterStatus: metadataObj?.filterStatus || null,
     is_read: false,
     read_at: null,
     created_at: new Date().toISOString()
@@ -125,8 +151,8 @@ async function createNotification({
   // Thử lưu vào MySQL
   try {
     await pool.query(
-      `INSERT INTO notifications (id, emp_id, target_role, type, title, content, reference_id, is_read, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, NOW())`,
+      `INSERT INTO notifications (id, emp_id, target_role, type, title, content, reference_id, metadata, is_read, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, NOW())`,
       [
         record.id,
         record.emp_id,
@@ -134,11 +160,27 @@ async function createNotification({
         record.type,
         record.title,
         record.content,
-        record.reference_id
+        record.reference_id,
+        metadataStr
       ]
     );
   } catch (dbErr) {
-    // Nếu bảng chưa có type VARCHAR(50), ghi nhận cảnh báo
+    // Nếu bảng chưa có metadata column, fallback lưu không có metadata
+    try {
+      await pool.query(
+        `INSERT INTO notifications (id, emp_id, target_role, type, title, content, reference_id, is_read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, NOW())`,
+        [
+          record.id,
+          record.emp_id,
+          record.target_role,
+          record.type,
+          record.title,
+          record.content,
+          record.reference_id
+        ]
+      );
+    } catch (_) {}
   }
 
   return record;
@@ -168,10 +210,24 @@ async function getNotificationsForUser({ empId, role }) {
       [empIdStr, userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
     );
     if (rows && Array.isArray(rows)) {
-      return rows.map((r) => ({
-        ...r,
-        is_read: Boolean(r.is_read)
-      }));
+      return rows.map((r) => {
+        let meta = null;
+        if (r.metadata) {
+          try {
+            meta = typeof r.metadata === 'object' ? r.metadata : JSON.parse(r.metadata);
+          } catch (_) {
+            meta = null;
+          }
+        }
+        return {
+          ...r,
+          metadata: meta,
+          targetPage: meta?.targetPage || r.targetPage || null,
+          targetTab: meta?.targetTab || r.targetTab || null,
+          filterStatus: meta?.filterStatus || r.filterStatus || null,
+          is_read: Boolean(r.is_read)
+        };
+      });
     }
   } catch (err) {
     // Dự phòng sang in-memory
@@ -192,6 +248,9 @@ async function getNotificationsForUser({ empId, role }) {
   items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   return items.slice(0, 50).map((r) => ({
     ...r,
+    targetPage: r.targetPage || r.metadata?.targetPage || null,
+    targetTab: r.targetTab || r.metadata?.targetTab || null,
+    filterStatus: r.filterStatus || r.metadata?.filterStatus || null,
     is_read: Boolean(r.is_read)
   }));
 }
@@ -258,6 +317,43 @@ async function markAllNotificationsAsRead({ empId, role }) {
 
 // Bảng ánh xạ xử lý sự kiện Event Bus
 const eventHandlers = {
+  // 0. Nhân viên mới đăng ký tài khoản -> Báo cho HR/Admin tiếp nhận vào phòng ban
+  'user.registered': async (event) => {
+    const data = event.data || event;
+    const fullName = data.fullName || data.full_name || data.username || 'Nhân viên mới';
+    const email = data.email || '';
+    const title = 'Nhân viên mới chờ tiếp nhận';
+    const content = `Nhân viên mới ${fullName} (${email}) đang chờ tiếp nhận và phân phòng ban`;
+
+    await createNotification({
+      targetRole: 'HR_ADMIN',
+      type: 'SYSTEM',
+      title,
+      content,
+      referenceId: data.empId || data.userId || null,
+      metadata: { targetPage: 'employees', filterStatus: 'PENDING' }
+    });
+  },
+
+  'employee.created': async (event) => {
+    const data = event.data || event;
+    if (!data.departmentId && !data.department_id) {
+      const fullName = data.fullName || data.full_name || 'Nhân viên mới';
+      const email = data.email || '';
+      const title = 'Nhân viên mới chờ tiếp nhận';
+      const content = `Nhân viên mới ${fullName} (${email}) đang chờ tiếp nhận và phân phòng ban`;
+
+      await createNotification({
+        targetRole: 'HR_ADMIN',
+        type: 'SYSTEM',
+        title,
+        content,
+        referenceId: data.id || null,
+        metadata: { targetPage: 'employees', filterStatus: 'PENDING' }
+      });
+    }
+  },
+
   // 1. Nhân viên nộp đơn xin nghỉ phép -> Báo cho Quản lý & HR/Admin
   'LEAVE_REQUEST_CREATED': async (event) => {
     const data = event.data || event;
@@ -266,6 +362,7 @@ const eventHandlers = {
     const dateRange = formatDateRange(data.startDate, data.endDate);
     const title = 'Đơn xin nghỉ phép mới cần phê duyệt';
     const content = `${employeeName} vừa gửi đơn xin nghỉ phép (${dateRange}) cần phê duyệt`;
+    const metadata = { targetPage: 'leaves', targetTab: 'approval', filterStatus: 'PENDING' };
 
     if (managerId && managerId !== empId) {
       await createNotification({
@@ -273,7 +370,8 @@ const eventHandlers = {
         type: 'LEAVE_STATUS',
         title,
         content,
-        referenceId: data.requestId
+        referenceId: data.requestId,
+        metadata
       });
     }
     await createNotification({
@@ -281,7 +379,8 @@ const eventHandlers = {
       type: 'LEAVE_STATUS',
       title,
       content,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata
     });
   },
 
@@ -293,6 +392,7 @@ const eventHandlers = {
     const dateStr = formatDateDisplay(data.workDate);
     const title = 'Đơn đăng ký tăng ca (OT) mới cần phê duyệt';
     const content = `${employeeName} vừa gửi đơn đăng ký tăng ca (OT) (${dateStr}) cần phê duyệt`;
+    const metadata = { targetPage: 'shifts', targetTab: 'ot-requests', filterStatus: 'PENDING' };
 
     if (managerId && managerId !== empId) {
       await createNotification({
@@ -300,7 +400,8 @@ const eventHandlers = {
         type: 'OT_STATUS',
         title,
         content,
-        referenceId: data.requestId
+        referenceId: data.requestId,
+        metadata
       });
     }
     await createNotification({
@@ -308,7 +409,8 @@ const eventHandlers = {
       type: 'OT_STATUS',
       title,
       content,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata
     });
   },
 
@@ -320,6 +422,7 @@ const eventHandlers = {
     const dateStr = formatDateDisplay(data.workDate);
     const title = 'Đơn giải trình chấm công mới cần phê duyệt';
     const content = `${employeeName} vừa gửi đơn giải trình chấm công (${dateStr}) cần phê duyệt`;
+    const metadata = { targetPage: 'leaves', targetTab: 'approval', filterStatus: 'PENDING' };
 
     if (managerId && managerId !== empId) {
       await createNotification({
@@ -327,7 +430,8 @@ const eventHandlers = {
         type: 'ATTENDANCE_ALERT',
         title,
         content,
-        referenceId: data.adjustmentId || data.requestId
+        referenceId: data.adjustmentId || data.requestId,
+        metadata
       });
     }
     await createNotification({
@@ -335,7 +439,8 @@ const eventHandlers = {
       type: 'ATTENDANCE_ALERT',
       title,
       content,
-      referenceId: data.adjustmentId || data.requestId
+      referenceId: data.adjustmentId || data.requestId,
+      metadata
     });
   },
 
@@ -349,7 +454,8 @@ const eventHandlers = {
       type: 'LEAVE_STATUS',
       title: 'Đơn xin nghỉ phép đã được phê duyệt',
       content: `Đơn xin nghỉ phép ngày ${dateRange} của bạn đã được phê duyệt.`,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata: { targetPage: 'leaves', targetTab: 'my-requests' }
     });
   },
 
@@ -364,7 +470,8 @@ const eventHandlers = {
       type: 'LEAVE_STATUS',
       title: 'Đơn xin nghỉ phép bị từ chối',
       content: `Đơn xin nghỉ phép ngày ${dateRange} của bạn đã bị từ chối.${reason ? ` Lý do: ${reason}` : ''}`,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata: { targetPage: 'leaves', targetTab: 'my-requests' }
     });
   },
 
@@ -378,7 +485,8 @@ const eventHandlers = {
       type: 'OT_STATUS',
       title: 'Đơn đăng ký tăng ca (OT) đã được phê duyệt',
       content: `Đơn đăng ký tăng ca (OT) ngày ${dateStr} của bạn đã được phê duyệt.`,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata: { targetPage: 'shifts', targetTab: 'ot-requests' }
     });
   },
 
@@ -393,7 +501,8 @@ const eventHandlers = {
       type: 'OT_STATUS',
       title: 'Đơn đăng ký tăng ca (OT) bị từ chối',
       content: `Đơn đăng ký tăng ca (OT) ngày ${dateStr} của bạn đã bị từ chối.${reason ? ` Lý do: ${reason}` : ''}`,
-      referenceId: data.requestId
+      referenceId: data.requestId,
+      metadata: { targetPage: 'shifts', targetTab: 'ot-requests' }
     });
   },
 
@@ -407,7 +516,8 @@ const eventHandlers = {
       type: 'ATTENDANCE_ALERT',
       title: 'Đơn giải trình chấm công đã được phê duyệt',
       content: `Đơn giải trình chấm công ngày ${dateStr} của bạn đã được phê duyệt.`,
-      referenceId: data.adjustmentId || data.requestId
+      referenceId: data.adjustmentId || data.requestId,
+      metadata: { targetPage: 'leaves', targetTab: 'my-requests' }
     });
   },
 
@@ -422,7 +532,8 @@ const eventHandlers = {
       type: 'ATTENDANCE_ALERT',
       title: 'Đơn giải trình chấm công bị từ chối',
       content: `Đơn giải trình chấm công ngày ${dateStr} của bạn đã bị từ chối.${reason ? ` Lý do: ${reason}` : ''}`,
-      referenceId: data.adjustmentId || data.requestId
+      referenceId: data.adjustmentId || data.requestId,
+      metadata: { targetPage: 'leaves', targetTab: 'my-requests' }
     });
   },
 
@@ -440,7 +551,8 @@ const eventHandlers = {
         type: 'SHIFT_ASSIGNED',
         title: 'Bạn có lịch phân ca làm việc mới',
         content: `Bạn đã được xếp ca làm việc mới ${shiftName} cho ${datesSummary}.`,
-        referenceId: data.shiftId || null
+        referenceId: data.shiftId || null,
+        metadata: { targetPage: 'shifts', targetTab: 'schedule' }
       });
     }
   },
@@ -453,7 +565,8 @@ const eventHandlers = {
       type: 'ATTENDANCE_ALERT',
       title: 'Cảnh báo đi muộn',
       content: `Bạn đã check-in muộn ${data.lateMinutes} phút vào ngày ${formatDateDisplay(data.workDate)}.`,
-      referenceId: data.attendanceId
+      referenceId: data.attendanceId,
+      metadata: { targetPage: 'my-attendance' }
     });
   },
 
@@ -465,7 +578,8 @@ const eventHandlers = {
       type: 'PAYROLL',
       title: `Phiếu lương tháng ${data.month}/${data.year} đã phát hành`,
       content: `Bảng lương kỳ ${data.month}/${data.year} đã được chốt. Vui lòng kiểm tra mục Phiếu lương.`,
-      referenceId: data.periodId
+      referenceId: data.periodId,
+      metadata: { targetPage: 'payroll' }
     });
   }
 };
@@ -557,11 +671,11 @@ app.post(
   requireAuth(),
   async (req, res, next) => {
     try {
-      const { empId, targetRole, type, title, content, referenceId } = req.body || {};
+      const { empId, targetRole, type, title, content, referenceId, metadata } = req.body || {};
       if (!title || !content) {
         return res.status(400).json({ success: false, error: 'Thiếu title hoặc content' });
       }
-      const record = await createNotification({ empId, targetRole, type, title, content, referenceId });
+      const record = await createNotification({ empId, targetRole, type, title, content, referenceId, metadata });
       res.status(201).json({ success: true, data: record });
     } catch (err) {
       next(err);

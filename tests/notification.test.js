@@ -76,7 +76,7 @@ describe('Kiểm thử Phân hệ Notification Service (:3107)', () => {
     // Dọn dẹp dữ liệu kiểm thử
     try {
       await pool.query(
-        "DELETE FROM notifications WHERE emp_id LIKE 'e_%test_notif%' OR reference_id LIKE 'req_%test%'"
+        "DELETE FROM notifications WHERE emp_id LIKE 'e_%test_notif%' OR reference_id LIKE 'req_%test%' OR reference_id LIKE 'shift_%' OR title LIKE '%kiểm thử%' OR title LIKE '%chờ tiếp nhận%'"
       );
       await db.closeAllPools().catch(() => {});
     } catch (_) {}
@@ -305,6 +305,35 @@ describe('Kiểm thử Phân hệ Notification Service (:3107)', () => {
     assert.ok(shiftNotif, 'Nhân viên nhận được thông báo xếp ca mới');
     assert.ok(shiftNotif.content.includes('Ca Sáng'));
     assert.ok(shiftNotif.content.includes('20/11/2026 - 22/11/2026'));
+    assert.equal(shiftNotif.targetPage, 'shifts');
+    assert.equal(shiftNotif.targetTab, 'schedule');
+  });
+
+  test('Nhận sự kiện user.registered: Tự động tạo thông báo cho HR_ADMIN kèm metadata điều hướng tiếp nhận', async () => {
+    const regRes = await fetch(`http://localhost:${NOTIF_PORT}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'user.registered',
+        data: {
+          username: 'test_nv_moi',
+          fullName: 'Trần Văn Mới',
+          email: 'tranvanmoi@example.com',
+          role: 'EMPLOYEE'
+        }
+      })
+    });
+    assert.equal(regRes.status, 200);
+
+    const hrRes = await fetch(`http://localhost:${NOTIF_PORT}/api/v1/notifications/my`, {
+      headers: { Authorization: `Bearer ${hrAdminToken}` }
+    });
+    assert.equal(hrRes.status, 200);
+    const hrBody = await hrRes.json();
+    const newEmpNotif = hrBody.data.find(n => n.content && n.content.includes('Trần Văn Mới'));
+    assert.ok(newEmpNotif, 'HR_ADMIN phải nhận được thông báo nhân viên mới đăng ký');
+    assert.equal(newEmpNotif.targetPage, 'employees');
+    assert.equal(newEmpNotif.filterStatus, 'PENDING');
   });
 
   test('Đánh dấu đã đọc 1 thông báo PATCH /api/v1/notifications/:id/read', async () => {
