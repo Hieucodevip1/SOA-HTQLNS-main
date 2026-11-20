@@ -5,16 +5,25 @@
 
 const env = require('./env');
 
-function success(res, data = null, statusCode = 200, message = 'Thành công') {
-  return res.status(statusCode).json({
+function success(res, data = null, statusCode = 200, message = 'Thành công', meta = null) {
+  if (typeof statusCode === 'string') {
+    meta = message !== 'Thành công' ? message : meta;
+    message = statusCode;
+    statusCode = 200;
+  }
+  const payload = {
     success: true,
     message,
     data
-  });
+  };
+  if (meta !== null && meta !== undefined) {
+    payload.meta = meta;
+  }
+  return res.status(statusCode).json(payload);
 }
 
-function created(res, data = null, message = 'Tạo mới thành công') {
-  return success(res, data, 201, message);
+function created(res, data = null, message = 'Tạo mới thành công', meta = null) {
+  return success(res, data, 201, message, meta);
 }
 
 function error(res, message = 'Lỗi máy chủ', statusCode = 500, details = null) {

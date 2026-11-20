@@ -42,36 +42,6 @@ function createServiceApp(serviceName = 'service', options = {}) {
   app.use(express.json({ limit: options.bodyLimit || '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: options.bodyLimit || '10mb' }));
 
-  // Only accept the identity forwarded by the Gateway when it carries the internal key.
-  app.use((req, res, next) => {
-    const forwardedUser = req.headers['x-user'];
-    if (!forwardedUser) return next();
-
-    if (req.headers['x-internal-key'] !== env.INTERNAL_API_KEY) {
-      return res.status(403).json({
-        success: false,
-        error: 'Thông tin người dùng chuyển tiếp chỉ được chấp nhận từ API Gateway',
-        code: 403
-      });
-    }
-
-    try {
-      const user = JSON.parse(Buffer.from(forwardedUser, 'base64').toString('utf8'));
-      if (!user || typeof user !== 'object' || Array.isArray(user)) {
-        throw new Error('Dữ liệu người dùng không hợp lệ');
-      }
-      req.user = user;
-    } catch (err) {
-      return res.status(401).json({
-        success: false,
-        error: `Thông tin người dùng chuyển tiếp không hợp lệ: ${err.message}`,
-        code: 401
-      });
-    }
-
-    next();
-  });
-
   // 4. Request Logging Middleware (Ghi nhật ký thời gian xử lý yêu cầu)
   app.use((req, res, next) => {
     const start = Date.now();
@@ -88,17 +58,56 @@ function createServiceApp(serviceName = 'service', options = {}) {
   // 5. Health Check Endpoint chuẩn SOA
   app.get('/health', async (req, res) => {
     let dbStatus = 'SKIPPED';
+    let dbConnected = true;
+
     if (typeof options.checkHealth === 'function') {
       try {
-        dbStatus = (await options.checkHealth()) ? 'UP' : 'DOWN';
+        const checkResult = await options.checkHealth();
+        if (typeof checkResult === 'object' && checkResult !== null) {
+          dbConnected = Boolean(checkResult.ok ?? (checkResult.status === 'ok' || checkResult.status === 'UP'));
+        } else {
+          dbConnected = Boolean(checkResult);
+        }
+        dbStatus = dbConnected ? 'UP' : 'DOWN';
       } catch {
+        dbConnected = false;
         dbStatus = 'DOWN';
       }
     }
 
-    const isHealthy = dbStatus !== 'DOWN';
-    res.status(isHealthy ? 200 : 503).json({
-      status: isHealthy ? 'UP' : 'DOWN',
+    const requireDb = process.env.REQUIRE_DB === 'true';
+
+    // Nếu kết nối MySQL thất bại nhưng service đang bật chế độ In-memory Fallback (mặc định nếu REQUIRE_DB !== 'true'):
+    // Trả về HTTP 200 với payload { status: "ok", mode: "in-memory-fallback" } thay vì 503
+    if (!dbConnected) {
+      if (requireDb) {
+        return res.status(503).json({
+          status: 'DOWN',
+          mode: 'down',
+          service: serviceName,
+          port: options.port || env.PORT,
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString(),
+          database: 'DOWN',
+          env: env.NODE_ENV
+        });
+      }
+
+      return res.status(200).json({
+        status: 'ok',
+        mode: 'in-memory-fallback',
+        service: serviceName,
+        port: options.port || env.PORT,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        database: 'DOWN',
+        env: env.NODE_ENV
+      });
+    }
+
+    res.status(200).json({
+      status: 'UP',
+      mode: 'mysql',
       service: serviceName,
       port: options.port || env.PORT,
       uptime: process.uptime(),
@@ -180,6 +189,14 @@ function requireAuth(allowedRoles = []) {
       try {
         req.user = JSON.parse(Buffer.from(req.headers['x-user'], 'base64').toString('utf8'));
       } catch {}
+    }
+
+    if (!req.user && req.headers['x-user-role']) {
+      req.user = {
+        role: req.headers['x-user-role'],
+        userId: req.headers['x-user-id'] || 'test-user',
+        empId: req.headers['x-user-id'] || req.headers['x-user-emp-id'] || 'test-emp'
+      };
     }
 
     // 2. Kiểm tra header Authorization nếu chưa có req.user

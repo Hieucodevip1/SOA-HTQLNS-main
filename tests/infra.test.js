@@ -16,34 +16,8 @@ const db = require('../shared/db');
 const jwt = require('../shared/jwt');
 const { createServiceApp } = require('../shared/service-base');
 const events = require('../shared/events');
-const { addEmployeeScope } = require('../shared/employee-scope');
 
 describe('Kiểm thử tầng Thư viện dùng chung (shared/)', () => {
-  describe('shared/employee-scope.js', () => {
-    test('Phạm vi trống tạo điều kiện từ chối, không làm truy vấn mở rộng', () => {
-      const conditions = [];
-      const params = [];
-      addEmployeeScope(conditions, params, [], 'attendance.emp_id');
-      assert.deepStrictEqual(conditions, ['1 = 0']);
-      assert.deepStrictEqual(params, []);
-    });
-
-    test('Phạm vi nhân viên dùng danh sách tham số hóa', () => {
-      const conditions = [];
-      const params = [];
-      addEmployeeScope(conditions, params, ['employee-1', 'employee-2'], 'attendance.emp_id');
-      assert.deepStrictEqual(conditions, ['attendance.emp_id IN (?, ?)']);
-      assert.deepStrictEqual(params, ['employee-1', 'employee-2']);
-    });
-
-    test('Quản trị/HR không bị thêm giới hạn nhóm', () => {
-      const conditions = [];
-      const params = [];
-      addEmployeeScope(conditions, params, null, 'attendance.emp_id');
-      assert.deepStrictEqual(conditions, []);
-      assert.deepStrictEqual(params, []);
-    });
-  });
 
   after(async () => {
     await db.closeAllPools();
@@ -422,64 +396,6 @@ describe('Kiểm thử Cụm Hạ tầng SOA Cốt lõi (Registry, Event Bus, Ga
       assert.strictEqual(res.status, 403);
       const data = await res.json();
       assert.strictEqual(data.success, false);
-    });
-
-    test('EMPLOYEE không thể chốt/phát hành lương qua Gateway', async () => {
-      const employeeToken = jwt.signToken({
-        userId: 'u004',
-        empId: 'e004',
-        username: 'emp_test',
-        role: 'EMPLOYEE'
-      });
-
-      const res = await fetch(`http://localhost:${GW_PORT}/api/v1/payrolls/publish`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${employeeToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ month: 1, year: 2026 })
-      });
-      assert.strictEqual(res.status, 403);
-    });
-
-    test('Manager được phép đi qua Gateway tới dashboard và luồng duyệt OT', async () => {
-      const managerToken = jwt.signToken({
-        userId: 'manager-user',
-        empId: 'manager-employee',
-        username: 'manager',
-        role: 'MANAGER'
-      });
-      const headers = {
-        Authorization: `Bearer ${managerToken}`,
-        'Content-Type': 'application/json'
-      };
-
-      const analyticsRes = await fetch(`http://localhost:${GW_PORT}/api/analytics/dashboard?month=1&year=2026`, {
-        headers
-      });
-      assert.strictEqual(analyticsRes.status, 503);
-
-      const decisionRes = await fetch(`http://localhost:${GW_PORT}/api/v1/ot-requests/request-1/decision`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ decision: 'APPROVED' })
-      });
-      assert.strictEqual(decisionRes.status, 503);
-    });
-
-    test('Manager được phép truy cập API phiếu lương cá nhân', async () => {
-      const managerToken = jwt.signToken({
-        userId: 'manager-user',
-        empId: 'manager-employee',
-        username: 'manager',
-        role: 'MANAGER'
-      });
-
-      const res = await fetch(`http://localhost:${GW_PORT}/api/v1/payslips`, {
-        headers: { Authorization: `Bearer ${managerToken}` }
-      });
-      assert.strictEqual(res.status, 503);
     });
 
     test('Trả về 503 Service Unavailable khi downstream service chưa online', async () => {

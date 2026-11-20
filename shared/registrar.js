@@ -21,6 +21,9 @@ class ServiceRegistrar {
   }
 
   async register() {
+    if (process.env.NODE_ENV === 'test' || process.env.DISABLE_REGISTRY === 'true') {
+      return false;
+    }
     try {
       const response = await fetch(`${this.registryUrl}/register`, {
         method: 'POST',
@@ -61,7 +64,7 @@ class ServiceRegistrar {
     if (this.timer) clearInterval(this.timer);
     this.timer = setInterval(async () => {
       try {
-        await fetch(`${this.registryUrl}/heartbeat`, {
+        const response = await fetch(`${this.registryUrl}/heartbeat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -74,6 +77,9 @@ class ServiceRegistrar {
           }),
           signal: AbortSignal.timeout(3000)
         });
+        if (response.status === 404) {
+          await this.register();
+        }
       } catch {
         // Heartbeat failure logged at debug level
       }

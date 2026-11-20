@@ -77,14 +77,14 @@ if (!html.includes('id="demoScreenBar"')) {
        THANH ĐIỀU HƯỚNG DEMO WIREFRAME FIGMA (1-CLICK XEM TẤT CẢ MÀN HÌNH MẪU)
        ========================================================================== -->
   <div id="demoScreenBar" class="demo-screen-bar">
-    <span class="demo-screen-label">Màn hình mẫu</span>
-    <button type="button" class="btn-demo-view" id="btn-demo-login" onclick="showScreenView('login')">Đăng nhập</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-register" onclick="showScreenView('register')">Đăng ký</button>
-    <button type="button" class="btn-demo-view active-demo" id="btn-demo-dashboard" onclick="showScreenView('dashboard')">Tổng quan</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">Đơn từ</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">Thiết lập</button>
-    <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">Nhân viên</button>
-    <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">Ẩn</button>
+    <span class="demo-screen-label">🎯 Xem nhanh giao diện:</span>
+    <button type="button" class="btn-demo-view" id="btn-demo-login" onclick="showScreenView('login')">🔐 1. Đăng nhập (Login)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-register" onclick="showScreenView('register')">📝 2. Đăng ký (Register)</button>
+    <button type="button" class="btn-demo-view active-demo" id="btn-demo-dashboard" onclick="showScreenView('dashboard')">📊 3. Dashboard (Thầy Lâm)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-requests" onclick="showScreenView('requests')">📄 4. Chi tiết đơn từ (Hiếu)</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-settings" onclick="showScreenView('settings')">⚙️ 5. Thiết lập Wi-Fi / GPS</button>
+    <button type="button" class="btn-demo-view" id="btn-demo-employees" onclick="showScreenView('employees')">👥 6. Danh sách Nhân viên</button>
+    <button type="button" class="btn-demo-close" onclick="document.getElementById('demoScreenBar').style.display='none'" title="Ẩn thanh xem nhanh">✕</button>
   </div>
 `;
   html = html.replace('</body>', demoBarHtml + '\n</body>');

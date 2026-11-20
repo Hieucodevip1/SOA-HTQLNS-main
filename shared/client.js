@@ -154,6 +154,7 @@ class ServiceClient {
       };
     } catch (err) {
       clearTimeout(timer);
+      this.cache.delete(serviceName);
       const e = new Error(`Lỗi forward tới ${serviceName}: ${err.message}`);
       e.status = 503;
       e.service = serviceName;

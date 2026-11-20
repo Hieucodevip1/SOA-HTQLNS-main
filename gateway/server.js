@@ -446,6 +446,9 @@ const server = http.createServer(async (req, res) => {
 
     if (authenticatedUser) {
       forwardHeaders['x-user'] = Buffer.from(JSON.stringify(authenticatedUser)).toString('base64');
+      const userId = authenticatedUser.empId || authenticatedUser.userId || authenticatedUser.id || authenticatedUser.sub || '';
+      forwardHeaders['x-user-id'] = String(userId);
+      forwardHeaders['x-user-role'] = String(authenticatedUser.role || '');
     }
 
     // L. Chuyển tiếp yêu cầu (Proxy Forward)

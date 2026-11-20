@@ -28,7 +28,6 @@ const { createOpenApiSpec } = require('../../shared/openapi');
 
 const PORT = Number(process.env.AUTH_PORT || 3001);
 const DB_NAME = 'htqlns_auth';
-const ORGANIZATION_DB_NAME = process.env.ORGANIZATION_DB_NAME || 'htqlns_organization';
 
 // Bộ nhớ đệm dự phòng (In-memory fallback) cho trường hợp MySQL chưa sẵn sàng
 const memoryUsers = new Map([
@@ -116,6 +115,93 @@ async function findUserByLogin(login) {
   return null;
 }
 
+// Helper bổ sung thông tin hồ sơ nhân sự cho user
+async function enrichUserProfile(user, useDb) {
+  let fullName = user.full_name || user.fullName || user.username;
+  let empCode = null;
+  let deptName = null;
+  let departmentId = null;
+  let managerId = null;
+  let position = user.position || null;
+
+  if (useDb) {
+    try {
+      const empRows = await db.query(
+        `SELECT e.id, e.code, e.full_name, e.department_id, e.manager_id, e.position_id, e.status, d.name AS dept_name, p.title AS position_title 
+         FROM htqlns_organization.employees e 
+         LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id 
+         LEFT JOIN htqlns_organization.positions p ON e.position_id = p.id
+         WHERE (e.id = ? AND ? IS NOT NULL) OR (e.email = ? AND ? IS NOT NULL) OR (e.code = ? AND ? IS NOT NULL) LIMIT 1`,
+        [user.emp_id, user.emp_id, user.email, user.email, user.username, user.username]
+      );
+      if (empRows.length > 0) {
+        fullName = empRows[0].full_name || fullName;
+        empCode = empRows[0].code;
+        deptName = empRows[0].dept_name;
+        departmentId = empRows[0].department_id || null;
+        managerId = empRows[0].manager_id || null;
+        position = empRows[0].position_title || position;
+        if (!user.emp_id) {
+          user.emp_id = empRows[0].id;
+          try {
+            await db.query('UPDATE users SET emp_id = ? WHERE id = ?', [empRows[0].id, user.id], DB_NAME);
+          } catch {}
+        }
+      }
+    } catch (e) {}
+  } else {
+    if (user.departmentId || user.departmentName || user.department_id || user.deptName) {
+      departmentId = user.departmentId || user.department_id;
+      deptName = user.departmentName || user.deptName;
+      managerId = user.managerId || user.manager_id;
+      position = user.position || user.positionTitle;
+    }
+  }
+
+  if (deptName === 'Phòng Nhân sự' || (deptName && deptName.includes('Nhân sự') && !deptName.includes('Hành chính'))) {
+    deptName = 'Phòng Hành chính Nhân sự';
+  }
+
+  if (!deptName && !departmentId) {
+    if (user.username === 'admin') { fullName = 'Nguyễn Quản Trị (Admin)'; empCode = 'EMP001'; deptName = 'Ban Giám Đốc'; departmentId = 'd0000001-0000-0000-0000-000000000001'; position = 'Tổng Giám Đốc Điều Hành'; }
+    else if (user.username === 'manager') { fullName = 'Nguyễn Thanh Lâm'; empCode = 'NV-QL01'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; position = 'Trưởng Nhóm Kỹ Thuật (Tech Lead)'; }
+    else if (user.username === 'employee') { fullName = 'Vũ Đức Hiếu'; empCode = 'NV-001'; deptName = 'Phòng Kỹ Thuật'; departmentId = 'd0000001-0000-0000-0000-000000000003'; managerId = 'e0000001-0000-0000-0000-000000000003'; position = 'Kỹ Sư Phần Mềm'; }
+    else if (user.username === 'hr_admin') { fullName = 'Trần Thị Thu Hà (HR)'; empCode = 'EMP002'; deptName = 'Phòng Hành chính Nhân sự'; departmentId = 'd0000001-0000-0000-0000-000000000002'; position = 'Trưởng Phòng Nhân Sự'; }
+  }
+
+  const isAssigned = Boolean(departmentId || managerId);
+
+  return {
+    id: user.id,
+    empId: user.emp_id || user.id,
+    emp_id: user.emp_id || user.id,
+    empCode,
+    employeeCode: empCode,
+    username: user.username,
+    fullName,
+    full_name: fullName,
+    deptName: deptName || null,
+    departmentName: deptName || null,
+    department_name: deptName || null,
+    department: deptName || null,
+    departmentId: departmentId || null,
+    department_id: departmentId || null,
+    position: position || null,
+    positionTitle: position || null,
+    position_title: position || null,
+    managerId: managerId || null,
+    manager_id: managerId || null,
+    officeId: null,
+    shiftId: null,
+    isAssigned,
+    email: user.email,
+    role: user.role,
+    biometricEnabled: Boolean(user.biometric_enabled),
+    status: user.status,
+    lastLoginAt: user.last_login_at
+  };
+}
+
 // Khởi tạo Express Service App
 const app = createServiceApp('auth-service', {
   port: PORT,
@@ -141,11 +227,11 @@ app.use((req, res, next) => {
 });
 
 // ==============================================================================
-// 1. ENDPOINT: Đăng ký tài khoản (POST /api/auth/register)
+// 1. ENDPOINT: Đăng ký tài khoản (POST /api/auth/register & /api/v1/auth/register)
 // ==============================================================================
-app.post('/api/auth/register', async (req, res) => {
+app.post(['/api/auth/register', '/api/v1/auth/register'], async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, role, emp_id, biometric_enabled, first_name, last_name, phone } = req.body;
 
     if (!username || !email || !password) {
       return badRequest(res, 'Vui lòng cung cấp đầy đủ: username, email và password');
@@ -159,7 +245,13 @@ app.post('/api/auth/register', async (req, res) => {
       return badRequest(res, 'Mật khẩu phải có độ dài tối thiểu 6 ký tự');
     }
 
-    const assignedRole = 'EMPLOYEE';
+    // Bảo mật: Đăng ký công khai không thể tự cấp quyền ADMIN
+    let assignedRole = 'EMPLOYEE';
+    if (req.user && ['ADMIN', 'HR'].includes(req.user.role)) {
+      assignedRole = role || 'EMPLOYEE';
+    } else if (role && role !== 'ADMIN') {
+      assignedRole = role;
+    }
 
     const existingUser = await findUserByLogin(username);
     if (existingUser) {
@@ -173,46 +265,90 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = crypto.randomUUID();
-    const empId = null;
-    const isBiometric = false;
+    let finalEmpId = emp_id || null;
+    let finalFullName = `${first_name || ''} ${last_name || ''}`.trim() || username;
+    const isBiometric = Boolean(biometric_enabled);
 
     const useDb = await isDbAvailable();
     if (useDb) {
+      if (!finalEmpId) {
+        try {
+          const empRows = await db.query('SELECT id, full_name FROM htqlns_organization.employees WHERE email = ? LIMIT 1', [email]);
+          if (empRows.length > 0) {
+            finalEmpId = empRows[0].id;
+            finalFullName = empRows[0].full_name;
+          } else {
+            finalEmpId = crypto.randomUUID();
+            const fName = first_name || username;
+            const lName = last_name || (assignedRole === 'MANAGER' ? '(Quản lý)' : '(Nhân viên)');
+            finalFullName = `${fName} ${lName}`.trim();
+            const empCode = 'EMP_' + Math.floor(10000 + Math.random() * 90000);
+
+            // Mặc định ban đầu khi đăng ký: KHÔNG thuộc phòng ban/quản lý nào (department_id = NULL, manager_id = NULL)
+            await db.query(
+              `INSERT INTO htqlns_organization.employees 
+               (id, code, full_name, email, phone, department_id, manager_id, join_date, contract_type, status)
+               VALUES (?, ?, ?, ?, ?, NULL, NULL, CURDATE(), 'PROBATION', 'PENDING_ASSIGNMENT')`,
+              [finalEmpId, empCode, finalFullName, email, phone || '0911223344']
+            );
+          }
+        } catch (e) {
+          console.warn('[AUTH] Tự động tạo hồ sơ nhân sự organization:', e.message);
+        }
+      }
+
       await db.query(
         `INSERT INTO users (id, emp_id, username, email, password_hash, role, biometric_enabled, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [userId, empId, username, email, passwordHash, assignedRole, isBiometric],
+        [userId, finalEmpId, username, email, passwordHash, assignedRole, isBiometric],
         DB_NAME
       );
     } else {
+      finalEmpId = finalEmpId || crypto.randomUUID();
       memoryUsers.set(userId, {
         id: userId,
-        emp_id: empId,
+        emp_id: finalEmpId,
         username,
         email,
+        full_name: finalFullName,
         password_hash: passwordHash,
         role: assignedRole,
         biometric_enabled: isBiometric,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        departmentId: null,
+        departmentName: null,
+        managerId: null,
+        officeId: null,
+        shiftId: null,
+        isAssigned: false
       });
     }
 
     // Bắn sự kiện user.registered lên Event Bus
     events.publish('user.registered', {
       userId,
-      empId,
+      empId: finalEmpId,
       username,
       email,
-      role: assignedRole
+      role: assignedRole,
+      fullName: finalFullName
     }, { source: 'auth-service' });
 
     return created(res, {
       id: userId,
-      emp_id: empId,
+      emp_id: finalEmpId,
+      empId: finalEmpId,
       username,
+      fullName: finalFullName,
       email,
-      role: assignedRole
-    }, 'Đăng ký thành công. Tài khoản cần được ADMIN liên kết với hồ sơ nhân sự để dùng các chức năng cá nhân.');
+      role: assignedRole,
+      departmentId: null,
+      departmentName: null,
+      managerId: null,
+      officeId: null,
+      shiftId: null,
+      isAssigned: false
+    }, 'Đăng ký tài khoản thành công');
   } catch (err) {
     return error(res, 'Lỗi đăng ký tài khoản: ' + err.message);
   }
@@ -291,17 +427,12 @@ app.post('/api/auth/login', async (req, res) => {
       loginAt: new Date().toISOString()
     }, { source: 'auth-service' });
 
+    const userProfile = await enrichUserProfile(user, useDb);
+
     return success(res, {
       token,
       refreshToken,
-      user: {
-        id: user.id,
-        empId: user.emp_id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        biometricEnabled: Boolean(user.biometric_enabled)
-      }
+      user: userProfile
     }, 200, 'Đăng nhập thành công');
   } catch (err) {
     return error(res, 'Lỗi đăng nhập: ' + err.message);
@@ -373,7 +504,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 // ==============================================================================
 // 4. ENDPOINT: Lấy thông tin tài khoản hiện tại (GET /api/auth/me)
 // ==============================================================================
-app.get('/api/auth/me', async (req, res) => {
+const getMeHandler = async (req, res) => {
   try {
     const currentUser = req.user;
     if (!currentUser) {
@@ -385,16 +516,48 @@ app.get('/api/auth/me', async (req, res) => {
       return notFound(res, 'Không tìm thấy thông tin tài khoản');
     }
 
-    return success(res, {
-      id: user.id,
-      empId: user.emp_id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      biometricEnabled: Boolean(user.biometric_enabled),
-      status: user.status,
-      lastLoginAt: user.last_login_at
-    });
+    const useDb = await isDbAvailable();
+    const userProfile = await enrichUserProfile(user, useDb);
+
+    return success(res, userProfile);
+  } catch (err) {
+    return error(res, err.message);
+  }
+};
+
+app.get('/api/auth/me', getMeHandler);
+app.get('/api/v1/auth/me', getMeHandler);
+
+// Endpoint nội bộ đồng bộ dữ liệu nhân viên từ organization-service
+app.post('/internal/auth/sync-employee', async (req, res) => {
+  try {
+    const { id, empId, code, email, fullName, departmentId, departmentName, position, status } = req.body || {};
+    const useDb = await isDbAvailable();
+    if (useDb) {
+      try {
+        if (id && (email || code)) {
+          await db.query(
+            'UPDATE users SET emp_id = ? WHERE (email = ? OR username = ?) AND (emp_id IS NULL OR emp_id = "")',
+            [id, email || '', code || ''],
+            DB_NAME
+          );
+        }
+      } catch (err) {
+        console.warn('[AUTH-SYNC] Lỗi cập nhật DB:', err.message);
+      }
+    }
+    for (const [uid, u] of memoryUsers.entries()) {
+      if ((id && (u.emp_id === id || u.id === id)) || (email && u.email === email) || (code && (u.username === code || u.code === code))) {
+        if (id) u.emp_id = id;
+        if (fullName) u.full_name = fullName;
+        if (departmentId) u.departmentId = departmentId;
+        if (departmentName) u.departmentName = departmentName;
+        if (position) u.position = position;
+        if (status) u.status = status;
+        u.isAssigned = Boolean(u.departmentId || departmentId);
+      }
+    }
+    return success(res, { synced: true }, 200, 'Đồng bộ thông tin nhân sự thành công');
   } catch (err) {
     return error(res, err.message);
   }
@@ -473,9 +636,6 @@ app.post('/api/auth/change-password', async (req, res) => {
       await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [userId], DB_NAME);
     } else {
       user.password_hash = newHash;
-      for (const token of memoryRefreshTokens.values()) {
-        if (token.user_id === userId) token.revoked_at = new Date();
-      }
     }
 
     return success(res, null, 200, 'Đổi mật khẩu thành công');
@@ -553,14 +713,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
         [newHash, user.id],
         DB_NAME
       );
-      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [user.id], DB_NAME);
     } else {
       user.password_hash = newHash;
       user.otp_code = null;
       user.otp_expires_at = null;
-      for (const token of memoryRefreshTokens.values()) {
-        if (token.user_id === user.id) token.revoked_at = new Date();
-      }
     }
 
     return success(res, null, 200, 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.');
@@ -578,40 +734,11 @@ app.post('/api/auth/logout', async (req, res) => {
     const currentUser = req.user;
 
     const useDb = await isDbAvailable();
-    if (refreshToken) {
-      let decoded;
-      try {
-        decoded = jwt.verifyToken(refreshToken);
-      } catch {
-        return unauthorized(res, 'Refresh token không hợp lệ hoặc đã hết hạn');
-      }
-
-      const currentUserId = currentUser && (currentUser.userId || currentUser.id);
-      if (currentUserId && currentUserId !== decoded.userId) {
-        return forbidden(res, 'Refresh token không thuộc phiên đăng nhập hiện tại');
-      }
-
-      if (useDb) {
-        await db.query(
-          'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = ? AND user_id = ? AND revoked_at IS NULL',
-          [refreshToken, decoded.userId],
-          DB_NAME
-        );
-      } else {
-        const entry = memoryRefreshTokens.get(refreshToken);
-        if (entry && entry.user_id === decoded.userId) entry.revoked_at = new Date();
-      }
-    } else if (currentUser) {
+    if (refreshToken && useDb) {
+      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = ?', [refreshToken], DB_NAME);
+    } else if (currentUser && useDb) {
       const uid = currentUser.userId || currentUser.id;
-      if (useDb) {
-        await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [uid], DB_NAME);
-      } else {
-        for (const token of memoryRefreshTokens.values()) {
-          if (token.user_id === uid) token.revoked_at = new Date();
-        }
-      }
-    } else {
-      return unauthorized(res, 'Yêu cầu đăng nhập để đăng xuất');
+      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ?', [uid], DB_NAME);
     }
 
     return success(res, null, 200, 'Đăng xuất thành công');
@@ -625,7 +752,13 @@ app.post('/api/auth/logout', async (req, res) => {
 // ==============================================================================
 app.get('/api/auth/users', async (req, res) => {
   try {
-    const currentUser = req.user;
+    let currentUser = req.user;
+    if (!currentUser && req.headers['authorization']?.startsWith('Bearer ')) {
+      try {
+        currentUser = jwt.verifyToken(req.headers['authorization'].slice(7).trim(), env.JWT_SECRET);
+      } catch {}
+    }
+
     if (!currentUser || !['ADMIN', 'HR'].includes(currentUser.role)) {
       return forbidden(res, 'Chỉ ADMIN hoặc HR mới có quyền xem danh sách người dùng');
     }
@@ -645,6 +778,7 @@ app.get('/api/auth/users', async (req, res) => {
         emp_id: u.emp_id,
         username: u.username,
         email: u.email,
+        fullName: u.full_name || u.fullName || u.username,
         role: u.role,
         biometric_enabled: u.biometric_enabled,
         status: u.status
@@ -652,72 +786,6 @@ app.get('/api/auth/users', async (req, res) => {
     }
 
     return success(res, usersList);
-  } catch (err) {
-    return error(res, err.message);
-  }
-});
-
-app.put('/api/auth/users/:id/employee', async (req, res) => {
-  try {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== 'ADMIN') {
-      return forbidden(res, 'Chỉ ADMIN mới có quyền liên kết hồ sơ nhân sự');
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(req.body, 'empId')) {
-      return badRequest(res, 'Cần cung cấp empId (hoặc null để hủy liên kết)');
-    }
-
-    const empId = req.body.empId;
-    if (empId !== null && (typeof empId !== 'string' || !empId.trim())) {
-      return badRequest(res, 'empId phải là mã hồ sơ nhân sự hợp lệ hoặc null');
-    }
-
-    const targetId = req.params.id;
-    const useDb = await isDbAvailable();
-
-    if (useDb) {
-      const users = await db.query('SELECT id FROM users WHERE id = ? LIMIT 1', [targetId], DB_NAME);
-      if (!users.length) return notFound(res, 'Không tìm thấy tài khoản');
-
-      if (empId !== null) {
-        try {
-          await db.query('SELECT 1', [], ORGANIZATION_DB_NAME);
-        } catch {
-          return res.status(503).json({ success: false, error: 'Organization DB hiện chưa sẵn sàng' });
-        }
-
-        const employees = await db.query(
-          'SELECT id FROM employees WHERE id = ? LIMIT 1',
-          [empId.trim()],
-          ORGANIZATION_DB_NAME
-        );
-        if (!employees.length) return notFound(res, 'Không tìm thấy hồ sơ nhân sự');
-
-        const linkedUsers = await db.query(
-          'SELECT id FROM users WHERE emp_id = ? AND id <> ? LIMIT 1',
-          [empId.trim(), targetId],
-          DB_NAME
-        );
-        if (linkedUsers.length) return conflict(res, 'Hồ sơ nhân sự đã được liên kết với tài khoản khác');
-      }
-
-      await db.query('UPDATE users SET emp_id = ? WHERE id = ?', [empId === null ? null : empId.trim(), targetId], DB_NAME);
-    } else {
-      const target = memoryUsers.get(targetId);
-      if (!target) return notFound(res, 'Không tìm thấy tài khoản');
-      if (empId !== null) {
-        return res.status(503).json({ success: false, error: 'Liên kết hồ sơ cần cơ sở dữ liệu Organization hoạt động' });
-      }
-      target.emp_id = null;
-    }
-
-    return success(
-      res,
-      { id: targetId, emp_id: empId === null ? null : empId.trim() },
-      200,
-      'Đã cập nhật liên kết hồ sơ. Tài khoản cần đăng nhập lại để nhận quyền mới.'
-    );
   } catch (err) {
     return error(res, err.message);
   }
@@ -823,14 +891,77 @@ app.get('/api-docs.json', (req, res) => {
       },
       '/api/auth/me': {
         get: { summary: 'Xem thông tin hồ sơ tài khoản hiện tại' }
-      },
-      '/api/auth/users/{id}/employee': {
-        put: { summary: 'ADMIN liên kết hoặc hủy liên kết hồ sơ nhân sự với tài khoản' }
       }
     }
   });
   res.json(spec);
 });
+
+// Webhook lắng nghe sự kiện từ Event Bus
+app.use(
+  '/events',
+  events.createWebhookRouter({
+    'employee.deleted': async (event) => {
+      const { id, email } = event.data || {};
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          if (id || email) {
+            await db.query('DELETE FROM users WHERE emp_id = ? OR email = ?', [id || null, email || null], DB_NAME);
+          }
+        } catch (err) {
+          console.warn('[AUTH-SERVICE] Lỗi xóa user khi nhận event employee.deleted:', err.message);
+        }
+      }
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((id && u.emp_id === id) || (email && u.email === email)) {
+          memoryUsers.delete(uid);
+        }
+      }
+    },
+    'employee.updated': async (event) => {
+      const { id, empId, code, email, fullName, departmentId, departmentName, position, status } = event.data || {};
+      const actualId = id || empId;
+      const useDb = await isDbAvailable();
+      if (useDb) {
+        try {
+          if (actualId && (email || code)) {
+            await db.query(
+              'UPDATE users SET emp_id = ? WHERE (email = ? OR username = ?) AND (emp_id IS NULL OR emp_id = "")',
+              [actualId, email || '', code || ''],
+              DB_NAME
+            );
+          }
+        } catch (err) {
+          console.warn('[AUTH-SERVICE] Lỗi cập nhật user khi nhận event employee.updated:', err.message);
+        }
+      }
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((actualId && (u.emp_id === actualId || u.id === actualId)) || (email && u.email === email) || (code && (u.username === code || u.code === code))) {
+          if (actualId) u.emp_id = actualId;
+          if (fullName) u.full_name = fullName;
+          if (departmentId) u.departmentId = departmentId;
+          if (departmentName) u.departmentName = departmentName;
+          if (position) u.position = position;
+          if (status) u.status = status;
+          u.isAssigned = Boolean(u.departmentId || departmentId);
+        }
+      }
+    },
+    'employee.onboarded': async (event) => {
+      const { id, code, departmentId, departmentName, status } = event.data || {};
+      for (const [uid, u] of memoryUsers.entries()) {
+        if ((id && (u.emp_id === id || u.id === id)) || (code && (u.username === code || u.code === code))) {
+          if (id) u.emp_id = id;
+          if (departmentId) u.departmentId = departmentId;
+          if (departmentName) u.departmentName = departmentName;
+          if (status) u.status = status;
+          u.isAssigned = Boolean(u.departmentId || departmentId);
+        }
+      }
+    }
+  })
+);
 
 // Gắn bộ xử lý lỗi tiêu chuẩn
 app.useErrorHandler();
@@ -846,6 +977,15 @@ const server = app.start(PORT, () => {
   } catch (err) {
     console.warn('[AUTH-SERVICE] Không thể đăng ký với Registry:', err.message);
   }
+
+  // Đăng ký nhận sự kiện từ Event Bus
+  setTimeout(async () => {
+    try {
+      await events.subscribe(['employee.deleted', 'employee.updated', 'employee.onboarded'], `http://localhost:${PORT}/events`, {
+        serviceName: 'auth-service'
+      });
+    } catch {}
+  }, 2000);
 });
 
 module.exports = { app, server };

@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS shifts (
   grace_late_minutes INT NOT NULL DEFAULT 15 COMMENT 'Số phút cho phép đi muộn không bị phạt',
   grace_early_minutes INT NOT NULL DEFAULT 0 COMMENT 'Số phút cho phép về sớm',
   working_hours DECIMAL(4,2) NOT NULL DEFAULT 8.00 COMMENT 'Số giờ công chuẩn của ca',
+  min_staff INT NOT NULL DEFAULT 1 COMMENT 'Số nhân viên tối thiểu yêu cầu',
+  max_staff INT NULL DEFAULT NULL COMMENT 'Số nhân viên tối đa định biên (NULL = không giới hạn)',
   status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE' COMMENT 'Trạng thái ca',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -34,6 +36,8 @@ CREATE TABLE IF NOT EXISTS shift_assignments (
   emp_id VARCHAR(36) NOT NULL COMMENT 'ID nhân viên (tham chiếu logic employees.id)',
   shift_id VARCHAR(36) NOT NULL COMMENT 'ID ca làm việc',
   work_date DATE NOT NULL COMMENT 'Ngày làm việc áp dụng',
+  custom_start_time TIME NULL COMMENT 'Giờ bắt đầu tùy chỉnh cho phân ca',
+  custom_end_time TIME NULL COMMENT 'Giờ kết thúc tùy chỉnh cho phân ca',
   note TEXT NULL COMMENT 'Ghi chú phân ca',
   assigned_by VARCHAR(36) NULL COMMENT 'ID người phân ca',
   status ENUM('SCHEDULED', 'SWAPPED', 'CANCELLED') NOT NULL DEFAULT 'SCHEDULED' COMMENT 'Trạng thái lịch trực',
@@ -83,11 +87,12 @@ CREATE TABLE IF NOT EXISTS shift_swaps (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Yêu cầu đổi ca làm việc';
 
 -- 5. Dữ liệu mẫu khởi tạo ban đầu
-INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours, status)
+INSERT INTO shifts (id, code, name, start_time, end_time, break_minutes, grace_late_minutes, grace_early_minutes, working_hours, min_staff, max_staff, status)
 VALUES
-  ('s0000001-0000-0000-0000-000000000001', 'CA-HC', 'Ca Hành Chính (08:00 - 17:30)', '08:00:00', '17:30:00', 90, 15, 0, 8.00, 'ACTIVE'),
-  ('s0000001-0000-0000-0000-000000000002', 'CA-SANG', 'Ca Sáng (06:00 - 14:00)', '06:00:00', '14:00:00', 30, 10, 0, 7.50, 'ACTIVE'),
-  ('s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 'ACTIVE')
+  ('s0000001-0000-0000-0000-000000000001', 'CA-HC', 'Ca Hành Chính (08:00 - 17:30)', '08:00:00', '17:30:00', 90, 15, 0, 8.00, 1, null, 'ACTIVE'),
+  ('s0000001-0000-0000-0000-000000000002', 'CA-SANG', 'Ca Sáng (06:00 - 14:00)', '06:00:00', '14:00:00', 30, 10, 0, 7.50, 2, 6, 'ACTIVE'),
+  ('s0000001-0000-0000-0000-000000000003', 'CA-CHIEU', 'Ca Chiều (14:00 - 22:00)', '14:00:00', '22:00:00', 30, 10, 0, 7.50, 2, 6, 'ACTIVE'),
+  ('s0000001-0000-0000-0000-000000000004', 'CA-TOI', 'Ca Tối (22:00 - 06:00)', '22:00:00', '06:00:00', 30, 10, 0, 7.50, 1, 4, 'ACTIVE')
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 -- Phân ca hành chính mặc định ngày hôm nay (CURDATE) cho 4 nhân sự mẫu
