@@ -268,67 +268,6 @@ body {
   background: #2d2d2d;
 }
 
-.auth-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: #64748b;
-  font-size: 13px;
-  margin: 18px 0;
-}
-
-.auth-divider::before,
-.auth-divider::after {
-  content: "";
-  flex: 1;
-  border-bottom: 1px solid #cbd5e1;
-}
-
-.auth-divider span {
-  padding: 0 10px;
-  font-weight: 600;
-}
-
-.social-btn-group {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.btn-social-fb {
-  flex: 1;
-  background: #5ea9ec;
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 10px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.btn-social-gg {
-  flex: 1;
-  background: #63b8f6;
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 10px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-
-
 .auth-switch-link {
   text-align: center;
   font-size: 13px;
@@ -1418,19 +1357,6 @@ input:checked + .slider:before {
 
             <button type="submit" class="btn-figma-dark" id="btnLoginAction">Login</button>
 
-            <div class="auth-divider">
-              <span>Or</span>
-            </div>
-
-            <div class="social-btn-group">
-              <button type="button" class="btn-social-fb" onclick="showToast('Chức năng SSO Facebook đang được tích hợp', 'warning')">
-                <span>f</span> Continue with facebook
-              </button>
-              <button type="button" class="btn-social-gg" onclick="showToast('Chức năng Google Workspace đang được tích hợp', 'warning')">
-                <span>G</span> Continue with google
-              </button>
-            </div>
-
             <div class="auth-switch-link">
               Don't have an account? <a onclick="toggleAuthMode('register')" style="color: #d84349; font-weight: 600; text-decoration: none; cursor: pointer;">Signup</a>
             </div>
@@ -1473,19 +1399,6 @@ input:checked + .slider:before {
             </div>
 
             <button type="submit" class="btn-figma-dark" id="btnRegisterAction">Register</button>
-
-            <div class="auth-divider">
-              <span>Or</span>
-            </div>
-
-            <div class="social-btn-group">
-              <button type="button" class="btn-social-fb" onclick="showToast('Chức năng SSO Facebook đang được tích hợp', 'warning')">
-                <span>f</span> Continue with facebook
-              </button>
-              <button type="button" class="btn-social-gg" onclick="showToast('Chức năng Google Workspace đang được tích hợp', 'warning')">
-                <span>G</span> Continue with google
-              </button>
-            </div>
 
             <div class="auth-switch-link">
               Already have an account? <a onclick="toggleAuthMode('login')" style="color: #d84349; font-weight: 600; text-decoration: none; cursor: pointer;">Login</a>
