@@ -1032,6 +1032,33 @@
       ]
     },
     {
+      "prefix": "/api/v1/leaves",
+      "service": "leave-service",
+      "rules": [
+        {
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        },
+        {
+          "methods": [
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "auth": true,
+          "roles": [
+            "*"
+          ]
+        }
+      ]
+    },
+    {
       "prefix": "/api/v1/shifts",
       "service": "shift-service",
       "rules": [

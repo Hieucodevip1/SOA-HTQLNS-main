@@ -427,4 +427,94 @@ describe('Kiểm thử Phân hệ Leave Service (:3104)', () => {
     const delData = await delRes.json();
     assert.strictEqual(delData.success, true);
   });
+
+  // ============================================================================
+  // BUG-21: CHUẨN HÓA ĐƯỜNG DẪN & TRA CỨU ID / REQUEST_CODE (POST /api/v1/leaves/:id/decision)
+  // ============================================================================
+  test('[BUG-21] Quản lý duyệt đơn nghỉ phép qua chuẩn POST /api/v1/leaves/:id/decision bằng UUID (HTTP 200)', async () => {
+    // 1. Tạo mới đơn nghỉ phép để nhận UUID
+    const createRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${employeeToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        leaveTypeId: 'lt000001-0000-0000-0000-000000000001',
+        startDate: '2026-12-18',
+        endDate: '2026-12-18',
+        totalDays: 1.0,
+        reason: 'Nghỉ phép test BUG-21 chuẩn hóa POST endpoint'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    const leaveUuid = createData.data?.id;
+    assert.ok(leaveUuid);
+
+    // 2. Tra cứu chi tiết đơn qua GET /api/v1/leaves/:id
+    const getRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves/${leaveUuid}`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(getRes.status, 200);
+    const getData = await getRes.json();
+    assert.strictEqual(getData.data.id, leaveUuid);
+
+    // 3. Quản lý gọi POST /api/v1/leaves/:id/decision truyền UUID -> HTTP 200
+    const decisionRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves/${leaveUuid}/decision`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVE',
+        comment: 'Đã phê duyệt đơn xin nghỉ phép qua hệ thống'
+      })
+    });
+    assert.strictEqual(decisionRes.status, 200);
+    const decisionData = await decisionRes.json();
+    assert.strictEqual(decisionData.success, true);
+    assert.strictEqual(decisionData.data.status, 'APPROVED');
+
+    // Dọn dẹp
+    await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves/${leaveUuid}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+  });
+
+  test('[BUG-21] Backend hỗ trợ tra cứu và phê duyệt theo cả mã hiển thị request_code (NP-2026-024) (HTTP 200)', async () => {
+    // Đảm bảo đơn NP-2026-024 ở trạng thái PENDING
+    const pool = db.getPool(process.env.LEAVE_DB_NAME || 'htqlns_leave');
+    await pool.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024' OR request_code = 'NP-2026-024'");
+
+    // 1. Tra cứu theo mã hiển thị request_code qua GET /api/v1/leaves/NP-2026-024
+    const getRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves/NP-2026-024`, {
+      headers: { Authorization: `Bearer ${managerToken}` }
+    });
+    assert.strictEqual(getRes.status, 200);
+    const getData = await getRes.json();
+    assert.ok(getData.data);
+
+    // 2. Quản lý duyệt đơn bằng POST /api/v1/leaves/NP-2026-024/decision
+    const decisionRes = await fetch(`http://localhost:${LEAVE_PORT}/api/v1/leaves/NP-2026-024/decision`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        decision: 'APPROVED',
+        comment: 'Quản lý duyệt đơn theo mã hiển thị'
+      })
+    });
+    assert.strictEqual(decisionRes.status, 200);
+    const decisionData = await decisionRes.json();
+    assert.strictEqual(decisionData.success, true);
+    assert.strictEqual(decisionData.data.status, 'APPROVED');
+
+    // Reset lại status để không ảnh hưởng test khác
+    await pool.query("UPDATE leave_requests SET status = 'PENDING' WHERE id = 'NP-2026-024' OR request_code = 'NP-2026-024'");
+  });
 });

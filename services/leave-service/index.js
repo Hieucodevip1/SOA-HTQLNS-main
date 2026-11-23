@@ -27,6 +27,16 @@ const app = createServiceApp(SERVICE_NAME, {
   }
 });
 
+// Đảm bảo schema có cột request_code phục vụ tra cứu linh hoạt theo cả UUID lẫn mã hiển thị (BUG-21)
+(async () => {
+  try {
+    await pool.query('ALTER TABLE leave_requests ADD COLUMN request_code VARCHAR(50) NULL UNIQUE AFTER id');
+  } catch {}
+  try {
+    await pool.query('UPDATE leave_requests SET request_code = id WHERE request_code IS NULL AND id LIKE "NP-%"');
+  } catch {}
+})();
+
 function getEmpIdFromUser(user) {
   if (!user) return null;
   return user.empId || user.emp_id || user.userId || user.id || user.sub || user.username || null;
@@ -126,7 +136,7 @@ app.get(['/api/v1/leave-balances', '/api/leaves/balances', '/api/leave/balances'
 });
 
 // 3. Danh sách đơn xin nghỉ phép (SCR_LEAVE_02, SCR_REQ_01)
-app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
+app.get(['/api/v1/leaves', '/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
     const { status, empId, scope } = req.query;
     const callerRole = (req.headers['x-user-role'] || req.user?.role || '').toUpperCase();
@@ -206,7 +216,7 @@ app.get(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), 
 });
 
 // 3B. Chi tiết đơn xin nghỉ phép (SCR_REQ_02 - Image upload)
-app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], requireAuth(), async (req, res, next) => {
+app.get(['/api/v1/leaves/:id', '/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], requireAuth(), async (req, res, next) => {
   try {
     const [rows] = await pool.query(
       `SELECT lr.*, lt.code AS leave_code, lt.name AS leave_name, lt.is_paid,
@@ -219,8 +229,8 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
        LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
        LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
        LEFT JOIN htqlns_organization.employees m ON lr.approver_id = m.id
-       WHERE lr.id = ?`,
-      [req.params.id]
+       WHERE lr.id = ? OR lr.request_code = ?`,
+      [req.params.id, req.params.id]
     );
     if (!rows.length) {
       return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
@@ -232,7 +242,7 @@ app.get(['/api/v1/leave-requests/:id', '/api/leaves/:id', '/api/leave/:id'], req
 });
 
 // 4. Tạo đơn xin nghỉ phép (SCR_LEAVE_01)
-app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
+app.post(['/api/v1/leaves', '/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(), async (req, res, next) => {
   try {
     const empId = getEmpIdFromUser(req.user);
     const leaveTypeId = req.body.leaveTypeId || req.body.leave_type_id;
@@ -266,10 +276,16 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
     }
 
     const id = crypto.randomUUID();
+    let requestCode = req.body.requestCode || req.body.request_code || null;
+    if (!requestCode) {
+      const randSuffix = String(Date.now()).slice(-4) + Math.floor(10 + Math.random() * 90);
+      requestCode = `NP-${year}-${randSuffix}`;
+    }
+
     await pool.query(
-      `INSERT INTO leave_requests (id, emp_id, leave_type_id, start_date, end_date, total_days, session, reason, attachment_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-      [id, empId, leaveTypeId, startDate, endDate, totalDays, session, reason.trim(), attachmentUrl]
+      `INSERT INTO leave_requests (id, request_code, emp_id, leave_type_id, start_date, end_date, total_days, session, reason, attachment_url, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+      [id, requestCode, empId, leaveTypeId, startDate, endDate, totalDays, session, reason.trim(), attachmentUrl]
     );
 
     const [created] = await pool.query(
@@ -288,6 +304,7 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
     );
     events.publish('LEAVE_REQUEST_CREATED', {
       requestId: id,
+      requestCode,
       empId,
       employeeName: created[0]?.emp_name || 'Nhân viên',
       departmentId: created[0]?.department_id,
@@ -306,6 +323,7 @@ app.post(['/api/v1/leave-requests', '/api/leaves', '/api/leave'], requireAuth(),
 
 // 4B. Hủy / Xóa đơn xin nghỉ phép (SCR_REQ_03)
 const deleteLeavePaths = [
+  '/api/v1/leaves/:id',
   '/api/v1/leave-requests/:id',
   '/api/leaves/:id',
   '/api/leave/:id'
@@ -316,7 +334,7 @@ app.delete(deleteLeavePaths, requireAuth(), async (req, res, next) => {
     const currentEmpId = getEmpIdFromUser(req.user);
     const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(callerRole);
 
-    const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [req.params.id]);
+    const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ? OR request_code = ?', [req.params.id, req.params.id]);
     if (!rows.length) {
       return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
     }
@@ -341,10 +359,10 @@ app.delete(deleteLeavePaths, requireAuth(), async (req, res, next) => {
       ).catch(() => {});
     }
 
-    await pool.query('DELETE FROM leave_requests WHERE id = ?', [req.params.id]);
-    events.publish('LEAVE_REQUEST_DELETED', { requestId: req.params.id, empId: leave.emp_id }).catch(() => {});
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [leave.id]);
+    events.publish('LEAVE_REQUEST_DELETED', { requestId: leave.id, requestCode: leave.request_code, empId: leave.emp_id }).catch(() => {});
 
-    res.json({ success: true, message: 'Đã hủy đơn xin nghỉ phép thành công', data: { id: req.params.id } });
+    res.json({ success: true, message: 'Đã hủy đơn xin nghỉ phép thành công', data: { id: leave.id } });
   } catch (err) {
     next(err);
   }
@@ -353,7 +371,12 @@ app.delete(deleteLeavePaths, requireAuth(), async (req, res, next) => {
 // 5. Duyệt / Từ chối đơn xin nghỉ phép (SCR_REQ_01)
 const handleLeaveDecision = async (req, res, next) => {
   try {
-    const { decision, rejectReason = null } = req.body;
+    let { decision, status, comment, rejectReason = null, reject_reason = null } = req.body;
+    decision = (decision || status || '').toUpperCase();
+    if (decision === 'APPROVE') decision = 'APPROVED';
+    if (decision === 'REJECT') decision = 'REJECTED';
+    const finalRejectReason = rejectReason || reject_reason || comment || null;
+
     if (!['APPROVED', 'REJECTED'].includes(decision)) {
       return res.status(400).json({ success: false, error: 'decision phải là APPROVED hoặc REJECTED' });
     }
@@ -365,8 +388,8 @@ const handleLeaveDecision = async (req, res, next) => {
        JOIN leave_types lt ON lr.leave_type_id = lt.id
        LEFT JOIN htqlns_organization.employees e ON lr.emp_id = e.id
        LEFT JOIN htqlns_organization.departments d ON e.department_id = d.id
-       WHERE lr.id = ?`,
-      [req.params.id]
+       WHERE lr.id = ? OR lr.request_code = ?`,
+      [req.params.id, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn nghỉ phép' });
     const leave = rows[0];
@@ -409,7 +432,7 @@ const handleLeaveDecision = async (req, res, next) => {
     // 3. ADMIN và HR_ADMIN có quyền duyệt thay (Override) bất kỳ đơn nào đang ở trạng thái PENDING
     await pool.query(
       `UPDATE leave_requests SET status = ?, approver_id = ?, approved_at = NOW(), reject_reason = ? WHERE id = ?`,
-      [decision, approverId, decision === 'REJECTED' ? rejectReason : null, leave.id]
+      [decision, approverId, decision === 'REJECTED' ? finalRejectReason : null, leave.id]
     );
 
     // Cập nhật quỹ phép năm
@@ -432,6 +455,7 @@ const handleLeaveDecision = async (req, res, next) => {
 
     events.publish(`LEAVE_REQUEST_${decision}`, {
       requestId: leave.id,
+      requestCode: leave.request_code || leave.id,
       empId: leave.emp_id,
       employeeName: leave.emp_name || 'Nhân viên',
       startDate: leave.start_date,
@@ -442,7 +466,7 @@ const handleLeaveDecision = async (req, res, next) => {
       approverId,
       approverRole: callerRole,
       isOverride: isAdminOrHr,
-      rejectReason: req.body?.rejectReason || req.body?.reject_reason || null
+      rejectReason: finalRejectReason
     }).catch(() => {});
 
     const [updated] = await pool.query(
@@ -468,10 +492,12 @@ const handleLeaveDecision = async (req, res, next) => {
 };
 
 const decisionPaths = [
+  '/api/v1/leaves/:id/decision',
   '/api/v1/leave-requests/:id/decision',
   '/api/leaves/:id/decision',
   '/api/leave/:id/decision'
 ];
+app.post(decisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleLeaveDecision);
 app.patch(decisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleLeaveDecision);
 app.put(decisionPaths, requireAuth(['ADMIN', 'HR', 'MANAGER']), handleLeaveDecision);
 

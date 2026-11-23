@@ -1301,8 +1301,11 @@ async function loadRequestsData() {
     let unified = [];
 
     leaves.forEach(l => {
+      const displayCode = l.request_code || l.id;
       unified.push({
         id: l.id,
+        requestCode: displayCode,
+        displayCode: displayCode,
         type: 'LEAVE',
         typeName: l.leave_name || 'Nghỉ phép',
         typeBadge: `<span class="badge-status" style="background: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #bfdbfe;">Nghỉ phép</span>`,
@@ -1504,7 +1507,7 @@ function renderRequestsTable(items) {
 
     return `
       <tr id="req-row-${r.id}">
-        <td><span style="font-weight: 700; color: #1e293b; font-family: monospace;">${r.id}</span></td>
+        <td><span style="font-weight: 700; color: #1e293b; font-family: monospace;">${r.requestCode || r.id}</span></td>
         <td>
           <div style="font-weight: 600; color: #1e293b;">${r.emp_name}</div>
           <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''}</div>
@@ -1626,15 +1629,17 @@ async function handleCreateLeaveSubmit() {
 
 async function handleDirectApprove(id, type) {
   if (!type) {
-    const item = state.unifiedRequests?.find(r => r.id === id);
+    const item = state.unifiedRequests?.find(r => r.id === id || r.requestCode === id);
     type = item?.type || (id.startsWith('NP-') ? 'LEAVE' : (id.startsWith('ADJ-') ? 'ADJUSTMENT' : (id.startsWith('OT-') ? 'OT' : 'LEAVE')));
   }
 
   try {
     let res;
     if (type === 'LEAVE') {
-      res = await apiCall(`/api/leave/${id}/decision`, 'POST', {
-        decision: 'APPROVE',
+      const item = state.unifiedRequests?.find(r => r.id === id || r.requestCode === id || r.raw?.id === id || r.raw?.request_code === id);
+      const targetId = item?.id || id;
+      res = await apiCall(`/api/v1/leaves/${targetId}/decision`, 'POST', {
+        decision: 'APPROVED',
         comment: 'Đã phê duyệt đơn xin nghỉ phép qua hệ thống'
       });
     } else if (type === 'ADJUSTMENT') {
@@ -1668,15 +1673,17 @@ async function handleDirectApprove(id, type) {
 
 async function handleDirectReject(id, type) {
   if (!type) {
-    const item = state.unifiedRequests?.find(r => r.id === id);
+    const item = state.unifiedRequests?.find(r => r.id === id || r.requestCode === id);
     type = item?.type || (id.startsWith('NP-') ? 'LEAVE' : (id.startsWith('ADJ-') ? 'ADJUSTMENT' : (id.startsWith('OT-') ? 'OT' : 'LEAVE')));
   }
 
   try {
     let res;
     if (type === 'LEAVE') {
-      res = await apiCall(`/api/leave/${id}/decision`, 'POST', {
-        decision: 'REJECT',
+      const item = state.unifiedRequests?.find(r => r.id === id || r.requestCode === id || r.raw?.id === id || r.raw?.request_code === id);
+      const targetId = item?.id || id;
+      res = await apiCall(`/api/v1/leaves/${targetId}/decision`, 'POST', {
+        decision: 'REJECTED',
         reject_reason: 'Không phù hợp kế hoạch công việc dự án'
       });
     } else if (type === 'ADJUSTMENT') {
@@ -1730,12 +1737,12 @@ async function openRequestDetail(requestId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   // Lấy dữ liệu đơn
-  let req = state.unifiedRequests?.find(r => r.id === requestId);
+  let req = state.unifiedRequests?.find(r => r.id === requestId || r.requestCode === requestId);
   let raw = req?.raw;
 
   if (!raw) {
     try {
-      const res = await apiCall(`/api/v1/leave-requests/${requestId}`);
+      const res = await apiCall(`/api/v1/leaves/${requestId}`).catch(() => apiCall(`/api/v1/leave-requests/${requestId}`));
       if (res?.data) raw = res.data;
     } catch {}
   }
@@ -1743,6 +1750,7 @@ async function openRequestDetail(requestId) {
   if (!raw && (!req || !req.id)) {
     raw = {
       id: requestId || 'NP-2026-024',
+      request_code: requestId || 'NP-2026-024',
       leave_name: 'Nghỉ phép năm',
       is_paid: 1,
       emp_name: 'Vũ Đức Hiếu',
@@ -1761,6 +1769,7 @@ async function openRequestDetail(requestId) {
 
   const finalReq = {
     id: raw?.id || req?.id || requestId,
+    requestCode: raw?.request_code || req?.requestCode || raw?.id || requestId,
     type: req?.type || (requestId.startsWith('NP-') ? 'LEAVE' : (requestId.startsWith('ADJ-') ? 'ADJUSTMENT' : (requestId.startsWith('OT-') ? 'OT' : 'LEAVE'))),
     leave_name: raw?.leave_name || req?.typeName || 'Đơn yêu cầu',
     is_paid: raw?.is_paid ?? 1,
@@ -1802,9 +1811,9 @@ async function openRequestDetail(requestId) {
   const step2Badge = document.getElementById('reqDetailStep2Badge');
   const step2Desc = document.getElementById('reqDetailStep2Desc');
 
-  if (headerCode) headerCode.innerText = `Mã đơn: ${finalReq.id}`;
+  if (headerCode) headerCode.innerText = `Mã đơn: ${finalReq.requestCode || finalReq.id}`;
   if (title) title.innerText = finalReq.leave_name;
-  if (meta) meta.innerText = `${finalReq.id} • Gửi ngày ${formatLeaveDateTime(finalReq.created_at)}`;
+  if (meta) meta.innerText = `${finalReq.requestCode || finalReq.id} • Gửi ngày ${formatLeaveDateTime(finalReq.created_at)}`;
   if (empName) empName.innerText = `${finalReq.emp_name} • ${finalReq.emp_code || ''}`;
   if (approverName) approverName.innerText = finalReq.approver_name || 'Quản lý';
   if (dept) dept.innerText = finalReq.department_name;
@@ -2003,8 +2012,11 @@ async function loadDashboardPendingRequests() {
     const unified = [];
 
     leaves.forEach(l => {
+      const displayCode = l.request_code || l.id;
       unified.push({
         id: l.id,
+        requestCode: displayCode,
+        displayCode: displayCode,
         type: 'LEAVE',
         typeName: l.leave_name || 'Nghỉ phép',
         emp_id: l.emp_id,
@@ -2083,7 +2095,7 @@ async function loadDashboardPendingRequests() {
 
           return `
             <tr>
-              <td><span style="font-weight: 700; color: #1e293b;">${r.id}</span></td>
+              <td><span style="font-weight: 700; color: #1e293b;">${r.requestCode || r.id}</span></td>
               <td>${r.typeName}</td>
               <td>${r.timeRange}</td>
               <td>${r.total_days} ${r.type === 'OT' ? 'h' : 'ngày'}</td>
@@ -2134,7 +2146,7 @@ async function loadDashboardPendingRequests() {
             <tr id="req-row-${r.id}">
               <td>
                 <div style="font-weight: 700; color: #1e293b;">${r.emp_name}</div>
-                <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''} • Mã: ${r.id}</div>
+                <div style="font-size: 11px; color: #94a3b8;">${r.emp_code || ''} • Mã: ${r.requestCode || r.id}</div>
               </td>
               <td>${r.department_name || '-'}</td>
               <td>${r.typeName}</td>
