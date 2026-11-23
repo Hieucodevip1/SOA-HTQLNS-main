@@ -15,6 +15,8 @@
 
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
 const jwt = require('../shared/jwt');
 const db = require('../shared/db');
 
@@ -26,15 +28,40 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
   let adminToken = '';
   let employeeToken = '';
   let employeeId = 'e0000001-0000-0000-0000-000000000004';
+  let runAllProcess = null;
 
   before(async () => {
-    // Đảm bảo Gateway đã sẵn sàng
-    for (let i = 0; i < 15; i++) {
+    // Đảm bảo Gateway đã sẵn sàng, nếu chưa chạy thì tự động khởi động cụm SOA qua run-all.js
+    let isGatewayUp = false;
+    for (let i = 0; i < 5; i++) {
       try {
         const res = await fetch(`${GATEWAY_URL}/health`);
-        if (res.ok) break;
+        if (res.ok) {
+          isGatewayUp = true;
+          break;
+        }
       } catch {
         await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    if (!isGatewayUp) {
+      runAllProcess = spawn(process.execPath, [path.resolve(__dirname, '..', 'scripts', 'run-all.js')], {
+        cwd: path.resolve(__dirname, '..'),
+        stdio: 'pipe'
+      });
+
+      for (let i = 0; i < 40; i++) {
+        try {
+          const res = await fetch(`${GATEWAY_URL}/health`);
+          if (res.ok) {
+            isGatewayUp = true;
+            // Đợi thêm 1.5s để tất cả 8 microservices hoàn tất đăng ký vào Registry
+            await new Promise((r) => setTimeout(r, 1500));
+            break;
+          }
+        } catch {}
+        await new Promise((r) => setTimeout(r, 500));
       }
     }
 
@@ -88,6 +115,32 @@ describe('Kiểm thử E2E Toàn bộ 8 Microservices qua API Gateway (:3000)', 
       await shiftPool.query("DELETE FROM shifts WHERE code LIKE 'CA_TEST_%' OR name LIKE 'Ca Kiểm Thử%'").catch(() => {});
       await db.closeAllPools();
     } catch {}
+
+    if (runAllProcess) {
+      if (process.platform === 'win32' && runAllProcess.pid) {
+        try {
+          execSync(`taskkill /pid ${runAllProcess.pid} /T /F`, { stdio: 'ignore' });
+        } catch {}
+      } else {
+        runAllProcess.kill();
+      }
+      try {
+        const ports = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3500, 3600];
+        const netstat = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+        for (const line of netstat.split(/\r?\n/)) {
+          if (!line.includes('LISTENING')) continue;
+          for (const port of ports) {
+            if (line.includes(`:${port} `)) {
+              const parts = line.trim().split(/\s+/);
+              const pid = parseInt(parts[parts.length - 1], 10);
+              if (pid && pid !== process.pid) {
+                try { execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' }); } catch {}
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   });
 
   // ============================================================================
