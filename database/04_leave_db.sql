@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS leave_balances (
 -- 3. Đơn xin nghỉ phép (SCR_LEAVE_01, SCR_LEAVE_02, SCR_REQ_01)
 CREATE TABLE IF NOT EXISTS leave_requests (
   id VARCHAR(36) NOT NULL PRIMARY KEY,
+  request_code VARCHAR(50) NULL UNIQUE COMMENT 'Mã hiển thị đơn nghỉ phép (VD: NP-2026-024)',
   emp_id VARCHAR(36) NOT NULL,
   leave_type_id VARCHAR(36) NOT NULL,
   start_date DATE NOT NULL,
