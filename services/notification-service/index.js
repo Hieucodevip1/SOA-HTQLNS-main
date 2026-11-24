@@ -189,26 +189,64 @@ async function createNotification({
 /**
  * Lấy danh sách thông báo theo quyền hạn của người dùng
  */
-async function getNotificationsForUser({ empId, role }) {
-  const empIdStr = String(empId || '');
+async function getNotificationsForUser({ empId, userId = null, role }) {
+  const idCandidates = new Set();
+  if (empId) idCandidates.add(String(empId));
+  if (userId) idCandidates.add(String(userId));
+
   const userRole = String(role || '').toUpperCase();
   const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(userRole);
   const isManager = userRole === 'MANAGER';
 
   try {
-    const [rows] = await pool.query(
-      `SELECT * FROM notifications
-       WHERE emp_id = ?
-          OR (emp_id IS NULL AND (
-               target_role = ?
-               OR target_role = 'ALL'
-               OR (target_role = 'HR_ADMIN' AND ? = TRUE)
-               OR (target_role = 'ADMIN' AND ? = TRUE)
-               OR (target_role = 'MANAGER' AND ? = TRUE)
-             ))
-       ORDER BY created_at DESC LIMIT 50`,
-      [empIdStr, userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
-    );
+    // Nếu có DB, tra cứu chéo giữa users.id và users.emp_id để gom đủ các định danh
+    if (idCandidates.size > 0) {
+      try {
+        const idList = Array.from(idCandidates);
+        const [uRows] = await pool.query(
+          'SELECT id, emp_id FROM htqlns_auth.users WHERE id IN (?) OR emp_id IN (?)',
+          [idList, idList]
+        );
+        if (uRows && uRows.length > 0) {
+          for (const u of uRows) {
+            if (u.id) idCandidates.add(String(u.id));
+            if (u.emp_id) idCandidates.add(String(u.emp_id));
+          }
+        }
+      } catch (_) {}
+    }
+
+    const targetIds = Array.from(idCandidates);
+    let rows;
+    if (targetIds.length > 0) {
+      [rows] = await pool.query(
+        `SELECT * FROM notifications
+         WHERE emp_id IN (?)
+            OR (emp_id IS NULL AND (
+                 target_role = ?
+                 OR target_role = 'ALL'
+                 OR (target_role = 'HR_ADMIN' AND ? = TRUE)
+                 OR (target_role = 'ADMIN' AND ? = TRUE)
+                 OR (target_role = 'MANAGER' AND ? = TRUE)
+               ))
+         ORDER BY created_at DESC LIMIT 50`,
+        [targetIds, userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
+      );
+    } else {
+      [rows] = await pool.query(
+        `SELECT * FROM notifications
+         WHERE emp_id IS NULL AND (
+                 target_role = ?
+                 OR target_role = 'ALL'
+                 OR (target_role = 'HR_ADMIN' AND ? = TRUE)
+                 OR (target_role = 'ADMIN' AND ? = TRUE)
+                 OR (target_role = 'MANAGER' AND ? = TRUE)
+               )
+         ORDER BY created_at DESC LIMIT 50`,
+        [userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
+      );
+    }
+
     if (rows && Array.isArray(rows)) {
       return rows.map((r) => {
         let meta = null;
@@ -234,7 +272,7 @@ async function getNotificationsForUser({ empId, role }) {
   }
 
   const items = Array.from(memoryNotifications.values()).filter((n) => {
-    if (empIdStr && String(n.emp_id) === empIdStr) return true;
+    if (n.emp_id && idCandidates.has(String(n.emp_id))) return true;
     if (!n.emp_id) {
       if (userRole && n.target_role === userRole) return true;
       if (n.target_role === 'ALL') return true;
@@ -273,15 +311,18 @@ async function markNotificationAsRead(id) {
 /**
  * Đánh dấu đã đọc toàn bộ thông báo của người dùng
  */
-async function markAllNotificationsAsRead({ empId, role }) {
-  const empIdStr = String(empId || '');
+async function markAllNotificationsAsRead({ empId, userId = null, role }) {
+  const idCandidates = new Set();
+  if (empId) idCandidates.add(String(empId));
+  if (userId) idCandidates.add(String(userId));
+
   const userRole = String(role || '').toUpperCase();
   const isAdminOrHr = ['ADMIN', 'HR', 'HR_ADMIN', 'SYSTEM_ADMIN'].includes(userRole);
   const isManager = userRole === 'MANAGER';
 
   for (const n of memoryNotifications.values()) {
     const isTarget =
-      (empIdStr && String(n.emp_id) === empIdStr) ||
+      (n.emp_id && idCandidates.has(String(n.emp_id))) ||
       (!n.emp_id && (
         (userRole && n.target_role === userRole) ||
         n.target_role === 'ALL' ||
@@ -296,22 +337,39 @@ async function markAllNotificationsAsRead({ empId, role }) {
   }
 
   try {
-    await pool.query(
-      `UPDATE notifications
-       SET is_read = TRUE, read_at = NOW()
-       WHERE is_read = FALSE
-         AND (
-           emp_id = ?
-           OR (emp_id IS NULL AND (
-                target_role = ?
-                OR target_role = 'ALL'
-                OR (target_role = 'HR_ADMIN' AND ? = TRUE)
-                OR (target_role = 'ADMIN' AND ? = TRUE)
-                OR (target_role = 'MANAGER' AND ? = TRUE)
-              ))
-         )`,
-      [empIdStr, userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
-    );
+    const targetIds = Array.from(idCandidates);
+    if (targetIds.length > 0) {
+      await pool.query(
+        `UPDATE notifications
+         SET is_read = TRUE, read_at = NOW()
+         WHERE is_read = FALSE
+           AND (
+             emp_id IN (?)
+             OR (emp_id IS NULL AND (
+                  target_role = ?
+                  OR target_role = 'ALL'
+                  OR (target_role = 'HR_ADMIN' AND ? = TRUE)
+                  OR (target_role = 'ADMIN' AND ? = TRUE)
+                  OR (target_role = 'MANAGER' AND ? = TRUE)
+                ))
+           )`,
+        [targetIds, userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
+      );
+    } else {
+      await pool.query(
+        `UPDATE notifications
+         SET is_read = TRUE, read_at = NOW()
+         WHERE is_read = FALSE
+           AND emp_id IS NULL AND (
+                  target_role = ?
+                  OR target_role = 'ALL'
+                  OR (target_role = 'HR_ADMIN' AND ? = TRUE)
+                  OR (target_role = 'ADMIN' AND ? = TRUE)
+                  OR (target_role = 'MANAGER' AND ? = TRUE)
+                )`,
+        [userRole, isAdminOrHr, ['ADMIN', 'SYSTEM_ADMIN'].includes(userRole), isManager]
+      );
+    }
   } catch (err) {}
 }
 
@@ -599,7 +657,36 @@ const eventHandlers = {
       referenceId: data.periodId,
       metadata: { targetPage: 'payroll' }
     });
-  }
+  },
+
+  // 13. Phê duyệt tiếp nhận / phân bổ phòng ban cho nhân sự
+  'EMPLOYEE_DEPARTMENT_ASSIGNED': async (event) => {
+    const data = event.data || event;
+    const empId = data.empId || data.emp_id || data.id || data.userId || null;
+    const deptName = data.departmentName || data.department || data.deptName || 'phòng ban mới';
+    const title = data.title || 'Tiếp nhận vào phòng ban thành công';
+    const content = data.content || data.message || `Bạn đã được tiếp nhận và phân bổ vào ${deptName}. Chúc bạn làm việc hiệu quả!`;
+
+    if (empId) {
+      await createNotification({
+        empId,
+        type: 'SYSTEM',
+        title,
+        content,
+        referenceId: data.departmentId || null,
+        metadata: {
+          targetPage: 'profile',
+          departmentId: data.departmentId || null,
+          departmentName: deptName
+        }
+      });
+    }
+  },
+
+  // Aliases đảm bảo tương thích các chuẩn tên sự kiện
+  'LEAVE_APPROVED': async (event) => eventHandlers['LEAVE_REQUEST_APPROVED'](event),
+  'OT_APPROVED': async (event) => eventHandlers['OT_REQUEST_APPROVED'](event),
+  'ADJUSTMENT_APPROVED': async (event) => eventHandlers['ADJUSTMENT_REQUEST_APPROVED'](event)
 };
 
 const app = createServiceApp(SERVICE_NAME, {
@@ -624,8 +711,9 @@ app.get(
   async (req, res, next) => {
     try {
       const empId = getEmpIdFromReq(req);
+      const userId = req.user?.userId || req.user?.id || req.headers['x-user-id'] || null;
       const role = getRoleFromReq(req);
-      const data = await getNotificationsForUser({ empId, role });
+      const data = await getNotificationsForUser({ empId, userId, role });
       const unreadCount = data.filter((n) => !n.is_read).length;
       res.json({
         success: true,
@@ -650,8 +738,9 @@ const markAllPaths = [
 app.patch(markAllPaths, requireAuth(), async (req, res, next) => {
   try {
     const empId = getEmpIdFromReq(req);
+    const userId = req.user?.userId || req.user?.id || req.headers['x-user-id'] || null;
     const role = getRoleFromReq(req);
-    await markAllNotificationsAsRead({ empId, role });
+    await markAllNotificationsAsRead({ empId, userId, role });
     res.json({ success: true, message: 'Đã đánh dấu tất cả thông báo là đã đọc' });
   } catch (err) {
     next(err);
@@ -661,8 +750,9 @@ app.patch(markAllPaths, requireAuth(), async (req, res, next) => {
 app.put(markAllPaths, requireAuth(), async (req, res, next) => {
   try {
     const empId = getEmpIdFromReq(req);
+    const userId = req.user?.userId || req.user?.id || req.headers['x-user-id'] || null;
     const role = getRoleFromReq(req);
-    await markAllNotificationsAsRead({ empId, role });
+    await markAllNotificationsAsRead({ empId, userId, role });
     res.json({ success: true, message: 'Đã đánh dấu tất cả thông báo là đã đọc' });
   } catch (err) {
     next(err);

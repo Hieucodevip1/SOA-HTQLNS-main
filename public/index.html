@@ -1536,406 +1536,344 @@ input:checked + .slider:before {
 
       <!-- KHU VỰC THAY ĐỔI CÁC VIEW THEO BREADCRUMB -->
       <main class="figma-page-content">
-
-        <!-- ====================================================================
-             VIEW 1: TỔNG QUAN TRONG NGÀY (FIGMA IMAGE 3)
+<!-- ====================================================================
+             VIEW 1: TỔNG QUAN TRONG NGÀY (GIAO DIỆN CƠ BẢN GỌN GÀNG)
              ==================================================================== -->
         <section id="view-dashboard" class="figma-view-section">
           <div class="breadcrumb-trail">Tổng quan / Tổng quan trong ngày</div>
-          <div class="page-main-header">
-            <h1 class="page-heading-title">Tổng quan trong ngày</h1>
-            <div class="page-heading-desc" id="dashGreetingSub">Xin chào Quản Lý, đây là tình hình đội nhóm hôm nay.</div>
-          </div>
 
           <!-- ==================== KHU VỰC DASHBOARD CHO ADMIN / MANAGER ==================== -->
           <div id="dashAdminOverviewSection">
 
-            <!-- Alert Thông Báo Nhân Sự Mới Chờ Tiếp Nhận (Dành cho Quản lý / Admin) -->
-            <div id="dashAdminPendingAlert" style="display: none; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 16px 20px; margin-bottom: 22px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; gap: 12px; align-items: center;">
-                  <span style="font-size: 24px;">🔔</span>
-                  <div>
-                    <div style="font-size: 14.5px; font-weight: 700; color: #1e40af;" id="dashAdminPendingAlertTitle">Có nhân sự mới đăng ký đang chờ tiếp nhận vào ban/phòng!</div>
-                    <div style="font-size: 12.5px; color: #3b82f6; margin-top: 2px;" id="dashAdminPendingAlertSub">Vui lòng phân bổ phòng ban, xếp ca trực và cấu hình mức lương để kích hoạt dữ liệu việc làm.</div>
-                  </div>
-                </div>
-                <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px; border-radius: 8px;" onclick="navigateToView('employees')">
-                  Xem &amp; Tiếp nhận nhân sự →
-                </button>
+            <!-- 1. BANNER CHÀO MỪNG + BỘ LỌC NHANH -->
+            <div class="figma-white-card" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+              <div>
+                <h1 class="page-heading-title" style="font-size: 20px; margin-bottom: 4px;">Tổng quan trong ngày</h1>
+                <div class="page-heading-desc" id="dashGreetingSub">Xin chào Quản Lý, đây là tình hình đội nhóm hôm nay.</div>
               </div>
-            </div>
-
-            <!-- KHU VỰC QUẢN LÝ PHÒNG BAN & MÃ MỜI (DÀNH CHO QUẢN LÝ / MANAGER) -->
-            <div id="managerTeamManagementCard" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
-              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div>
-                  <div style="font-size: 15px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                    <span>🏢</span> <span id="mgrDeptNameTitle">Phòng ban phụ trách</span>
-                    <span class="badge-status badge-approved" id="mgrInviteCodeBadge" style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: #2563eb; cursor: pointer; padding: 4px 10px; border-radius: 6px;" onclick="copyManagerInviteCode()" title="Bấm để sao chép mã mời">
-                      Mã mời: <strong id="mgrInviteCodeVal">TEAM-TECH</strong> 📋
-                    </span>
-                  </div>
-                  <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;" id="mgrTeamSubtitle">
-                    Gửi mã mời hoặc nhập email nhân viên để họ tham gia vào đội ngũ của bạn.
-                  </div>
-                </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                  <button type="button" class="btn-primary-blue" id="btnMgrInviteEmail" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px; cursor: pointer; pointer-events: auto; position: relative; z-index: 10;" onclick="openManagerInviteModal()">
-                    ✉️ Mời nhân viên qua email
-                  </button>
-                  <button type="button" class="btn-figma-dark" id="btnMgrCreateTeam" style="padding: 7px 14px; font-size: 12.5px; border-radius: 8px; cursor: pointer; pointer-events: auto; position: relative; z-index: 10;" onclick="openCreateTeamModal()">
-                    ➕ Tạo Phòng ban / Nhóm mới
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- Bộ lọc ngày & phòng ban -->
-            <div class="filter-pill-bar">
-              <div class="pill-dropdown-group">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <div class="figma-filter-pill" onclick="openDateFilterModal()" style="cursor: pointer;" title="Nhấp để đổi ngày xem">
                   <span id="currentDatePillText">Hôm nay</span> ▾
                 </div>
                 <div class="figma-filter-pill" onclick="openDeptFilterModal()" style="cursor: pointer;" title="Nhấp để đổi phòng ban">
                   <span id="currentDeptPillText">Toàn công ty</span> ▾
                 </div>
+                <span class="update-time-meta" id="dashUpdateTimeMeta" style="display: none;">Cập nhật trực tiếp</span>
               </div>
-              <div class="update-time-meta" id="dashUpdateTimeMeta">Cập nhật trực tiếp theo thời gian thực</div>
             </div>
 
-            <!-- 4 THẺ CHỈ SỐ METRIC (CÓ THỂ BẤM TƯƠNG TÁC) -->
-            <div class="metrics-row-4">
-              <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn cơ quan">
+            <!-- Alert Thông Báo Nhân Sự Mới Chờ Tiếp Nhận -->
+            <div id="dashAdminPendingAlert" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <div style="font-size: 14px; font-weight: 700; color: #1e40af;" id="dashAdminPendingAlertTitle">Có nhân sự mới đăng ký đang chờ tiếp nhận!</div>
+                  <div style="font-size: 12px; color: #3b82f6; margin-top: 2px;" id="dashAdminPendingAlertSub">Vui lòng phân bổ phòng ban và xếp ca làm việc.</div>
+                </div>
+                <button type="button" class="btn-primary-blue" style="padding: 6px 14px; font-size: 12.5px;" onclick="navigateToView('employees')">
+                  Tiếp nhận nhân sự →
+                </button>
+              </div>
+            </div>
+
+            <!-- Khối Quản lý Phòng ban & Mã mời (Ẩn gọn nếu không dùng, giữ ID cho JS) -->
+            <div id="managerTeamManagementCard" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <div style="font-size: 14px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                    <span id="mgrDeptNameTitle">Phòng ban phụ trách</span>
+                    <span class="badge-status badge-approved" id="mgrInviteCodeBadge" style="font-size: 12px; background: #f1f5f9; color: #2563eb; cursor: pointer;" onclick="copyManagerInviteCode()">
+                      Mã mời: <strong id="mgrInviteCodeVal">TEAM-TECH</strong>
+                    </span>
+                  </div>
+                  <div style="font-size: 12px; color: #64748b; margin-top: 2px;" id="mgrTeamSubtitle">Gửi mã mời để nhân viên tham gia đội ngũ.</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" class="btn-primary-blue" id="btnMgrInviteEmail" style="padding: 6px 12px; font-size: 12px;" onclick="openManagerInviteModal()">Mời qua email</button>
+                  <button type="button" class="btn-secondary-outline" id="btnMgrCreateTeam" style="padding: 6px 12px; font-size: 12px;" onclick="openCreateTeamModal()">+ Tạo phòng ban</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. HÀNG 4 THẺ KPI CƠ BẢN -->
+            <div class="metrics-row-4" style="margin-bottom: 18px;">
+              <div class="figma-metric-card" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
                 <div class="metric-header">
-                  <span>Đã đi làm</span>
+                  <span>Đi làm hôm nay</span>
                   <span>👤</span>
                 </div>
                 <div class="metric-value-huge metric-value-green" id="dashMetricPresent">-- / --</div>
-                <div class="metric-footer-note" id="dashMetricPresentSub">Đang tải số liệu đi làm...</div>
+                <div class="metric-footer-note" id="dashMetricPresentSub">Nhân sự có mặt</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;">
                 <div class="metric-header">
-                  <span>Nghỉ phép</span>
+                  <span>Nghỉ phép hôm nay</span>
                   <span>📅</span>
                 </div>
                 <div class="metric-value-huge metric-value-blue" id="dashMetricLeave">--</div>
-                <div class="metric-footer-note" id="dashMetricLeaveSub">Đang tải số liệu nghỉ phép...</div>
+                <div class="metric-footer-note" id="dashMetricLeaveSub">Đã được phê duyệt</div>
               </div>
 
-              <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
+              <div class="figma-metric-card" onclick="scrollToLateTable()" style="cursor: pointer;">
                 <div class="metric-header">
                   <span>Đi muộn</span>
                   <span>⏰</span>
                 </div>
                 <div class="metric-value-huge metric-value-orange" id="dashMetricLate">--</div>
-                <div class="metric-footer-note" id="dashMetricLateSub">Đang tải số liệu đi muộn...</div>
+                <div class="metric-footer-note" id="dashMetricLateSub">Ghi nhận trễ giờ</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem và xử lý đơn chờ duyệt">
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;">
                 <div class="metric-header">
                   <span>Đơn chờ duyệt</span>
                   <span>📄</span>
                 </div>
                 <div class="metric-value-huge metric-value-blue" id="dashMetricPending">--</div>
-                <div class="metric-footer-note" id="dashMetricPendingSub">Đang tải đơn chờ duyệt...</div>
+                <div class="metric-footer-note" id="dashMetricPendingSub">Cần bạn xử lý</div>
               </div>
             </div>
 
-            <!-- PHÂN BỔ CHẤM CÔNG HÔM NAY (DONUT CHART) & NHÂN VIÊN ĐI MUỘN -->
-            <div class="middle-grid-2">
-              <!-- Card Trái: Biểu đồ Donut Phân bổ chấm công -->
-              <div class="figma-white-card">
+            <!-- 3. HÀNG 2 CỘT: CẦN BẠN XỬ LÝ (TRÁI) & TRUY CẬP NHANH + ĐI MUỘN (PHẢI) -->
+            <div class="middle-grid-2" style="grid-template-columns: 1.5fr 1fr; margin-bottom: 18px;">
+              <!-- Cột Trái: Đơn đang chờ phê duyệt -->
+              <div id="dashPendingApprovalCard" class="figma-white-card">
                 <div class="card-title-flex">
-                  <div class="card-title-text">Phân bổ chấm công hôm nay</div>
+                  <div>
+                    <div class="card-title-text">Cần bạn xử lý (Đơn chờ duyệt)</div>
+                    <div id="dashPendingApprovalSub" style="font-size: 12px; color: #64748b;">Danh sách đơn nghỉ phép, giải trình &amp; tăng ca chờ duyệt</div>
+                  </div>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Tất cả đơn →</a>
                 </div>
 
-                <div class="donut-chart-container">
-                  <div class="donut-svg-wrap" style="width: 130px; height: 130px; min-width: 130px; position: relative;">
-                    <svg viewBox="0 0 36 36" style="width: 130px; height: 130px; transform: rotate(-90deg); display: block;">
-                      <!-- Vòng nền -->
-                      <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" stroke-width="3.8"></circle>
-                      <!-- Đúng giờ -->
-                      <circle id="donutCircleOntime" cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-                      <!-- Đi muộn -->
-                      <circle id="donutCircleLate" cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-                      <!-- Nghỉ phép -->
-                      <circle id="donutCircleLeave" cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-                      <!-- Chưa chấm công -->
-                      <circle id="donutCircleAbsent" cx="18" cy="18" r="15.915" fill="transparent" stroke="#94a3b8" stroke-width="3.8" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
-                    </svg>
-                    <div class="donut-center-label">
-                      <div class="donut-center-number" id="donutCenterNumber">0</div>
-                      <div class="donut-center-sub">nhân viên</div>
-                    </div>
-                  </div>
-
-                  <div class="donut-legend-list">
-                    <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem danh sách đúng giờ">
-                      <div class="legend-dot-label">
-                        <span class="dot-color dot-ontime"></span>
-                        <span>Đúng giờ</span>
-                      </div>
-                      <span class="legend-count" id="donutLegendOntime">0</span>
-                    </div>
-
-                    <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;" title="Nhấp để cuộn tới bảng nhân viên đi muộn">
-                      <div class="legend-dot-label">
-                        <span class="dot-color dot-late"></span>
-                        <span>Đi muộn</span>
-                      </div>
-                      <span class="legend-count" id="donutLegendLate">0</span>
-                    </div>
-
-                    <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;" title="Nhấp để xem danh sách nghỉ phép">
-                      <div class="legend-dot-label">
-                        <span class="dot-color dot-leave"></span>
-                        <span>Nghỉ phép</span>
-                      </div>
-                      <span class="legend-count" id="donutLegendLeave">0</span>
-                    </div>
-
-                    <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;" title="Nhấp để xem bảng chấm công toàn bộ nhân sự">
-                      <div class="legend-dot-label">
-                        <span class="dot-color dot-absent"></span>
-                        <span>Chưa chấm công</span>
-                      </div>
-                      <span class="legend-count" id="donutLegendAbsent">0</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="donutSummaryFoot" style="font-size: 11px; color: #94a3b8; margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 10px;">
-                  Đang đồng bộ phân bổ chấm công...
+                <div style="overflow-x: auto;">
+                  <table class="figma-table">
+                    <thead>
+                      <tr>
+                        <th>Nhân viên</th>
+                        <th>Phòng ban</th>
+                        <th>Loại đơn</th>
+                        <th>Thời gian</th>
+                        <th>Lý do</th>
+                        <th style="text-align: center;">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashPendingApprovalTableBody">
+                      <tr>
+                        <td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Hiện không có đơn nghỉ hoặc tăng ca cần bạn duyệt.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <!-- Card Phải: Bảng Nhân viên đi muộn (Có thể tương tác bấm xem) -->
-              <div class="figma-white-card" id="lateEmployeesCard">
-                <div class="card-title-flex">
-                  <div class="card-title-text">Nhân viên đi muộn hôm nay</div>
-                  <span class="badge-status" style="background: #fef3c7; color: #b45309; display: none;" id="dashLateCountBadge">• 0 người</span>
+              <!-- Cột Phải: Truy cập nhanh + Danh sách đi muộn gọn -->
+              <div style="display: flex; flex-direction: column; gap: 18px;">
+                <!-- Truy cập nhanh 2x2 giống ảnh mẫu -->
+                <div class="figma-white-card">
+                  <div class="card-title-text" style="margin-bottom: 12px;">Truy cập nhanh</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button type="button" class="btn-secondary-outline" style="text-align: left; padding: 10px 12px; display: flex; align-items: center; gap: 8px;" onclick="navigateToView('attendance-history')">
+                      <span>🕒</span> Bảng chấm công
+                    </button>
+                    <button type="button" class="btn-secondary-outline" style="text-align: left; padding: 10px 12px; display: flex; align-items: center; gap: 8px;" onclick="navigateToView('requests')">
+                      <span>📅</span> Đơn nghỉ phép
+                    </button>
+                    <button type="button" class="btn-secondary-outline" style="text-align: left; padding: 10px 12px; display: flex; align-items: center; gap: 8px;" onclick="navigateToView('shifts')">
+                      <span>⏱️</span> Đơn tăng ca
+                    </button>
+                    <button type="button" class="btn-secondary-outline" style="text-align: left; padding: 10px 12px; display: flex; align-items: center; gap: 8px;" onclick="navigateToView('employees')">
+                      <span>👥</span> Hồ sơ nhân viên
+                    </button>
+                  </div>
                 </div>
 
-                <table class="figma-table">
-                  <thead>
-                    <tr>
-                      <th>Nhân viên</th>
-                      <th>Giờ vào</th>
-                      <th>Đi muộn</th>
-                      <th>Chi tiết</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashLateEmployeesTableBody">
-                    <tr>
-                      <td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">Đang tải danh sách nhân viên đi muộn...</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div style="margin-top: 14px; text-align: left;">
-                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('attendance-history')">Xem bảng chấm công hôm nay →</a>
+                <!-- Nhân viên đi muộn hôm nay -->
+                <div class="figma-white-card" id="lateEmployeesCard">
+                  <div class="card-title-flex" style="margin-bottom: 10px;">
+                    <div class="card-title-text">Đi muộn hôm nay</div>
+                    <span class="badge-status" style="background: #fef3c7; color: #b45309; display: none;" id="dashLateCountBadge">0 người</span>
+                  </div>
+                  <table class="figma-table">
+                    <thead>
+                      <tr>
+                        <th>Nhân viên</th>
+                        <th>Giờ vào</th>
+                        <th>Trễ</th>
+                        <th>Xem</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashLateEmployeesTableBody">
+                      <tr>
+                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 14px;">Không có nhân viên đi muộn.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
 
-            <!-- BẢNG ĐƠN ĐANG CHỜ PHÊ DUYỆT (CHO QUẢN TRỊ VIÊN / QUẢN LÝ) -->
-            <div id="dashPendingApprovalCard" class="figma-white-card">
-              <div class="card-title-flex">
-                <div>
-                  <div class="card-title-text">Đơn đang chờ phê duyệt</div>
-                  <div id="dashPendingApprovalSub" style="font-size: 12px; color: #64748b;">Danh sách đơn từ của nhân viên cần xét duyệt trực tiếp</div>
-                </div>
-                <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Quản lý tất cả đơn từ →</a>
+            <!-- 4. HÀNG CUỐI: TÌNH HÌNH CHẤM CÔNG HÔM NAY (DONUT CHART CƠ BẢN) -->
+            <div class="figma-white-card">
+              <div class="card-title-flex" style="margin-bottom: 12px;">
+                <div class="card-title-text">Tình hình chấm công hôm nay</div>
+                <span id="donutSummaryFoot" style="font-size: 12px; color: #64748b;">Cập nhật theo thời gian thực</span>
               </div>
 
-              <table class="figma-table">
-                <thead>
-                  <tr>
-                    <th>Nhân viên / Mã đơn</th>
-                    <th>Phòng ban</th>
-                    <th>Loại đơn</th>
-                    <th>Thời gian yêu cầu</th>
-                    <th>Lý do</th>
-                    <th style="text-align: center;">Thao tác xét duyệt</th>
-                  </tr>
-                </thead>
-                <tbody id="dashPendingApprovalTableBody">
-                  <tr>
-                    <td colspan="6" style="text-align: center; color: #94a3b8; padding: 24px;">Đang tải danh sách đơn chờ duyệt...</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="donut-chart-container" style="max-width: 620px;">
+                <div class="donut-svg-wrap" style="width: 120px; height: 120px; min-width: 120px; position: relative;">
+                  <svg viewBox="0 0 36 36" style="width: 120px; height: 120px; transform: rotate(-90deg); display: block;">
+                    <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" stroke-width="4"></circle>
+                    <circle id="donutCircleOntime" cx="18" cy="18" r="15.915" fill="transparent" stroke="#10b981" stroke-width="4" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                    <circle id="donutCircleLate" cx="18" cy="18" r="15.915" fill="transparent" stroke="#f59e0b" stroke-width="4" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                    <circle id="donutCircleLeave" cx="18" cy="18" r="15.915" fill="transparent" stroke="#3b82f6" stroke-width="4" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                    <circle id="donutCircleAbsent" cx="18" cy="18" r="15.915" fill="transparent" stroke="#cbd5e1" stroke-width="4" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                  </svg>
+                  <div class="donut-center-label">
+                    <div class="donut-center-number" id="donutCenterNumber">0</div>
+                    <div class="donut-center-sub">nhân sự</div>
+                  </div>
+                </div>
+
+                <div class="donut-legend-list">
+                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
+                    <div class="legend-dot-label"><span class="dot-color dot-ontime"></span><span>Đi làm đúng giờ</span></div>
+                    <span class="legend-count" id="donutLegendOntime">0</span>
+                  </div>
+                  <div class="legend-item" onclick="scrollToLateTable()" style="cursor: pointer;">
+                    <div class="legend-dot-label"><span class="dot-color dot-late"></span><span>Đi muộn</span></div>
+                    <span class="legend-count" id="donutLegendLate">0</span>
+                  </div>
+                  <div class="legend-item" onclick="navigateToView('requests')" style="cursor: pointer;">
+                    <div class="legend-dot-label"><span class="dot-color dot-leave"></span><span>Nghỉ phép</span></div>
+                    <span class="legend-count" id="donutLegendLeave">0</span>
+                  </div>
+                  <div class="legend-item" onclick="navigateToView('attendance-history')" style="cursor: pointer;">
+                    <div class="legend-dot-label"><span class="dot-color dot-absent"></span><span>Chưa ghi nhận</span></div>
+                    <span class="legend-count" id="donutLegendAbsent">0</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- ==================== KHU VỰC DASHBOARD CHO NHÂN VIÊN (EMPLOYEE) ==================== -->
           <div id="dashEmployeeOverviewSection" style="display: none;">
 
-            <!-- Sảnh chờ Tham gia Phòng ban & Thông Báo Hồ Sơ Chờ Tiếp Nhận -->
-            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(245,158,11,0.06);">
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div style="flex: 1;">
-                  <div style="font-size: 14px; font-weight: 700; color: #92400e;">
-                    Bạn chưa gia nhập phòng ban (Nút chấm công tạm khóa)
-                  </div>
-                  <div style="font-size: 12.5px; color: #b45309; margin-top: 4px; line-height: 1.5;">
-                    Chào mừng bạn đến với hệ thống HTQLNS! Vui lòng nhập mã mời từ Quản lý của bạn (ví dụ: <code style="background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:700;">TEAM-TECH</code>) hoặc bấm Tham gia nếu có thư mời đang chờ:
-                  </div>
-
-                  <!-- Form nhập mã mời phòng ban -->
-                  <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: 520px;">
-                    <input type="text" id="inputJoinInviteCode" class="figma-pill-input" placeholder="Nhập mã mời (ví dụ: TEAM-TECH)..." style="width: 250px; max-width: 100%; padding: 6px 14px; font-size: 12.5px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; height: 34px; margin: 0;">
-                    <button type="button" class="btn-figma-dark" style="width: auto !important; max-width: fit-content; flex-shrink: 0; padding: 0 16px; height: 34px; font-size: 12.5px; font-weight: 600; border-radius: 9999px; margin: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" onclick="handleJoinDepartmentByCode()">
-                       Tham gia phòng ban
-                    </button>
-                  </div>
-
-                  <!-- Khối hiển thị lời mời đang chờ gửi tới nhân viên này -->
-                  <div id="empPendingInvitationsSection" style="display: none; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fde68a;">
-                    <div style="font-size: 12.5px; font-weight: 700; color: #78350f; margin-bottom: 6px;">Lời mời phòng ban đang chờ bạn:</div>
-                    <div id="empPendingInvitationsList" style="display: flex; flex-direction: column; gap: 6px;"></div>
-                  </div>
-
-                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
-                    <span class="badge-status" style="background: #fef3c7; color: #92400e; font-weight: 600; font-size: 11px; padding: 3px 8px;">Chờ tham gia ban/phòng</span>
-                    <span style="font-size: 11.5px; color: #78350f;">Ca trực, quỹ phép, chấm công và phiếu lương sẽ kích hoạt sau khi tham gia phòng ban.</span>
-                  </div>
-                </div>
+            <!-- Banner chờ tham gia phòng ban -->
+            <div id="dashEmpOnboardingBanner" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;">
+              <div style="font-size: 14px; font-weight: 700; color: #92400e;">Bạn chưa gia nhập phòng ban (Nút chấm công tạm khóa)</div>
+              <div style="font-size: 12.5px; color: #b45309; margin-top: 4px;">
+                Nhập mã mời từ Quản lý (ví dụ: <code>TEAM-TECH</code>) để kích hoạt chấm công:
+              </div>
+              <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <input type="text" id="inputJoinInviteCode" class="figma-pill-input" placeholder="Nhập mã mời..." style="width: 220px; padding: 6px 14px; font-size: 12.5px; text-transform: uppercase; height: 34px; margin: 0;">
+                <button type="button" class="btn-figma-dark" style="width: auto; padding: 0 16px; height: 34px; font-size: 12.5px; margin: 0;" onclick="handleJoinDepartmentByCode()">Tham gia</button>
+              </div>
+              <div id="empPendingInvitationsSection" style="display: none; margin-top: 10px;">
+                <div id="empPendingInvitationsList"></div>
               </div>
             </div>
 
-            <!-- ===== KHU VỰC 1: HERO CARD — Thao tác nhanh & Chấm công trong ngày (SCR_ATT_01 + SCR_SHIFT_01) ===== -->
-            <div class="emp-hero-card">
-              <div class="emp-hero-top">
-                <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; justify-content: center; gap: 6px;">
-                  <div class="emp-hero-submeta" id="dashEmpTodayDateText" style="font-size: 13px; font-weight: 600; color: #1e293b;"></div>
-                  <div class="emp-hero-gps-tag" id="dashEmpGpsStatus">
-                    Trạng thái định vị: Chưa gán văn phòng làm việc
-                  </div>
+            <!-- 1. THẺ CHẤM CÔNG NHANH CƠ BẢN -->
+            <div class="figma-white-card" style="margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px;">
+                <div>
+                  <div id="dashEmpTodayDateText" style="font-size: 15px; font-weight: 700; color: #0f172a;">Hôm nay</div>
+                  <div id="dashEmpGpsStatus" style="font-size: 12px; color: #64748b; margin-top: 2px;">Trạng thái định vị: Sẵn sàng</div>
                 </div>
-                <div class="emp-live-clock-box">
-                  <div class="emp-clock-date-label">Đồng hồ thời gian thực</div>
-                  <div class="emp-live-clock-digits" id="dashEmpLiveClock">--:--:--</div>
-                  <div style="margin-top: 4px;">
-                    <span class="badge-status badge-approved" id="dashEmpTodayBadge" style="font-size: 11.5px; font-weight: 600;">Sẵn sàng chấm công</span>
-                  </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span class="badge-status badge-approved" id="dashEmpTodayBadge">Sẵn sàng chấm công</span>
+                  <strong id="dashEmpLiveClock" style="font-size: 18px; font-family: monospace; color: #0f172a;">--:--:--</strong>
                 </div>
               </div>
 
-              <!-- Đồng hồ & Khối Check-in / Check-out lớn -->
-              <div class="emp-checkin-row">
+              <div class="emp-checkin-row" style="margin-bottom: 0;">
                 <div class="emp-time-stat-box">
                   <div class="emp-time-stat-label">Giờ vào ca</div>
-                  <div class="emp-time-stat-val" style="color: #059669;" id="dashEmpCheckInVal">--:--:--</div>
+                  <div class="emp-time-stat-val" style="color: #059669; font-size: 20px;" id="dashEmpCheckInVal">--:--:--</div>
                   <div class="emp-time-stat-note" id="dashEmpCheckInNote">Chưa check-in</div>
                 </div>
                 <div class="emp-time-stat-box">
                   <div class="emp-time-stat-label">Giờ ra ca</div>
-                  <div class="emp-time-stat-val" style="color: #2563eb;" id="dashEmpCheckOutVal">--:--:--</div>
+                  <div class="emp-time-stat-val" style="color: #2563eb; font-size: 20px;" id="dashEmpCheckOutVal">--:--:--</div>
                   <div class="emp-time-stat-note" id="dashEmpCheckOutNote">Chưa check-out</div>
                 </div>
                 <div class="emp-time-stat-box">
                   <div class="emp-time-stat-label">Thời gian làm việc</div>
-                  <div class="emp-time-stat-val" style="color: #0f172a;" id="dashEmpHoursVal">0.0 h</div>
-                  <div class="emp-time-stat-note" style="color: #059669;" id="dashEmpHoursNote">Tiêu chuẩn: 8.0 h</div>
+                  <div class="emp-time-stat-val" style="color: #0f172a; font-size: 20px;" id="dashEmpHoursVal">0.0 h</div>
+                  <div class="emp-time-stat-note" id="dashEmpHoursNote">Tiêu chuẩn: 8.0 h</div>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: center;">
-                  <button type="button" class="btn-hero-action btn-hero-checkin" id="dashEmpCheckInBtn" onclick="handleDashboardCheckIn()">
+                  <button type="button" class="btn-hero-action btn-hero-checkin" id="dashEmpCheckInBtn" style="min-height: 62px;" onclick="handleDashboardCheckIn()">
                     <span>CHECK-IN NGAY</span>
                   </button>
-                  <button type="button" class="btn-hero-action btn-hero-checkout" id="dashEmpCheckOutBtn" onclick="handleDashboardCheckOut()" style="display: none;">
-                    <span>CHECK-OUT (KẾT THÚC CA)</span>
+                  <button type="button" class="btn-hero-action btn-hero-checkout" id="dashEmpCheckOutBtn" style="min-height: 62px; display: none;" onclick="handleDashboardCheckOut()">
+                    <span>CHECK-OUT</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Cảnh báo chưa phân ca làm việc hôm nay -->
-              <div id="dashEmpShiftWarningNotice" style="display: none; margin: 12px 0 0 0; padding: 10px 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309; text-align: center; font-weight: 500;">
-                 Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.
-
-              <!-- Lối tắt nhanh (Quick Actions) -->
-              <div class="emp-quick-actions-bar">
-                <button type="button" class="btn-emp-quick-action btn-emp-qa-leave" onclick="scrollToCreateLeaveForm()">
-                  <span>Xin nghỉ phép</span>
-                </button>
-                <button type="button" class="btn-emp-quick-action btn-emp-qa-ot" onclick="openCreateOtModal()">
-                  <span>Đăng ký OT</span>
-                </button>
-                <button type="button" class="btn-emp-quick-action btn-emp-qa-adj" onclick="openSubmitAdjustmentModal('', '', '')">
-                  <span>Giải trình công</span>
-                </button>
+              <div id="dashEmpShiftWarningNotice" style="display: none; margin-top: 12px; padding: 8px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12.5px; color: #b45309; text-align: center;">
+                Bạn chưa được phân ca làm việc hôm nay. Vui lòng liên hệ Quản lý bộ phận để xếp lịch.
               </div>
             </div>
 
-            <!-- ===== KHU VỰC 2: 4 KPI CARDS — Chỉ số cá nhân trong tháng ===== -->
-            <div class="metrics-row-4" style="margin-bottom: 16px;">
-              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem bảng công chi tiết cá nhân">
-                <div class="metric-header">
-                  <span>Ngày công thực tế</span>
-                </div>
+            <!-- 2. 4 KPI CÁ NHÂN CƠ BẢN -->
+            <div class="metrics-row-4" style="margin-bottom: 18px;">
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
+                <div class="metric-header"><span>Ngày công tháng</span></div>
                 <div class="metric-value-huge metric-value-green" id="dashEmpKpiWorkDays">0 / 22</div>
                 <div class="metric-footer-note" id="dashEmpKpiWorkDaysSub">0.0 giờ tích lũy</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;" title="Xem chi tiết quỹ phép năm">
-                <div class="metric-header">
-                  <span>Quỹ phép năm còn lại</span>
-                </div>
+              <div class="figma-metric-card" onclick="navigateToView('requests')" style="cursor: pointer;">
+                <div class="metric-header"><span>Phép năm còn lại</span></div>
                 <div class="metric-value-huge metric-value-blue" id="dashEmpKpiLeaveBalance">0.0 ngày</div>
-                <div class="metric-footer-note" id="dashEmpKpiLeaveBalanceSub">Chưa kích hoạt quỹ phép</div>
+                <div class="metric-footer-note" id="dashEmpKpiLeaveBalanceSub">Số dư khả dụng</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;" title="Xem chi tiết vi phạm chuyên cần">
-                <div class="metric-header">
-                  <span>Tình trạng chuyên cần</span>
-                </div>
+              <div class="figma-metric-card" onclick="navigateToView('my-attendance')" style="cursor: pointer;">
+                <div class="metric-header"><span>Đi muộn</span></div>
                 <div class="metric-value-huge metric-value-orange" id="dashEmpKpiLateCount">0 lần</div>
-                <div class="metric-footer-note" id="dashEmpKpiLateCountSub">Không có vi phạm</div>
+                <div class="metric-footer-note" id="dashEmpKpiLateCountSub">Trong tháng hiện tại</div>
               </div>
 
-              <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;" title="Xem phiếu lương và chi tiết tăng ca">
-                <div class="metric-header">
-                  <span>Giờ tăng ca (OT) &amp; Lương</span>
-                </div>
+              <div class="figma-metric-card" onclick="navigateToView('payroll')" style="cursor: pointer;">
+                <div class="metric-header"><span>Giờ tăng ca (OT)</span></div>
                 <div class="metric-value-huge" style="color: #7c3aed;" id="dashEmpKpiOtHours">0.0 giờ</div>
-                <div class="metric-footer-note" id="dashEmpKpiOtHoursSub">Chưa có giờ tăng ca</div>
+                <div class="metric-footer-note" id="dashEmpKpiOtHoursSub">Đã duyệt trong tháng</div>
               </div>
             </div>
 
-            <!-- ===== KHU VỰC 3: Lịch làm việc & Đơn từ đang theo dõi ===== -->
-            <div class="middle-grid-2" style="margin-bottom: 16px;">
-              <!-- Cột trái: Lịch ca tuần này (SCR_SHIFT_01) -->
+            <!-- 3. LỊCH CA TUẦN NÀY & TRUY CẬP NHANH / ĐƠN TỪ GẦN ĐÂY -->
+            <div class="middle-grid-2">
               <div class="figma-white-card">
                 <div class="card-title-flex">
-                  <div>
-                    <div class="card-title-text">Lịch ca tuần này</div>
-                    <div style="font-size: 11.5px; color: #64748b;">Ca phân công thực tế</div>
-                  </div>
-                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('shifts')">Xem chi tiết →</a>
+                  <div class="card-title-text">Lịch ca tuần này</div>
+                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('shifts')">Chi tiết →</a>
                 </div>
-                <div id="dashEmpWeekScheduleBody" style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+                <div id="dashEmpWeekScheduleBody" style="display: flex; flex-direction: column; gap: 6px;">
                   <div style="text-align: center; color: #94a3b8; padding: 14px; font-size: 12.5px;">Đang tải lịch ca làm việc...</div>
                 </div>
               </div>
 
-              <!-- Cột phải: Đơn từ gần đây (SCR_LEAVE_02) -->
               <div class="figma-white-card">
                 <div class="card-title-flex">
-                  <div>
-                    <div class="card-title-text">Đơn từ gần đây</div>
-                    <div style="font-size: 11.5px; color: #64748b;">Theo dõi tiến độ phê duyệt</div>
+                  <div class="card-title-text">Đơn từ gần đây &amp; Truy cập nhanh</div>
+                  <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="scrollToCreateLeaveForm()">+ Nghỉ phép</button>
+                    <button type="button" class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="openCreateOtModal()">+ Tăng ca</button>
+                    <button type="button" class="btn-secondary-outline" style="padding: 4px 10px; font-size: 11.5px;" onclick="openSubmitAdjustmentModal('', '', '')">+ Giải trình</button>
                   </div>
-                  <button type="button" class="btn-primary-blue" style="padding: 4px 12px; font-size: 12px; border-radius: 9999px;" onclick="scrollToCreateLeaveForm()">+ Tạo đơn mới</button>
                 </div>
-                <div style="overflow-x: auto; margin-top: 8px;">
+                <div style="overflow-x: auto;">
                   <table class="figma-table">
                     <thead>
                       <tr>
                         <th>Mã đơn</th>
                         <th>Loại đơn</th>
-                        <th>Thời gian yêu cầu</th>
-                        <th>Trạng thái duyệt</th>
+                        <th>Thời gian</th>
+                        <th>Trạng thái</th>
                       </tr>
                     </thead>
                     <tbody id="dashEmpRecentRequestsBody">
@@ -1943,18 +1881,11 @@ input:checked + .slider:before {
                     </tbody>
                   </table>
                 </div>
-                <div style="margin-top: 8px; text-align: right;">
-                  <a class="link-action-blue" style="font-size: 12px; cursor: pointer;" onclick="navigateToView('requests')">Xem lịch sử đơn từ →</a>
-                </div>
               </div>
             </div>
 
           </div>
-
-
-          
         </section>
-
 
         <!-- ====================================================================
              VIEW: QUẢN LÝ ĐƠN TỪ & NGHỈ PHÉP (TẠO ĐƠN & PHÊ DUYỆT)
