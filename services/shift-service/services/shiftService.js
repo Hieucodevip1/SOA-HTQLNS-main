@@ -339,8 +339,47 @@ class ShiftService {
       throw err;
     }
 
-    if (scope.isManager && Array.isArray(scope.allowedEmpIds)) {
-      const unauthorized = empIds.some(id => !scope.allowedEmpIds.includes(id));
+    if (scope.isManager) {
+      const managerId = req.user?.empId || req.user?.emp_id || req.user?.id || req.headers['x-user-id'] || scope.empId;
+      let managerDeptId = scope.departmentId || null;
+
+      const allowedSet = new Set(Array.isArray(scope.allowedEmpIds) ? scope.allowedEmpIds : []);
+      if (managerId) allowedSet.add(managerId);
+
+      try {
+        if (!managerDeptId && managerId) {
+          const [mRows] = await pool.query(
+            'SELECT department_id FROM htqlns_organization.employees WHERE id = ? OR email = ? LIMIT 1',
+            [managerId, req.user?.email || '']
+          );
+          if (mRows && mRows.length > 0) managerDeptId = mRows[0].department_id;
+        }
+        if (!managerDeptId && managerId) {
+          const [dRows] = await pool.query(
+            'SELECT id FROM htqlns_organization.departments WHERE manager_id = ? LIMIT 1',
+            [managerId]
+          );
+          if (dRows && dRows.length > 0) managerDeptId = dRows[0].id;
+        }
+
+        // Lấy tất cả nhân sự thuộc cùng phòng ban HOẶC có manager_id = managerId
+        const [empRows] = await pool.query(
+          `SELECT id, code, department_id, manager_id FROM htqlns_organization.employees
+           WHERE status = 'ACTIVE'
+             AND (
+               manager_id = ?
+               OR (department_id IS NOT NULL AND department_id = ?)
+               OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?)
+             )`,
+          [managerId, managerDeptId || '__NO_DEPT__', managerId]
+        );
+        for (const emp of empRows) {
+          if (emp.id) allowedSet.add(emp.id);
+          if (emp.code) allowedSet.add(emp.code);
+        }
+      } catch (_) {}
+
+      const unauthorized = empIds.some(id => !allowedSet.has(id));
       if (unauthorized) {
         const err = new Error('Quản lý chỉ được phân ca cho nhân sự thuộc phạm vi quản lý');
         err.statusCode = 403;
@@ -348,9 +387,26 @@ class ShiftService {
       }
     }
 
+    // Chuẩn hóa danh sách empIds sang ID chính khóa (UUID) nếu người dùng truyền mã nhân viên (code)
+    let finalEmpIds = [...empIds];
+    try {
+      const [lookupRows] = await pool.query(
+        `SELECT id, code FROM htqlns_organization.employees WHERE code IN (?) OR id IN (?)`,
+        [empIds, empIds]
+      );
+      if (lookupRows && lookupRows.length > 0) {
+        const idMap = new Map();
+        for (const r of lookupRows) {
+          idMap.set(r.id, r.id);
+          if (r.code) idMap.set(r.code, r.id);
+        }
+        finalEmpIds = empIds.map(id => idMap.get(id) || id);
+      }
+    } catch (_) {}
+
     const assignedBy = req.user?.empId || req.user?.emp_id || req.user?.id || null;
     const count = await shiftRepository.createShiftAssignments({
-      empIds,
+      empIds: finalEmpIds,
       shiftId,
       workDates,
       clearUnselectedDates,
@@ -364,7 +420,7 @@ class ShiftService {
       const shift = await shiftRepository.getShiftById(shiftId);
       const shiftName = shift?.name || shiftId;
       events.publish('SHIFT_ASSIGNED', {
-        empIds,
+        empIds: finalEmpIds,
         shiftId,
         shiftName,
         workDates,

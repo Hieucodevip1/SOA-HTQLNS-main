@@ -46,11 +46,12 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
         ...process.env,
         SHIFT_SERVICE_PORT: String(SHIFT_PORT),
         NODE_ENV: 'test'
-      }
+      },
+      stdio: 'inherit'
     });
 
     // Chờ service sẵn sàng
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 30; i++) {
       try {
         const res = await fetch(`http://localhost:${SHIFT_PORT}/health`);
         if (res.ok) break;
@@ -207,6 +208,30 @@ describe('Kiểm thử Phân hệ Shift Service (:3105)', () => {
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.data.affectedCount, 2);
+  });
+
+  // 7b. Manager phân ca thành công cho cả nhân viên cũ (EMP_VUDUCHIEU) và nhân viên mới (EMP_NGUYENHOANG, EMP_18793)
+  test('Quản lý phân ca thành công cho cả nhân viên cũ (EMP_VUDUCHIEU) và nhân viên mới (EMP_NGUYENHOANG, EMP_18793) (HTTP 201)', async () => {
+    assert.ok(createdShiftId, 'createdShiftId phải tồn tại');
+    const res = await fetch(`http://localhost:${SHIFT_PORT}/api/v1/shift-assignments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${managerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        empIds: ['EMP_VUDUCHIEU', 'EMP_NGUYENHOANG', 'EMP_18793'],
+        shiftId: createdShiftId,
+        workDates: ['2026-11-23'],
+        startTime: '08:00:00',
+        endTime: '17:30:00',
+        note: 'Phân ca nhân viên mới và cũ trong phòng PB-TECH'
+      })
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.data.affectedCount, 3);
   });
 
   // 8. Tra cứu lịch phân ca có đầy đủ thông tin nhân viên & ca (HTTP 200)

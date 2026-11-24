@@ -427,8 +427,8 @@ class ShiftRepository {
           conditions.push('sa.emp_id = ?');
           params.push(empId);
         } else if (managerId) {
-          conditions.push('(e.manager_id = ? OR d.manager_id = ?)');
-          params.push(managerId, managerId);
+          conditions.push('(e.manager_id = ? OR d.manager_id = ? OR e.department_id = (SELECT department_id FROM htqlns_organization.employees WHERE id = ?))');
+          params.push(managerId, managerId, managerId);
         }
 
         if (fromDate) {
