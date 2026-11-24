@@ -159,37 +159,75 @@ async function resolveEmployeeScope(req, options = {}) {
 
   // 3. Tài khoản vai trò MANAGER (Quản lý)
   if (user.isManager) {
-    // Tài khoản demo mặc định Quản lý (Lê Hoàng Nam)
-    if (empId === 'e0000001-0000-0000-0000-000000000003' || user.username === 'manager') {
-      const demoSubordinates = ['e0000001-0000-0000-0000-000000000004', 'e0000001-0000-0000-0000-000000000003'];
-      return {
-        ...user,
-        isUnassigned: false,
-        shouldReturnEmpty: false,
-        allowedEmpIds: demoSubordinates,
-        managedEmpIds: demoSubordinates,
-        departmentId: 'd0000001-0000-0000-0000-000000000003'
-      };
-    }
-
     let managedEmpIds = [];
+    let managerDeptId = null;
 
     if (options.memoryLookup && typeof options.memoryLookup === 'function') {
-      managedEmpIds = options.memoryLookup(empId, user.email, 'MANAGER');
-    } else if (options.pool) {
-      try {
-        const [rows] = await options.pool.query(
-          `SELECT id FROM htqlns_organization.employees 
-           WHERE status = 'ACTIVE'
-             AND (manager_id = ? 
-                  OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?))`,
-          [empId, empId]
-        );
-        if (rows && rows.length > 0) {
-          managedEmpIds = rows.map((r) => r.id);
+      managedEmpIds = options.memoryLookup(empId, user.email, 'MANAGER') || [];
+    } else {
+      // Tài khoản demo mặc định Quản lý (Nguyễn Thanh Lâm / PB-TECH)
+      if (empId === 'e0000001-0000-0000-0000-000000000003' || user.username === 'manager') {
+        managerDeptId = 'd0000001-0000-0000-0000-000000000003';
+        managedEmpIds = [
+          'e0000001-0000-0000-0000-000000000004',
+          'e0000001-0000-0000-0000-000000000003',
+          'EMP_VUDUCHIEU',
+          'EMP_NGUYENHOANG',
+          'EMP_18793'
+        ];
+      }
+
+      // Tra cứu danh sách cấp dưới từ MySQL: cùng phòng ban HOẶC có manager_id = Manager
+      const dbPool = options.pool || db.getPool('htqlns_organization');
+      if (dbPool) {
+        try {
+          if (!managerDeptId && empId) {
+            const [mRows] = await dbPool.query(
+              'SELECT department_id FROM htqlns_organization.employees WHERE id = ? OR email = ? LIMIT 1',
+              [empId, user.email || '']
+            );
+            if (mRows && mRows.length > 0) {
+              managerDeptId = mRows[0].department_id;
+            }
+          }
+          if (!managerDeptId && empId) {
+            const [dRows] = await dbPool.query(
+              'SELECT id FROM htqlns_organization.departments WHERE manager_id = ? LIMIT 1',
+              [empId]
+            );
+            if (dRows && dRows.length > 0) {
+              managerDeptId = dRows[0].id;
+            }
+          }
+
+          const [rows] = await dbPool.query(
+            `SELECT id, code FROM htqlns_organization.employees 
+             WHERE status = 'ACTIVE'
+               AND (
+                 manager_id = ? 
+                 OR (department_id IS NOT NULL AND department_id = ?)
+                 OR department_id IN (SELECT id FROM htqlns_organization.departments WHERE manager_id = ?)
+               )`,
+            [empId, managerDeptId || '__NO_DEPT__', empId]
+          );
+
+          if (rows && rows.length > 0) {
+            for (const r of rows) {
+              if (r.id) managedEmpIds.push(r.id);
+              if (r.code) managedEmpIds.push(r.code);
+            }
+          }
+        } catch (err) {
+          // DB error or fallback
         }
-      } catch {}
+      }
+
+      if (empId && managedEmpIds.length > 0) {
+        managedEmpIds.push(empId);
+      }
     }
+
+    managedEmpIds = Array.from(new Set(managedEmpIds.filter(Boolean)));
 
     // Nếu quản lý mới tạo chưa có nhân viên nào tham gia
     if (!managedEmpIds || managedEmpIds.length === 0) {
@@ -199,7 +237,7 @@ async function resolveEmployeeScope(req, options = {}) {
         shouldReturnEmpty: true,
         allowedEmpIds: [],
         managedEmpIds: [],
-        departmentId: null
+        departmentId: managerDeptId
       };
     }
 
@@ -209,7 +247,7 @@ async function resolveEmployeeScope(req, options = {}) {
       shouldReturnEmpty: false,
       allowedEmpIds: managedEmpIds,
       managedEmpIds,
-      departmentId: null
+      departmentId: managerDeptId
     };
   }
 

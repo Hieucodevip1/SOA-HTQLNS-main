@@ -1034,6 +1034,24 @@ const createEmployeeHandler = async (req, res) => {
     const contractTypeVal = contract_type || 'OFFICIAL';
     const useDb = await isDbAvailable();
 
+    let finalMgrId = manager_id || null;
+    if (!finalMgrId && department_id) {
+      if (useDb) {
+        try {
+          const dRows = await db.query('SELECT manager_id FROM departments WHERE id = ? LIMIT 1', [department_id], DB_NAME);
+          if (dRows.length > 0 && dRows[0].manager_id && dRows[0].manager_id !== id) {
+            finalMgrId = dRows[0].manager_id;
+          }
+        } catch {}
+      }
+      if (!finalMgrId) {
+        const d = memoryDepartments.get(department_id);
+        if (d && d.manager_id && d.manager_id !== id) {
+          finalMgrId = d.manager_id;
+        }
+      }
+    }
+
     if (useDb) {
       const existing = await db.query('SELECT id FROM employees WHERE code = ? OR email = ?', [code, email], DB_NAME);
       if (existing.length > 0) return conflict(res, 'Mã nhân viên hoặc email đã tồn tại');
@@ -1051,7 +1069,7 @@ const createEmployeeHandler = async (req, res) => {
           gender || 'MALE',
           department_id || null,
           position_id || null,
-          manager_id || null,
+          finalMgrId,
           joinDateVal,
           contractTypeVal
         ],
@@ -1071,7 +1089,7 @@ const createEmployeeHandler = async (req, res) => {
         gender: gender || 'MALE',
         department_id,
         position_id,
-        manager_id,
+        manager_id: finalMgrId,
         join_date: joinDateVal,
         contract_type: contractTypeVal,
         status: 'ACTIVE'
@@ -1246,6 +1264,24 @@ const updateEmployeeHandler = async (req, res) => {
     if (resolvedStatus === 'ACTIVE') {
       if (!finalDept) finalDept = targetEmp?.department_id || 'd0000001-0000-0000-0000-000000000003';
       if (!finalPos) finalPos = targetEmp?.position_id || 'p0000001-0000-0000-0000-000000000004';
+    }
+
+    // Nếu chưa có manager_id nhưng có finalDept, tự động gán manager_id là trưởng phòng của phòng ban đó (nếu có)
+    if (!finalMgr && finalDept) {
+      if (useDb) {
+        try {
+          const dRows = await db.query('SELECT manager_id FROM departments WHERE id = ? LIMIT 1', [finalDept], DB_NAME);
+          if (dRows.length > 0 && dRows[0].manager_id && dRows[0].manager_id !== actualEmpId) {
+            finalMgr = dRows[0].manager_id;
+          }
+        } catch {}
+      }
+      if (!finalMgr) {
+        const d = memoryDepartments.get(finalDept);
+        if (d && d.manager_id && d.manager_id !== actualEmpId) {
+          finalMgr = d.manager_id;
+        }
+      }
     }
 
     if (useDb) {
@@ -1529,6 +1565,24 @@ const onboardEmployeeHandler = async (req, res) => {
     if (finalStatus === 'ACTIVE') {
       if (!finalDeptId) finalDeptId = 'd0000001-0000-0000-0000-000000000003';
       if (!finalPosId) finalPosId = 'p0000001-0000-0000-0000-000000000004';
+    }
+
+    // Nếu chưa có manager_id nhưng có finalDeptId, tự động gán manager_id là trưởng phòng của phòng ban đó (nếu có)
+    if (!finalMgrId && finalDeptId) {
+      if (useDb) {
+        try {
+          const dRows = await db.query('SELECT manager_id FROM departments WHERE id = ? LIMIT 1', [finalDeptId], DB_NAME);
+          if (dRows.length > 0 && dRows[0].manager_id && dRows[0].manager_id !== id) {
+            finalMgrId = dRows[0].manager_id;
+          }
+        } catch {}
+      }
+      if (!finalMgrId) {
+        const d = memoryDepartments.get(finalDeptId);
+        if (d && d.manager_id && d.manager_id !== id) {
+          finalMgrId = d.manager_id;
+        }
+      }
     }
 
     const useDb = await isDbAvailable();
@@ -2177,13 +2231,27 @@ app.post(['/api/organization/join-department', '/api/organization/departments/jo
     const useDb = await isDbAvailable();
     let updatedEmp = null;
 
+    let finalDeptManagerId = dept.manager_id || null;
+    if (useDb && (!finalDeptManagerId || dept.id)) {
+      try {
+        const dRows = await db.query('SELECT manager_id FROM departments WHERE id = ? LIMIT 1', [dept.id], DB_NAME);
+        if (dRows.length > 0 && dRows[0].manager_id) {
+          finalDeptManagerId = dRows[0].manager_id;
+          dept.manager_id = finalDeptManagerId;
+        }
+      } catch {}
+    }
+    if (finalDeptManagerId === callerEmpId) {
+      finalDeptManagerId = null;
+    }
+
     if (useDb) {
       try {
         await db.query(
           `UPDATE employees 
            SET department_id = ?, manager_id = ?, status = 'ACTIVE' 
            WHERE id = ? OR email = ?`,
-          [dept.id, dept.manager_id, callerEmpId, callerEmail],
+          [dept.id, finalDeptManagerId, callerEmpId, callerEmail],
           DB_NAME
         );
         const rows = await db.query('SELECT * FROM employees WHERE id = ? OR email = ? LIMIT 1', [callerEmpId, callerEmail], DB_NAME);
@@ -2201,7 +2269,7 @@ app.post(['/api/organization/join-department', '/api/organization/departments/jo
 
     if (memEmp) {
       memEmp.department_id = dept.id;
-      memEmp.manager_id = dept.manager_id;
+      memEmp.manager_id = finalDeptManagerId;
       memEmp.status = 'ACTIVE';
       updatedEmp = memEmp;
     } else if (callerEmpId) {
@@ -2211,7 +2279,7 @@ app.post(['/api/organization/join-department', '/api/organization/departments/jo
         full_name: req.user?.fullName || req.user?.username || 'Nhân viên mới',
         email: callerEmail,
         department_id: dept.id,
-        manager_id: dept.manager_id,
+        manager_id: finalDeptManagerId,
         status: 'ACTIVE',
         join_date: new Date().toISOString().split('T')[0]
       };
@@ -2316,6 +2384,12 @@ app.get('/internal/organization/employee-scope', async (req, res) => {
         try {
           const deptRows = await db.query('SELECT id FROM departments WHERE manager_id = ?', [empId], DB_NAME);
           managedDepts = deptRows.map((d) => d.id);
+          const empRows = await db.query('SELECT department_id FROM employees WHERE id = ? LIMIT 1', [empId], DB_NAME);
+          if (empRows.length > 0 && empRows[0].department_id) {
+            managedDepts.push(empRows[0].department_id);
+          }
+          managedDepts = Array.from(new Set(managedDepts));
+
           const subRows = await db.query(
             'SELECT id FROM employees WHERE manager_id = ? OR (department_id IS NOT NULL AND department_id IN (?))',
             [empId, managedDepts.length > 0 ? managedDepts : ['__none__']],
@@ -2327,11 +2401,15 @@ app.get('/internal/organization/employee-scope', async (req, res) => {
         managedDepts = Array.from(memoryDepartments.values())
           .filter((d) => d.manager_id === empId)
           .map((d) => d.id);
+        const memEmp = memoryEmployees.get(empId);
+        if (memEmp && memEmp.department_id) managedDepts.push(memEmp.department_id);
+        managedDepts = Array.from(new Set(managedDepts));
+
         subordinates = Array.from(memoryEmployees.values()).filter(
           (e) => e.manager_id === empId || (e.department_id && managedDepts.includes(e.department_id))
         );
       }
-      const allowedEmpIds = subordinates.map((e) => e.id);
+      const allowedEmpIds = Array.from(new Set([empId, ...subordinates.map((e) => e.id)]));
       const isUnassigned = managedDepts.length === 0 && (!emp || !emp.department_id);
       return success(res, {
         isUnassigned,
