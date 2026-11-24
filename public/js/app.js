@@ -1642,15 +1642,15 @@ async function handleDirectApprove(id, type) {
         decision: 'APPROVED',
         comment: 'Đã phê duyệt đơn xin nghỉ phép qua hệ thống'
       });
-    } else if (type === 'ADJUSTMENT') {
-      res = await apiCall(`/api/v1/attendance-adjustments/${id}/decision`, 'POST', {
-        decision: 'APPROVE',
-        comment: 'Đã phê duyệt giải trình chấm công qua hệ thống'
+    } else if (type === 'ADJUSTMENT' || type === 'ATTENDANCE_ADJUSTMENT') {
+      res = await apiCall(`/api/v1/attendance-adjustments/${id}/decision`, 'PATCH', {
+        decision: 'APPROVED', // hoặc 'REJECTED' ở nhánh từ chối
+        note: 'Đã phê duyệt giải trình công'
       });
     } else if (type === 'OT') {
-      res = await apiCall(`/api/v1/ot-requests/${id}/decision`, 'POST', {
-        status: 'APPROVED',
-        note: 'Đã phê duyệt tăng ca OT qua hệ thống'
+      res = await apiCall(`/api/v1/ot-requests/${id}/decision`, 'PATCH', {
+        decision: 'APPROVED',
+        rejectReason: null
       });
     }
 
@@ -1686,15 +1686,15 @@ async function handleDirectReject(id, type) {
         decision: 'REJECTED',
         reject_reason: 'Không phù hợp kế hoạch công việc dự án'
       });
-    } else if (type === 'ADJUSTMENT') {
-      res = await apiCall(`/api/v1/attendance-adjustments/${id}/decision`, 'POST', {
-        decision: 'REJECT',
-        comment: 'Không phù hợp kế hoạch'
+    } else if (type === 'ADJUSTMENT' || type === 'ATTENDANCE_ADJUSTMENT') {
+      res = await apiCall(`/api/v1/attendance-adjustments/${id}/decision`, 'PATCH', {
+        decision: 'REJECTED',
+        note: 'Không phù hợp kế hoạch'
       });
     } else if (type === 'OT') {
-      res = await apiCall(`/api/v1/ot-requests/${id}/decision`, 'POST', {
-        status: 'REJECTED',
-        note: 'Không phù hợp kế hoạch'
+      res = await apiCall(`/api/v1/ot-requests/${id}/decision`, 'PATCH', {
+        decision: 'REJECTED',
+        rejectReason: reason || 'Từ chối yêu cầu tăng ca OT'
       });
     }
 

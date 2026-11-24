@@ -280,6 +280,22 @@ async function logAudit(action, actor, resource, resourceId, details, req) {
   }
 }
 
+// Tra cứu user_id tương ứng với nhân viên từ auth-service / htqlns_auth
+async function resolveUserIdByEmp(empId, email = null) {
+  if (!empId && !email) return null;
+  const useDb = await isDbAvailable();
+  if (useDb) {
+    try {
+      const uRows = await db.query(
+        'SELECT id FROM htqlns_auth.users WHERE emp_id = ? OR (email = ? AND email <> "") LIMIT 1',
+        [empId || '', email || '']
+      );
+      if (uRows && uRows.length > 0) return uRows[0].id;
+    } catch (_) {}
+  }
+  return null;
+}
+
 // ==============================================================================
 // 1. QUẢN LÝ PHÒNG BAN (DEPARTMENTS)
 // ==============================================================================
@@ -1314,6 +1330,20 @@ const updateEmployeeHandler = async (req, res) => {
       contract_type: resolvedContract
     }, { source: 'organization-service' });
 
+    // Phát sự kiện EMPLOYEE_DEPARTMENT_ASSIGNED khi nhân viên chuyển ACTIVE hoặc được gán phòng ban mới
+    if (resolvedStatus === 'ACTIVE' || (finalDept && (!targetEmp || targetEmp.department_id !== finalDept))) {
+      const targetUserId = await resolveUserIdByEmp(actualEmpId, finalEmail || targetEmp?.email);
+      const targetDeptName = deptName || 'Phòng ban mới';
+      events.publish('EMPLOYEE_DEPARTMENT_ASSIGNED', {
+        empId: actualEmpId,
+        userId: targetUserId || null,
+        fullName: finalFullName || targetEmp?.full_name || 'Nhân viên',
+        departmentId: finalDept || null,
+        departmentName: targetDeptName,
+        message: `Bạn đã được tiếp nhận và phân bổ vào ${targetDeptName}. Chúc bạn làm việc hiệu quả!`
+      }, { source: 'organization-service' }).catch(() => {});
+    }
+
     // Gọi API nội bộ đồng bộ trực tiếp sang auth-service
     try {
       const authPort = process.env.AUTH_PORT || 3001;
@@ -1595,6 +1625,17 @@ const onboardEmployeeHandler = async (req, res) => {
       status: emp.status,
       contractType: emp.contract_type
     }, { source: 'organization-service' });
+
+    // Phát sự kiện EMPLOYEE_DEPARTMENT_ASSIGNED khi tiếp nhận nhân sự vào phòng ban
+    const onboardUserId = await resolveUserIdByEmp(id, emp.email);
+    events.publish('EMPLOYEE_DEPARTMENT_ASSIGNED', {
+      empId: id,
+      userId: onboardUserId || null,
+      fullName: emp.full_name,
+      departmentId: emp.department_id,
+      departmentName: onboardDeptName || 'Phòng ban mới',
+      message: `Bạn đã được tiếp nhận và phân bổ vào ${onboardDeptName || 'phòng ban mới'}. Chúc bạn làm việc hiệu quả!`
+    }, { source: 'organization-service' }).catch(() => {});
 
     // Đồng bộ trực tiếp sang auth-service
     try {
@@ -1933,6 +1974,16 @@ app.post(
         position: finalPosTitle || employee.position_title
       }, { source: 'organization-service' });
 
+      const inviteUserId = await resolveUserIdByEmp(employee.id, targetEmail);
+      events.publish('EMPLOYEE_DEPARTMENT_ASSIGNED', {
+        empId: employee.id,
+        userId: inviteUserId || null,
+        fullName: employee.full_name,
+        departmentId: targetDeptId,
+        departmentName: targetDept.name,
+        message: `Bạn đã được ${callerName} tiếp nhận và phân bổ vào ${targetDept.name}.`
+      }, { source: 'organization-service' }).catch(() => {});
+
       return success(
         res,
         {
@@ -2187,6 +2238,16 @@ app.post(['/api/organization/join-department', '/api/organization/departments/jo
       managerId: dept.manager_id,
       shiftId: dept.default_shift_id || 'shift-standard',
       officeId: dept.office_id || 'office-default'
+    }, { source: 'organization-service' }).catch(() => {});
+
+    const joinUserId = await resolveUserIdByEmp(callerEmpId, callerEmail);
+    events.publish('EMPLOYEE_DEPARTMENT_ASSIGNED', {
+      empId: callerEmpId,
+      userId: joinUserId || null,
+      fullName: updatedEmp?.full_name || 'Nhân viên',
+      departmentId: dept.id,
+      departmentName: dept.name,
+      message: `Bạn đã gia nhập thành công phòng ban "${dept.name}". Chúc bạn làm việc hiệu quả!`
     }, { source: 'organization-service' }).catch(() => {});
 
     return success(res, {

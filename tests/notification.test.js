@@ -336,6 +336,97 @@ describe('Kiểm thử Phân hệ Notification Service (:3107)', () => {
     assert.equal(newEmpNotif.filterStatus, 'PENDING');
   });
 
+  test('Nhận sự kiện EMPLOYEE_DEPARTMENT_ASSIGNED: Thông báo tiếp nhận vào phòng ban cho nhân viên', async () => {
+    const assignRes = await fetch(`http://localhost:${NOTIF_PORT}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'EMPLOYEE_DEPARTMENT_ASSIGNED',
+        data: {
+          empId: 'e_emp_test_notif',
+          userId: 'u_emp_notif_test',
+          fullName: 'Nguyễn Văn Test',
+          departmentId: 'd0000001-0000-0000-0000-000000000003',
+          departmentName: 'Phòng Công nghệ & Phần mềm',
+          message: 'Bạn đã được tiếp nhận và phân bổ vào Phòng Công nghệ & Phần mềm. Chúc bạn làm việc hiệu quả!'
+        }
+      })
+    });
+    assert.equal(assignRes.status, 200);
+
+    const empRes = await fetch(`http://localhost:${NOTIF_PORT}/api/v1/notifications/my`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    assert.equal(empRes.status, 200);
+    const empBody = await empRes.json();
+    const assignedNotif = empBody.data.find(
+      n => n.type === 'SYSTEM' && n.content && n.content.includes('Phòng Công nghệ & Phần mềm')
+    );
+    assert.ok(assignedNotif, 'Nhân viên phải nhận được thông báo tiếp nhận vào phòng ban');
+    assert.equal(assignedNotif.title, 'Tiếp nhận vào phòng ban thành công');
+    assert.equal(assignedNotif.reference_id, 'd0000001-0000-0000-0000-000000000003');
+    assert.equal(assignedNotif.targetPage, 'profile');
+  });
+
+  test('Tương thích ngược các luồng duyệt đơn (LEAVE_APPROVED, OT_APPROVED, ADJUSTMENT_APPROVED)', async () => {
+    // 1. LEAVE_APPROVED
+    await fetch(`http://localhost:${NOTIF_PORT}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'LEAVE_APPROVED',
+        data: {
+          empId: 'e_emp_test_notif',
+          requestId: 'req_leave_alias_test',
+          startDate: '2026-11-25',
+          endDate: '2026-11-26'
+        }
+      })
+    });
+
+    // 2. OT_APPROVED
+    await fetch(`http://localhost:${NOTIF_PORT}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'OT_APPROVED',
+        data: {
+          empId: 'e_emp_test_notif',
+          requestId: 'req_ot_alias_test',
+          workDate: '2026-11-25'
+        }
+      })
+    });
+
+    // 3. ADJUSTMENT_APPROVED
+    await fetch(`http://localhost:${NOTIF_PORT}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'ADJUSTMENT_APPROVED',
+        data: {
+          empId: 'e_emp_test_notif',
+          adjustmentId: 'req_adj_alias_test',
+          workDate: '2026-11-25'
+        }
+      })
+    });
+
+    const empRes = await fetch(`http://localhost:${NOTIF_PORT}/api/v1/notifications/my`, {
+      headers: { Authorization: `Bearer ${employeeToken}` }
+    });
+    const empBody = await empRes.json();
+
+    const leaveNotif = empBody.data.find(n => n.reference_id === 'req_leave_alias_test');
+    assert.ok(leaveNotif, 'Nhận thông báo LEAVE_APPROVED thành công');
+
+    const otNotif = empBody.data.find(n => n.reference_id === 'req_ot_alias_test');
+    assert.ok(otNotif, 'Nhận thông báo OT_APPROVED thành công');
+
+    const adjNotif = empBody.data.find(n => n.reference_id === 'req_adj_alias_test');
+    assert.ok(adjNotif, 'Nhận thông báo ADJUSTMENT_APPROVED thành công');
+  });
+
   test('Đánh dấu đã đọc 1 thông báo PATCH /api/v1/notifications/:id/read', async () => {
     assert.ok(testNotifId, 'Cần có testNotifId để kiểm thử');
 
