@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node scripts/run-all.js",
     "clean:test-data": "node scripts/clean-test-data.js",
-    "test": "node --test --test-concurrency=1 tests/infra.test.js tests/auth-org.test.js tests/employee-scope.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/analytics.test.js tests/notification.test.js tests/e2e.test.js",
+    "test": "node --test --test-concurrency=1 tests/infra.test.js tests/auth-org.test.js tests/employee-scope.test.js tests/attendance.test.js tests/leave.test.js tests/shift.test.js tests/payroll.test.js tests/analytics.test.js tests/notification.test.js tests/frontend.test.js tests/e2e.test.js",
+    "test:frontend": "node --test tests/frontend.test.js",
     "test:infra": "node --test tests/infra.test.js",
     "test:auth-org": "node --test tests/auth-org.test.js",
     "test:scope": "node --test tests/employee-scope.test.js",
