@@ -113,6 +113,7 @@ function createFrontendSandbox() {
     clearTimeout: () => {},
     setInterval: () => 0,
     clearInterval: () => {},
+    prompt: () => 'kiet@htqlns.com',
     fetch: async (url, opts = {}) => {
       apiCalls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
       return mockFetchHandler(url, opts);
@@ -530,6 +531,284 @@ describe('Kiểm thử Unit Test Frontend (public/js/app.js)', () => {
       assert.strictEqual(sb.apiCalls[0].url, '/api/v1/notifications/notif-abc/read');
       assert.strictEqual(sb.apiCalls[0].method, 'PATCH');
       assert.strictEqual(sb.run('cachedNotifications[0].is_read'), true);
+    });
+  });
+
+  // =========================================================================
+  // PHẦN UNIT TEST FRONTEND CỦA HUỲNH GIA KIỆT
+  // =========================================================================
+
+  // E5.1 Dashboard tổng quan (FE) HRMS-83
+  describe('E5.1 Dashboard tổng quan (FE) HRMS-83', () => {
+    test('renderDashboardOverview() hiển thị đúng các thẻ KPI và nhãn phòng ban/ngày', () => {
+      const datePill = sb.ensureElement('currentDatePillText');
+      const deptPill = sb.ensureElement('currentDeptPillText');
+      const presentEl = sb.ensureElement('dashMetricPresent');
+      const leaveEl = sb.ensureElement('dashMetricLeave');
+      const lateEl = sb.ensureElement('dashMetricLate');
+
+      sb.ctx.renderDashboardOverview({
+        date: '2026-11-27',
+        departmentName: 'Phòng Kỹ thuật',
+        metrics: { totalEmployees: 20, presentCount: 18, attendanceRate: 90, leaveCount: 2, lateCount: 1 },
+        donut: {},
+        lateEmployees: []
+      });
+
+      assert.strictEqual(datePill.innerText, '27/11/2026 • Hôm nay');
+      assert.strictEqual(deptPill.innerText, 'Phòng Kỹ thuật • 20 người');
+      assert.strictEqual(presentEl.innerText, '18 / 20');
+      assert.strictEqual(leaveEl.innerText, '02');
+      assert.strictEqual(lateEl.innerText, '01');
+    });
+
+    test('renderDashboardOverview() xử lý an toàn khi totalEmployees bằng 0', () => {
+      const presentSub = sb.ensureElement('dashMetricPresentSub');
+      const lateSub = sb.ensureElement('dashMetricLateSub');
+
+      sb.ctx.renderDashboardOverview({
+        date: '2026-11-27',
+        metrics: { totalEmployees: 0, presentCount: 0, leaveCount: 0, lateCount: 0 }
+      });
+
+      assert.strictEqual(presentSub.innerText, 'Chưa có nhân sự trong phạm vi quản lý');
+      assert.strictEqual(lateSub.innerText, 'Không có dữ liệu');
+    });
+  });
+
+  // E6.1 Đăng nhập, xác thực (FE) HRMS-83
+  describe('E6.1 Đăng nhập, xác thực (FE) HRMS-83', () => {
+    test('isTokenValid() xác thực đúng JWT còn hạn và từ chối JWT hết hạn/sai định dạng', () => {
+      const makeJwt = (expSec) => {
+        const h = Buffer.from(JSON.stringify({ alg: 'HS256' })).toString('base64url');
+        const p = Buffer.from(JSON.stringify({ sub: '1', exp: expSec })).toString('base64url');
+        return `${h}.${p}.sig`;
+      };
+      const futureExp = Math.floor(Date.now() / 1000) + 3600;
+      const pastExp = Math.floor(Date.now() / 1000) - 60;
+
+      assert.strictEqual(sb.ctx.isTokenValid(makeJwt(futureExp)), true);
+      assert.strictEqual(sb.ctx.isTokenValid(makeJwt(pastExp)), false);
+      assert.strictEqual(sb.ctx.isTokenValid('invalid-token'), false);
+    });
+
+    test('toggleAuthMode() chuyển đổi qua lại giữa form đăng nhập và đăng ký', () => {
+      const loginForm = sb.ensureElement('authLoginFormContainer');
+      const regForm = sb.ensureElement('authRegisterFormContainer');
+
+      sb.ctx.toggleAuthMode('register');
+      assert.strictEqual(loginForm.style.display, 'none');
+      assert.strictEqual(regForm.style.display, 'block');
+
+      sb.ctx.toggleAuthMode('login');
+      assert.strictEqual(loginForm.style.display, 'block');
+      assert.strictEqual(regForm.style.display, 'none');
+    });
+
+    test('handleLoginSubmit() gọi POST /api/auth/login và lưu token vào localStorage', async () => {
+      sb.ensureElement('loginUsername', { value: 'admin' });
+      sb.ensureElement('loginPassword', { value: '123456' });
+      sb.ensureElement('btnLoginAction', { innerText: 'Login' });
+      sb.run(`
+        fetchCurrentUserProfile = async function() {};
+        initPortalDashboard = function() {};
+      `);
+
+      sb.setFetchMock(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { token: 'jwt-admin-123', user: { id: 'u1', username: 'admin', role: 'ADMIN' } }
+        })
+      }));
+
+      await sb.ctx.handleLoginSubmit({ preventDefault() {} });
+      assert.strictEqual(sb.apiCalls[0].url, '/api/auth/login');
+      assert.strictEqual(sb.apiCalls[0].method, 'POST');
+      assert.strictEqual(sb.storage.get('htqlns_token'), 'jwt-admin-123');
+    });
+  });
+
+  // E6.2 Đổi mật khẩu (FE+BE) HRMS-89
+  describe('E6.2 Đổi mật khẩu (FE+BE) HRMS-89', () => {
+    test('togglePasswordVisibility() chuyển đổi trạng thái ẩn/hiện mật khẩu', () => {
+      const input = sb.ensureElement('loginPassword', { value: 'secret' });
+      input.type = 'password';
+      const btn = createMockElement('btnTogglePwd');
+
+      sb.ctx.togglePasswordVisibility('loginPassword', btn);
+      assert.strictEqual(input.type, 'text');
+      assert.strictEqual(btn.textContent, 'Ẩn');
+
+      sb.ctx.togglePasswordVisibility('loginPassword', btn);
+      assert.strictEqual(input.type, 'password');
+      assert.strictEqual(btn.textContent, 'Hiện');
+    });
+
+    test('handleForgotPasswordClick() hiển thị thông báo hướng dẫn khôi phục mật khẩu', () => {
+      sb.ctx.handleForgotPasswordClick();
+      assert.ok(sb.getToasts().some(t => t.type === 'success' && t.msg.includes('OTP')));
+    });
+  });
+
+  // E6.3 Phân quyền RBAC (FE+BE) HRMS-89
+  describe('E6.3 Phân quyền RBAC (FE+BE) HRMS-89', () => {
+    test('handleUpdateUserRole() gửi PUT /api/auth/users/:id/role với vai trò mới', async () => {
+      sb.ensureElement('role-select-u123', { value: 'MANAGER' });
+      sb.run('loadRbacUsersData = async function() {};');
+      sb.setFetchMock(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true })
+      }));
+
+      await sb.ctx.handleUpdateUserRole('u123', 'nguyenvana');
+      assert.strictEqual(sb.apiCalls.length, 1);
+      assert.strictEqual(sb.apiCalls[0].url, '/api/auth/users/u123/role');
+      assert.strictEqual(sb.apiCalls[0].method, 'PUT');
+      assert.deepStrictEqual(sb.apiCalls[0].body, { role: 'MANAGER' });
+    });
+
+    test('applyRoleBasedUI() ẩn các mục quản trị (RBAC, Cài đặt) đối với EMPLOYEE', () => {
+      const navRbac = sb.ensureElement('nav-rbac');
+      const navSettings = sb.ensureElement('nav-settings');
+      sb.run("state.user.role = 'EMPLOYEE';");
+
+      sb.ctx.applyRoleBasedUI();
+      assert.strictEqual(navRbac.style.display, 'none');
+      assert.strictEqual(navSettings.style.display, 'none');
+    });
+  });
+
+  // EMP-US01 Thêm nhân viên mới (FE+BE) HRMS-101
+  describe('EMP-US01 Thêm nhân viên mới (FE+BE) HRMS-101', () => {
+    test('submitNewEmployee() cảnh báo khi thiếu mã nhân viên, họ tên hoặc email', async () => {
+      sb.ensureElement('newEmpCode', { value: '' });
+      sb.ensureElement('newEmpName', { value: 'Nguyễn Văn A' });
+      sb.ensureElement('newEmpEmail', { value: '' });
+
+      await sb.ctx.submitNewEmployee();
+      assert.strictEqual(sb.apiCalls.length, 0);
+      assert.ok(sb.getToasts().some(t => t.type === 'warning'));
+    });
+
+    test('submitNewEmployee() gọi POST /api/organization/employees khi dữ liệu hợp lệ', async () => {
+      sb.ensureElement('newEmpCode', { value: 'EMP_999' });
+      sb.ensureElement('newEmpName', { value: 'Trần Văn Mới' });
+      sb.ensureElement('newEmpEmail', { value: 'moitv@company.vn' });
+      sb.ensureElement('newEmpPhone', { value: '0909123456' });
+      sb.ensureElement('newEmpDept', { value: 'dept-1' });
+      sb.run('loadEmployeesData = async function() {};');
+
+      sb.setFetchMock(async () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({ success: true })
+      }));
+
+      await sb.ctx.submitNewEmployee();
+      assert.strictEqual(sb.apiCalls.length, 1);
+      assert.strictEqual(sb.apiCalls[0].url, '/api/organization/employees');
+      assert.strictEqual(sb.apiCalls[0].method, 'POST');
+      assert.strictEqual(sb.apiCalls[0].body.code, 'EMP_999');
+    });
+  });
+
+  // EMP-US02 Danh sách nhân viên (FE+BE) HRMS-101
+  describe('EMP-US02 Danh sách nhân viên (FE+BE) HRMS-101', () => {
+    test('renderEmployeesTable() render danh sách nhân viên và hiển thị trạng thái rỗng', () => {
+      const tbody = sb.ensureElement('employeesTableFullBody');
+
+      sb.ctx.renderEmployeesTable([]);
+      assert.ok(tbody.innerHTML.includes('Chưa có dữ liệu nhân sự'));
+
+      sb.ctx.renderEmployeesTable([
+        { id: 'e1', code: 'EMP_001', full_name: 'Huỳnh Gia Kiệt', email: 'kiet@company.vn', status: 'ACTIVE' }
+      ]);
+      assert.ok(tbody.innerHTML.includes('EMP_001'));
+      assert.ok(tbody.innerHTML.includes('Huỳnh Gia Kiệt'));
+    });
+  });
+
+  // EMP-US04 Chỉnh sửa nhân viên (FE+BE) HRMS-101
+  describe('EMP-US04 Chỉnh sửa nhân viên (FE+BE) HRMS-101', () => {
+    test('handleUpdateEmployeeSubmit() validate trường bắt buộc và gửi PUT /api/v1/employees/:id', async () => {
+      sb.ensureElement('editEmpCode', { value: 'emp_001' });
+      sb.ensureElement('editEmpFullName', { value: 'Huỳnh Gia Kiệt' });
+      sb.ensureElement('editEmpEmail', { value: 'kiet@company.vn' });
+      sb.ensureElement('editEmpPhone', { value: '0901234567' });
+      sb.ensureElement('editEmpDept', { value: 'Phòng Kỹ thuật' });
+      sb.ensureElement('editEmpStatus', { value: 'ACTIVE' });
+      sb.run(`
+        state.employees = [{ id: 'e1', code: 'EMP_001', fullName: 'Cũ' }];
+        renderEmployeesTable = function() {};
+      `);
+
+      sb.setFetchMock(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true })
+      }));
+
+      await sb.ctx.handleUpdateEmployeeSubmit({ preventDefault() {} }, 'e1');
+      const putCall = sb.apiCalls.find(c => c.url === '/api/v1/employees/e1' && c.method === 'PUT');
+      assert.ok(putCall);
+      assert.strictEqual(putCall.body.code, 'EMP_001');
+    });
+  });
+
+  // EMP-US05 Tìm kiếm nhân viên (FE+BE) HRMS-101
+  describe('EMP-US05 Tìm kiếm nhân viên (FE+BE) HRMS-101', () => {
+    test('handleEmployeeFilter() lọc nhân viên theo từ khóa và trạng thái', () => {
+      const tbody = sb.ensureElement('employeesTableFullBody');
+      const searchInput = sb.ensureElement('employeeSearchInput', { value: 'hieu' });
+      const statusSelect = sb.ensureElement('employeeFilterStatus', { value: 'ALL' });
+
+      sb.run(`
+        state.employees = [
+          { id: 'e1', code: 'EMP_KIET', full_name: 'Huỳnh Gia Kiệt', email: 'kiet@test.vn', status: 'ACTIVE' },
+          { id: 'e2', code: 'EMP_HIEU', full_name: 'Vũ Đức Hiếu', email: 'hieu@test.vn', status: 'PENDING_ASSIGNMENT' }
+        ];
+      `);
+
+      sb.ctx.handleEmployeeFilter();
+      assert.ok(tbody.innerHTML.includes('Vũ Đức Hiếu'));
+      assert.ok(!tbody.innerHTML.includes('Huỳnh Gia Kiệt'));
+
+      // Lọc theo trạng thái ACTIVE không khớp với PENDING_ASSIGNMENT
+      searchInput.value = '';
+      statusSelect.value = 'ACTIVE';
+      sb.ctx.handleEmployeeFilter();
+      assert.ok(tbody.innerHTML.includes('Huỳnh Gia Kiệt'));
+      assert.ok(!tbody.innerHTML.includes('Vũ Đức Hiếu'));
+    });
+  });
+
+  // INFRA-02 Tích hợp các module (FE+BE) HRMS-91
+  describe('INFRA-02 Tích hợp các module (FE+BE) HRMS-91', () => {
+    test('apiCall() tự động gắn Bearer Token và xử lý 401 khi phiên đăng nhập hết hạn', async () => {
+      const portalEl = sb.ensureElement('portalApp');
+      const loginEl = sb.ensureElement('loginScreen');
+      let capturedHeaders = null;
+
+      sb.setFetchMock(async (_url, opts) => {
+        capturedHeaders = opts.headers;
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'Unauthorized' })
+        };
+      });
+
+      await assert.rejects(
+        () => sb.ctx.apiCall('/api/organization/employees'),
+        /Unauthorized/
+      );
+      assert.strictEqual(capturedHeaders.Authorization, 'Bearer mock-jwt-token');
+      assert.strictEqual(sb.run('state.token'), null);
+      assert.strictEqual(portalEl.style.display, 'none');
+      assert.strictEqual(loginEl.style.display, 'flex');
     });
   });
 });
